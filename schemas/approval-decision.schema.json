@@ -1,0 +1,180 @@
+{
+  "$defs": {
+    "ActorKind": {
+      "enum": [
+        "human",
+        "agent",
+        "service",
+        "workflow",
+        "executor"
+      ],
+      "title": "ActorKind",
+      "type": "string"
+    },
+    "ActorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Attributes",
+          "type": "object"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ActorKind"
+        },
+        "tenant_id": {
+          "minLength": 1,
+          "title": "Tenant Id",
+          "type": "string"
+        },
+        "workload_identity": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workload Identity"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "tenant_id"
+      ],
+      "title": "ActorRef",
+      "type": "object"
+    },
+    "ApprovalOutcome": {
+      "enum": [
+        "approved",
+        "denied",
+        "revoked",
+        "expired"
+      ],
+      "title": "ApprovalOutcome",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "action_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Action Digest",
+      "type": "string"
+    },
+    "action_id": {
+      "format": "uuid",
+      "title": "Action Id",
+      "type": "string"
+    },
+    "approval_id": {
+      "format": "uuid",
+      "title": "Approval Id",
+      "type": "string"
+    },
+    "approver": {
+      "$ref": "#/$defs/ActorRef"
+    },
+    "approver_role": {
+      "minLength": 1,
+      "title": "Approver Role",
+      "type": "string"
+    },
+    "decided_at": {
+      "format": "date-time",
+      "title": "Decided At",
+      "type": "string"
+    },
+    "environment": {
+      "minLength": 1,
+      "title": "Environment",
+      "type": "string"
+    },
+    "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+    },
+    "outcome": {
+      "$ref": "#/$defs/ApprovalOutcome"
+    },
+    "policy_decision_id": {
+      "format": "uuid",
+      "title": "Policy Decision Id",
+      "type": "string"
+    },
+    "policy_revision": {
+      "minLength": 1,
+      "title": "Policy Revision",
+      "type": "string"
+    },
+    "reason": {
+      "minLength": 1,
+      "title": "Reason",
+      "type": "string"
+    },
+    "schema_name": {
+      "default": "prodkit.approval-decision",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "target_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Target Digest",
+      "type": "string"
+    },
+    "tenant_id": {
+      "minLength": 1,
+      "title": "Tenant Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "approval_id",
+    "action_id",
+    "action_digest",
+    "target_digest",
+    "tenant_id",
+    "environment",
+    "policy_decision_id",
+    "policy_revision",
+    "approver",
+    "approver_role",
+    "decided_at",
+    "outcome",
+    "expires_at",
+    "reason"
+  ],
+  "title": "ApprovalDecision",
+  "type": "object"
+}

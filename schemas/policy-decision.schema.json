@@ -1,0 +1,149 @@
+{
+  "$defs": {
+    "PolicyOutcome": {
+      "enum": [
+        "allow",
+        "deny",
+        "require_approval"
+      ],
+      "title": "PolicyOutcome",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "action_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Action Digest",
+      "type": "string"
+    },
+    "action_id": {
+      "format": "uuid",
+      "title": "Action Id",
+      "type": "string"
+    },
+    "constraints": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "title": "Constraints",
+      "type": "object"
+    },
+    "decision_id": {
+      "format": "uuid",
+      "title": "Decision Id",
+      "type": "string"
+    },
+    "evaluated_at": {
+      "format": "date-time",
+      "title": "Evaluated At",
+      "type": "string"
+    },
+    "expires_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expires At"
+    },
+    "outcome": {
+      "$ref": "#/$defs/PolicyOutcome"
+    },
+    "policy_bundle": {
+      "minLength": 1,
+      "title": "Policy Bundle",
+      "type": "string"
+    },
+    "policy_engine": {
+      "minLength": 1,
+      "title": "Policy Engine",
+      "type": "string"
+    },
+    "policy_revision": {
+      "minLength": 1,
+      "title": "Policy Revision",
+      "type": "string"
+    },
+    "raw_decision_artifact_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Raw Decision Artifact Sha256"
+    },
+    "reason_codes": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Reason Codes",
+      "type": "array"
+    },
+    "required_approval_roles": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Required Approval Roles",
+      "type": "array"
+    },
+    "schema_name": {
+      "default": "prodkit.policy-decision",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "tenant_id": {
+      "minLength": 1,
+      "title": "Tenant Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "decision_id",
+    "action_id",
+    "action_digest",
+    "tenant_id",
+    "policy_engine",
+    "policy_bundle",
+    "policy_revision",
+    "evaluated_at",
+    "outcome"
+  ],
+  "title": "PolicyDecision",
+  "type": "object"
+}

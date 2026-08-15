@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: prodkit-control-api
+spec:
+  selector:
+    app: prodkit-control-api
+  ports:
+    - port: 80
+      targetPort: 8000

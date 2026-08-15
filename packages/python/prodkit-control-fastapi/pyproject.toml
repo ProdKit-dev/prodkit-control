@@ -1,0 +1,26 @@
+[project]
+name = "prodkit-control-fastapi"
+version = "0.1.0"
+description = "FastAPI surface for ProdKit Control."
+requires-python = ">=3.12,<3.15"
+license = { text = "Apache-2.0" }
+dependencies = [
+  "fastapi>=0.120,<1",
+  "uvicorn[standard]>=0.35,<1",
+  "prodkit-control-core",
+  "prodkit-control-runtime",
+]
+
+[project.scripts]
+prodkit-control-api = "prodkit_control_fastapi.__main__:main"
+
+[build-system]
+requires = ["uv_build>=0.10,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "prodkit_control_fastapi"
+
+[tool.uv.sources]
+prodkit-control-core = { workspace = true }
+prodkit-control-runtime = { workspace = true }

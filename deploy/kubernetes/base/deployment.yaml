@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prodkit-control-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: prodkit-control-api
+  template:
+    metadata:
+      labels:
+        app: prodkit-control-api
+    spec:
+      serviceAccountName: prodkit-control-api
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: ghcr.io/prodkit-dev/prodkit-control:latest
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8000 }
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8000 }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: "1", memory: 512Mi }

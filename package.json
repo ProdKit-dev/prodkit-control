@@ -1,0 +1,13 @@
+{
+  "name": "prodkit-control",
+  "private": true,
+  "packageManager": "pnpm@10.15.0",
+  "scripts": {
+    "build:ts": "turbo run build",
+    "typecheck:ts": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.0"
+  }
+}

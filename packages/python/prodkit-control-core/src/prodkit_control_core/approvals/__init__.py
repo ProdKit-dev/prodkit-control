@@ -1,0 +1,1 @@
+"""Approvals extension namespace."""

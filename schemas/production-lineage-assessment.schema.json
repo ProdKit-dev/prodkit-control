@@ -1,0 +1,113 @@
+{
+  "$defs": {
+    "LineageNodeKind": {
+      "enum": [
+        "specification_revision",
+        "decision_set",
+        "generator_configuration",
+        "source_tree",
+        "verification",
+        "build_artifact",
+        "authorization",
+        "agent_action",
+        "deployment",
+        "production_observation",
+        "reconciliation"
+      ],
+      "title": "LineageNodeKind",
+      "type": "string"
+    },
+    "LineageNodeRef": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Digest",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/LineageNodeKind"
+        },
+        "node_id": {
+          "format": "uuid",
+          "title": "Node Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "node_id",
+        "digest"
+      ],
+      "title": "LineageNodeRef",
+      "type": "object"
+    },
+    "ProductionLineageRequirement": {
+      "enum": [
+        "specification_revision",
+        "decision_set",
+        "successful_generation",
+        "source_tree",
+        "passing_verification",
+        "successful_build",
+        "authorization",
+        "successful_agent_action",
+        "successful_deployment",
+        "production_observation",
+        "matched_reconciliation"
+      ],
+      "title": "ProductionLineageRequirement",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "complete": {
+      "title": "Complete",
+      "type": "boolean"
+    },
+    "lineage_path": {
+      "items": {
+        "$ref": "#/$defs/LineageNodeRef"
+      },
+      "title": "Lineage Path",
+      "type": "array"
+    },
+    "missing_requirements": {
+      "items": {
+        "$ref": "#/$defs/ProductionLineageRequirement"
+      },
+      "title": "Missing Requirements",
+      "type": "array"
+    },
+    "observation": {
+      "$ref": "#/$defs/LineageNodeRef"
+    },
+    "satisfied_requirements": {
+      "items": {
+        "$ref": "#/$defs/ProductionLineageRequirement"
+      },
+      "title": "Satisfied Requirements",
+      "type": "array"
+    },
+    "schema_name": {
+      "default": "prodkit.production-lineage-assessment",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "observation",
+    "complete",
+    "satisfied_requirements",
+    "missing_requirements",
+    "lineage_path"
+  ],
+  "title": "ProductionLineageAssessment",
+  "type": "object"
+}

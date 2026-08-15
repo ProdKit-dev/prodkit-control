@@ -1,0 +1,20 @@
+[project]
+name = "prodkit-otel"
+version = "0.1.0"
+description = "OpenTelemetry projection adapter for ProdKit events."
+requires-python = ">=3.12,<3.15"
+license = { text = "Apache-2.0" }
+dependencies = [
+  "opentelemetry-api>=1.36,<2",
+  "prodkit-control-core",
+]
+
+[build-system]
+requires = ["uv_build>=0.10,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "prodkit_otel"
+
+[tool.uv.sources]
+prodkit-control-core = { workspace = true }
