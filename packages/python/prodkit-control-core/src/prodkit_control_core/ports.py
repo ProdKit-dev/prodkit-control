@@ -10,18 +10,20 @@ from .contracts import (
     ActionSpec,
     ApprovalDecision,
     ArtifactRef,
+    CanonicalModelRequest,
+    CanonicalModelResponse,
     ControlEvent,
     ControlEventDraft,
+    CredentialLease,
+    ExecutionAttemptRecord,
     ExecutionResult,
+    LineageGraph,
+    LineageNode,
+    LineageRelation,
     PolicyDecision,
     ReconciliationFinding,
     StateObservation,
     VerificationResult,
-    CanonicalModelRequest,
-    CanonicalModelResponse,
-    LineageGraph,
-    LineageNode,
-    LineageRelation,
 )
 
 
@@ -108,6 +110,20 @@ class IdempotencyStore(Protocol):
     async def claim(self, *, tenant_id: str, key: str, action_digest: str) -> bool: ...
     async def complete(self, *, tenant_id: str, key: str, result: ExecutionResult) -> None: ...
     async def result(self, *, tenant_id: str, key: str) -> ExecutionResult | None: ...
+
+
+@runtime_checkable
+class ExecutionAttemptStore(Protocol):
+    async def create(self, attempt: ExecutionAttemptRecord) -> None: ...
+    async def replace(self, attempt: ExecutionAttemptRecord) -> None: ...
+    async def get(self, attempt_id: UUID) -> ExecutionAttemptRecord | None: ...
+    async def latest_for_action(self, action_id: UUID) -> ExecutionAttemptRecord | None: ...
+
+
+@runtime_checkable
+class CredentialLeaseProvider(Protocol):
+    async def issue(self, *, action: ActionSpec, executor_identity: str) -> CredentialLease: ...
+    async def revoke(self, lease_id: UUID) -> None: ...
 
 
 @runtime_checkable
