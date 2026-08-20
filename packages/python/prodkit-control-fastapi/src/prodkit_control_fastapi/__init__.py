@@ -1,3 +1,3 @@
-from .app import AppServices, create_app
+from .app import AppServices, PrincipalResolver, RequestPrincipal, create_app
 
-__all__ = ("AppServices", "create_app")
+__all__ = ("AppServices", "PrincipalResolver", "RequestPrincipal", "create_app")
