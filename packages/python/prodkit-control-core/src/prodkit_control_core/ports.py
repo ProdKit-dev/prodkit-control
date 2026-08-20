@@ -82,6 +82,15 @@ class ControlledExecutor(Protocol):
 
 
 @runtime_checkable
+class AttemptAwareExecutor(ControlledExecutor, Protocol):
+    """Executor capable of using a broker-owned durable attempt identifier."""
+
+    identity: str
+
+    async def execute_attempt(self, action: ActionSpec, *, attempt_id: UUID) -> ExecutionResult: ...
+
+
+@runtime_checkable
 class EffectVerifier(Protocol):
     name: str
     version: str
