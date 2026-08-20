@@ -9,7 +9,8 @@ pnpm_version="${PRODKIT_RELEASE_PNPM_VERSION:-10.15.0}"
 python3 scripts/release_check.py --version "$version"
 uv python install "$python_version"
 uv sync --all-packages --group dev --locked --python "$python_version"
-npm install --global "pnpm@$pnpm_version"
+corepack enable
+corepack prepare "pnpm@$pnpm_version" --activate
 pnpm install --frozen-lockfile
 
 rm -rf .artifacts/release-build
