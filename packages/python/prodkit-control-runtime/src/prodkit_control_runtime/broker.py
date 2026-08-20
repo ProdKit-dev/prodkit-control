@@ -16,6 +16,9 @@ from prodkit_control_core import (
     AuthorizationDeniedError,
     ControlledExecutor,
     ControlEventDraft,
+    CredentialLease,
+    CredentialLeaseAwareExecutor,
+    CredentialLeaseProvider,
     DuplicateActionError,
     EffectVerifier,
     EventLedger,
@@ -49,10 +52,10 @@ class BrokerOutcome:
 class ActionBroker:
     """Fail-closed lifecycle owner for externally visible actions.
 
-    When ``execution_attempts`` is configured the broker requires attempt-aware executors,
-    allocates the attempt identifier before the side effect, and durably moves that attempt
-    through claimed/started/terminal states. An executor exception leaves the idempotency claim
-    owned and records an ``uncertain`` attempt; the broker never silently retries it.
+    A durable production profile supplies both ``execution_attempts`` and, for privileged
+    executors, ``credential_leases``. The broker allocates the attempt identifier before the side
+    effect and leaves both the attempt and idempotency claim in an explicit uncertain state after
+    any ambiguous executor failure. It never silently retries an externally intended action.
     """
 
     def __init__(
@@ -66,6 +69,7 @@ class ActionBroker:
         verifier: EffectVerifier,
         artifact_store: ArtifactStore | None = None,
         execution_attempts: ExecutionAttemptStore | None = None,
+        credential_leases: CredentialLeaseProvider | None = None,
     ) -> None:
         self._ledger = ledger
         self._policy = policy
@@ -75,6 +79,7 @@ class ActionBroker:
         self._verifier = verifier
         self._artifact_store = artifact_store
         self._execution_attempts = execution_attempts
+        self._credential_leases = credential_leases
 
     async def execute(
         self,
@@ -144,12 +149,40 @@ class ActionBroker:
 
         executor: ControlledExecutor = self._executors.get(action.executor)
         durable_executor: AttemptAwareExecutor | None = None
-        if self._execution_attempts is not None:
+        lease_executor: CredentialLeaseAwareExecutor | None = None
+        if self._execution_attempts is not None or self._credential_leases is not None:
             if not isinstance(executor, AttemptAwareExecutor):
                 raise AuthorizationDeniedError(
                     f"executor {executor.name!r} does not support durable attempt ownership"
                 )
             durable_executor = executor
+        if self._credential_leases is not None:
+            if not isinstance(executor, CredentialLeaseAwareExecutor):
+                raise AuthorizationDeniedError(
+                    f"executor {executor.name!r} cannot consume an isolated credential lease"
+                )
+            lease_executor = executor
+
+        lease: CredentialLease | None = None
+        if self._credential_leases is not None and durable_executor is not None:
+            lease = await self._credential_leases.issue(
+                action=action,
+                executor_identity=durable_executor.identity,
+            )
+            await self._event(
+                action,
+                actor,
+                trace_id,
+                EventType.CREDENTIAL_LEASE_ISSUED,
+                {
+                    "lease_id": str(lease.lease_id),
+                    "executor_identity": lease.executor_identity,
+                    "audience": lease.audience,
+                    "scopes": list(lease.scopes),
+                    "issued_at": lease.issued_at.isoformat(),
+                    "expires_at": lease.expires_at.isoformat(),
+                },
+            )
 
         claimed = await self._idempotency.claim(
             tenant_id=action.tenant_id,
@@ -157,6 +190,8 @@ class ActionBroker:
             action_digest=action.digest,
         )
         if not claimed:
+            if lease is not None:
+                await self._revoke_lease(action, actor=actor, trace_id=trace_id, lease=lease)
             existing = await self._idempotency.result(
                 tenant_id=action.tenant_id,
                 key=action.idempotency_key,
@@ -215,10 +250,17 @@ class ActionBroker:
                 "executor_version": executor.version,
                 "action_digest": action.digest,
                 "execution_attempt_id": str(attempt_id) if attempt_id is not None else None,
+                "credential_lease_id": str(lease.lease_id) if lease is not None else None,
             },
         )
         try:
-            if durable_executor is not None and attempt_id is not None:
+            if lease_executor is not None and attempt_id is not None and lease is not None:
+                result = await lease_executor.execute_attempt_with_lease(
+                    action,
+                    attempt_id=attempt_id,
+                    credential_lease=lease,
+                )
+            elif durable_executor is not None and attempt_id is not None:
                 result = await durable_executor.execute_attempt(action, attempt_id=attempt_id)
             else:
                 result = await executor.execute(action)
@@ -234,6 +276,12 @@ class ActionBroker:
                     }
                 )
                 await self._execution_attempts.replace(uncertain)
+            revocation_error: Exception | None = None
+            if lease is not None:
+                try:
+                    await self._revoke_lease(action, actor=actor, trace_id=trace_id, lease=lease)
+                except Exception as revoke_exc:  # preserve the original ambiguous executor failure
+                    revocation_error = revoke_exc
             await self._event(
                 action,
                 actor,
@@ -247,13 +295,52 @@ class ActionBroker:
                     "error_type": type(exc).__name__,
                     "idempotency_key_retained": True,
                     "automatic_retry_permitted": False,
+                    "credential_revocation_failed": revocation_error is not None,
                 },
             )
+            if revocation_error is not None:
+                exc.add_note(f"credential lease revocation also failed: {revocation_error}")
             raise
 
         self._validate_result(action, executor, result, require_current_version=True)
         if attempt_id is not None and result.execution_attempt_id != attempt_id:
             raise IntegrityViolationError("executor changed the broker-owned execution attempt id")
+
+        if lease is not None:
+            try:
+                await self._revoke_lease(action, actor=actor, trace_id=trace_id, lease=lease)
+            except Exception as exc:
+                if attempt is not None and self._execution_attempts is not None:
+                    uncertain = attempt.model_copy(
+                        update={
+                            "state": ExecutionAttemptState.UNCERTAIN,
+                            "finished_at": datetime.now(UTC),
+                            "error_type": type(exc).__name__,
+                            "error_message": str(exc),
+                            "uncertainty_reason": (
+                                "executor returned but credential lease revocation failed"
+                            ),
+                        }
+                    )
+                    await self._execution_attempts.replace(uncertain)
+                await self._event(
+                    action,
+                    actor,
+                    trace_id,
+                    EventType.EXECUTION_UNCERTAIN,
+                    {
+                        "executor": executor.name,
+                        "execution_attempt_id": (
+                            str(attempt_id) if attempt_id is not None else None
+                        ),
+                        "reason": "credential_lease_revocation_failed",
+                        "idempotency_key_retained": True,
+                        "automatic_retry_permitted": False,
+                    },
+                )
+                raise IntegrityViolationError(
+                    "credential lease revocation failed after external execution"
+                ) from exc
 
         if attempt is not None and self._execution_attempts is not None:
             terminal_state = (
@@ -297,6 +384,35 @@ class ActionBroker:
             result=result,
             observation=observation,
             verification=verification,
+        )
+
+    async def _revoke_lease(
+        self,
+        action: ActionSpec,
+        *,
+        actor: ActorRef,
+        trace_id: str,
+        lease: CredentialLease,
+    ) -> None:
+        if self._credential_leases is None:
+            return
+        try:
+            await self._credential_leases.revoke(lease.lease_id)
+        except Exception as exc:
+            await self._event(
+                action,
+                actor,
+                trace_id,
+                EventType.CREDENTIAL_LEASE_REVOCATION_FAILED,
+                {"lease_id": str(lease.lease_id), "error_type": type(exc).__name__},
+            )
+            raise
+        await self._event(
+            action,
+            actor,
+            trace_id,
+            EventType.CREDENTIAL_LEASE_REVOKED,
+            {"lease_id": str(lease.lease_id)},
         )
 
     async def _observe_and_verify(
