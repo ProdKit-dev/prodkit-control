@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 API_VERSION = "2022-11-28"
+_ALLOWED_GITHUB_HOSTS = frozenset({"api.github.com", "uploads.github.com"})
 
 
 def _sha256(path: Path) -> str:
@@ -20,6 +21,17 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _validate_github_url(url: str) -> None:
+    parsed = urllib.parse.urlsplit(url)
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname not in _ALLOWED_GITHUB_HOSTS
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise RuntimeError("release request URL is outside the allowed GitHub HTTPS origins")
 
 
 def _request(
@@ -31,6 +43,7 @@ def _request(
     data: bytes | None = None,
     content_type: str | None = None,
 ) -> tuple[int, Any]:
+    _validate_github_url(url)
     body = data
     headers = {
         "Accept": "application/vnd.github+json",
@@ -43,9 +56,10 @@ def _request(
         headers["Content-Type"] = "application/json"
     elif content_type is not None:
         headers["Content-Type"] = content_type
-    request = urllib.request.Request(url, data=body, headers=headers, method=method)
+    request = urllib.request.Request(  # noqa: S310 - URL is allow-listed above.
+        url, data=body, headers=headers, method=method
+    )
     try:
-        # URLs are constructed only from GitHub API responses or the fixed api.github.com origin.
         with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310
             payload = response.read()
             decoded = json.loads(payload) if payload else None
