@@ -45,7 +45,8 @@ def _request(
         headers["Content-Type"] = content_type
     request = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
+        # URLs are constructed only from GitHub API responses or the fixed api.github.com origin.
+        with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310
             payload = response.read()
             decoded = json.loads(payload) if payload else None
             return response.status, decoded
@@ -60,9 +61,9 @@ def _asset_matches(asset: dict[str, Any], path: Path) -> bool:
     if asset.get("size") != path.stat().st_size:
         return False
     digest = asset.get("digest")
-    if isinstance(digest, str) and digest.startswith("sha256:"):
-        return digest == f"sha256:{_sha256(path)}"
-    return True
+    if not isinstance(digest, str) or not digest.startswith("sha256:"):
+        return False
+    return digest == f"sha256:{_sha256(path)}"
 
 
 def _release_by_tag(repository: str, tag: str, token: str) -> dict[str, Any] | None:
@@ -160,7 +161,7 @@ def publish(tag: str, notes: Path, assets: list[Path]) -> None:
         if existing is not None:
             if not _asset_matches(existing, path):
                 raise RuntimeError(
-                    f"existing release asset {path.name!r} differs from the local artifact"
+                    f"existing release asset {path.name!r} has no matching SHA-256 digest"
                 )
             continue
         if release.get("draft") is False:
@@ -180,13 +181,13 @@ def publish(tag: str, notes: Path, assets: list[Path]) -> None:
     for path in assets:
         remote = refreshed_assets.get(path.name)
         if remote is None or not _asset_matches(remote, path):
-            raise RuntimeError(f"release asset verification failed for {path.name!r}")
+            raise RuntimeError(f"release asset SHA-256 verification failed for {path.name!r}")
 
     if refreshed.get("draft") is not False:
         refreshed = _publish(repository, refreshed, token, body)
     if refreshed.get("draft") is not False or refreshed.get("prerelease") is not False:
         raise RuntimeError("release did not reach final published state")
-    print(f"Published {tag} with {len(assets)} verified assets")
+    print(f"Published {tag} with {len(assets)} SHA-256-verified assets")
 
 
 def main() -> int:
