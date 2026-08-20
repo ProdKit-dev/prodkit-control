@@ -5,7 +5,7 @@ import secrets
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, cast
+from typing import Annotated, TypeAlias, cast
 from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -146,6 +146,50 @@ def build_services() -> AppServices:
     )
 
 
+def _get_services(request: Request) -> AppServices:
+    try:
+        services = request.app.state.services
+    except AttributeError as exc:  # pragma: no cover - app factory always wires services
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="control services are not configured",
+        ) from exc
+    return cast(AppServices, services)
+
+
+async def _require_principal(request: Request) -> RequestPrincipal:
+    resolver = cast(
+        PrincipalResolver | None,
+        getattr(request.app.state, "principal_resolver", None),
+    )
+    allow_insecure_header_auth = bool(
+        getattr(request.app.state, "allow_insecure_header_auth", False)
+    )
+    if resolver is not None:
+        resolved = resolver(request)
+        if inspect.isawaitable(resolved):
+            resolved = await cast(Awaitable[RequestPrincipal], resolved)
+        if not isinstance(resolved, RequestPrincipal):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="principal resolver returned an invalid principal",
+            )
+        return resolved
+    if not allow_insecure_header_auth:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "authentication_not_configured",
+                "message": "configure a principal resolver for protected API routes",
+            },
+        )
+    return _insecure_header_principal(request)
+
+
+Principal: TypeAlias = Annotated[RequestPrincipal, Depends(_require_principal)]
+Services: TypeAlias = Annotated[AppServices, Depends(_get_services)]
+
+
 def create_app(
     services: AppServices | None = None,
     *,
@@ -157,7 +201,6 @@ def create_app(
     Production deployments must provide ``principal_resolver``. Header-based identity is
     intentionally disabled unless ``allow_insecure_header_auth`` is explicitly enabled.
     """
-    state = services or build_services()
     app = FastAPI(
         title="ProdKit Control",
         version="0.0.1",
@@ -166,34 +209,9 @@ def create_app(
             "reconciliation, and evidence API."
         ),
     )
-    app.state.services = state
-
-    def get_services() -> AppServices:
-        return cast(AppServices, app.state.services)
-
-    async def require_principal(request: Request) -> RequestPrincipal:
-        if principal_resolver is not None:
-            resolved = principal_resolver(request)
-            if inspect.isawaitable(resolved):
-                resolved = await cast(Awaitable[RequestPrincipal], resolved)
-            if not isinstance(resolved, RequestPrincipal):
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="principal resolver returned an invalid principal",
-                )
-            return resolved
-        if not allow_insecure_header_auth:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={
-                    "code": "authentication_not_configured",
-                    "message": "configure a principal resolver for protected API routes",
-                },
-            )
-        return _insecure_header_principal(request)
-
-    Principal = Annotated[RequestPrincipal, Depends(require_principal)]
-    globals()["Principal"] = Principal
+    app.state.services = services or build_services()
+    app.state.principal_resolver = principal_resolver
+    app.state.allow_insecure_header_auth = allow_insecure_header_auth
 
     @app.get("/healthz", tags=["operations"])
     async def healthz() -> dict[str, str]:
@@ -212,7 +230,7 @@ def create_app(
     async def start_run(
         request: StartRunRequest,
         principal: Principal,
-        services: AppServices = Depends(get_services),
+        services: Services,
     ) -> RunRecord:
         return await services.coordinator.start_run(
             tenant_id=principal.tenant_id,
@@ -225,18 +243,14 @@ def create_app(
         )
 
     @app.get("/v1/runs/{run_id}", response_model=RunRecord)
-    async def get_run(
-        run_id: UUID,
-        principal: Principal,
-        services: AppServices = Depends(get_services),
-    ) -> RunRecord:
+    async def get_run(run_id: UUID, principal: Principal, services: Services) -> RunRecord:
         return _scoped_run(services, run_id, principal.tenant_id)
 
     @app.get("/v1/runs/{run_id}/events", response_model=list[ControlEvent])
     async def list_events(
         run_id: UUID,
         principal: Principal,
-        services: AppServices = Depends(get_services),
+        services: Services,
     ) -> list[ControlEvent]:
         _scoped_run(services, run_id, principal.tenant_id)
         return await services.ledger.list_run_events(run_id)
@@ -246,7 +260,7 @@ def create_app(
         run_id: UUID,
         request: ExecuteActionRequest,
         principal: Principal,
-        services: AppServices = Depends(get_services),
+        services: Services,
     ) -> dict[str, object]:
         action = request.action
         if action.run_id != run_id or action.tenant_id != principal.tenant_id:
@@ -254,7 +268,9 @@ def create_app(
         run = _scoped_run(services, run_id, principal.tenant_id)
         try:
             outcome = await services.broker.execute(
-                action, actor=principal.actor(), trace_id=run.trace_id
+                action,
+                actor=principal.actor(),
+                trace_id=run.trace_id,
             )
         except ApprovalRequiredError as exc:
             raise HTTPException(
@@ -265,7 +281,12 @@ def create_app(
                     "action_digest": exc.action_digest,
                 },
             ) from exc
-        except (AuthorizationDeniedError, DuplicateActionError) as exc:
+        except DuplicateActionError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": "duplicate_action", "message": str(exc)},
+            ) from exc
+        except AuthorizationDeniedError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
         return {
             "action": action.model_dump(mode="json"),
@@ -280,7 +301,7 @@ def create_app(
         run_id: UUID,
         request: ApprovalRequest,
         principal: Principal,
-        services: AppServices = Depends(get_services),
+        services: Services,
     ) -> ApprovalDecision:
         action = request.action
         if action.run_id != run_id or action.tenant_id != principal.tenant_id:
@@ -319,13 +340,15 @@ def create_app(
     async def complete_run(
         run_id: UUID,
         principal: Principal,
+        services: Services,
         final_status: RunStatus = RunStatus.SUCCEEDED,
-        services: AppServices = Depends(get_services),
     ) -> RunRecord:
         _scoped_run(services, run_id, principal.tenant_id)
         try:
             return await services.coordinator.complete_run(
-                run_id, actor=principal.actor(), status=final_status
+                run_id,
+                actor=principal.actor(),
+                status=final_status,
             )
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -339,7 +362,7 @@ def create_app(
         run_id: UUID,
         request: RecordLineageNodeRequest,
         principal: Principal,
-        services: AppServices = Depends(get_services),
+        services: Services,
     ) -> LineageNode:
         run = _scoped_run(services, run_id, principal.tenant_id)
         node = request.node
@@ -381,7 +404,7 @@ def create_app(
         run_id: UUID,
         request: RecordLineageRelationRequest,
         principal: Principal,
-        services: AppServices = Depends(get_services),
+        services: Services,
     ) -> LineageRelation:
         run = _scoped_run(services, run_id, principal.tenant_id)
         try:
@@ -412,7 +435,7 @@ def create_app(
     async def get_lineage(
         run_id: UUID,
         principal: Principal,
-        services: AppServices = Depends(get_services),
+        services: Services,
     ) -> LineageGraph:
         _scoped_run(services, run_id, principal.tenant_id)
         try:
@@ -428,7 +451,7 @@ def create_app(
         run_id: UUID,
         request: AssessLineageRequest,
         principal: Principal,
-        services: AppServices = Depends(get_services),
+        services: Services,
     ) -> ProductionLineageAssessment:
         run = _scoped_run(services, run_id, principal.tenant_id)
         try:
