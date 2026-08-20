@@ -11,6 +11,17 @@ from typing import Any
 API_VERSION = "2022-11-28"
 
 
+def _validate_github_url(url: str) -> None:
+    parsed = urllib.parse.urlsplit(url)
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname != "api.github.com"
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise RuntimeError("tag request URL is outside the allowed GitHub HTTPS origin")
+
+
 def _request(
     method: str,
     url: str,
@@ -18,6 +29,7 @@ def _request(
     *,
     json_body: dict[str, Any] | None = None,
 ) -> tuple[int, Any]:
+    _validate_github_url(url)
     body = None
     headers = {
         "Accept": "application/vnd.github+json",
@@ -28,9 +40,10 @@ def _request(
     if json_body is not None:
         body = json.dumps(json_body).encode("utf-8")
         headers["Content-Type"] = "application/json"
-    request = urllib.request.Request(url, data=body, headers=headers, method=method)
+    request = urllib.request.Request(  # noqa: S310 - URL is allow-listed above.
+        url, data=body, headers=headers, method=method
+    )
     try:
-        # The origin is fixed to GitHub's API and path components are URL-encoded.
         with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310
             payload = response.read()
             return response.status, json.loads(payload) if payload else None
