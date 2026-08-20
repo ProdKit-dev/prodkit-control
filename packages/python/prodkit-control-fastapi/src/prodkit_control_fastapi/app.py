@@ -168,7 +168,7 @@ async def _require_principal(request: Request) -> RequestPrincipal:
     if resolver is not None:
         resolved = resolver(request)
         if inspect.isawaitable(resolved):
-            resolved = await cast(Awaitable[RequestPrincipal], resolved)
+            resolved = await resolved
         if not isinstance(resolved, RequestPrincipal):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
