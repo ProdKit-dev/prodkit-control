@@ -17,6 +17,7 @@ concurrency:
 jobs:
   python:
     name: Python ${{ matrix.python-version }}
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 20
     strategy:
@@ -66,6 +67,7 @@ jobs:
 
   typescript:
     name: TypeScript (Node ${{ matrix.node-version }})
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
     strategy:
@@ -100,6 +102,7 @@ jobs:
 
   security:
     name: Dependency Audit
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
 
@@ -140,6 +143,7 @@ jobs:
 
   packaging:
     name: Release Artifact Proof
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 20
 
@@ -199,6 +203,7 @@ jobs:
 
   hygiene:
     name: Repository Hygiene
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 5
 
@@ -217,7 +222,7 @@ jobs:
 
   ci-success:
     name: CI passed
-    if: always()
+    if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     needs: [python, typescript, security, packaging, hygiene]
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 5
