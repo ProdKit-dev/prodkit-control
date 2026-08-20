@@ -4,6 +4,7 @@ from .broker import ActionBroker as ActionBroker
 from .broker import BrokerOutcome as BrokerOutcome
 from .bundles import EvidenceBundleBuilder as EvidenceBundleBuilder
 from .bundles import EvidenceBundleVerifier as EvidenceBundleVerifier
+from .bundles import evidence_bundle_sha256 as evidence_bundle_sha256
 from .coordinator import RunCoordinator as RunCoordinator
 from .executors import DigestEffectVerifier as DigestEffectVerifier
 from .executors import DryRunExecutor as DryRunExecutor
