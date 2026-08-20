@@ -8,9 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_RE = re.compile(r"^v?(\d+\.\d+\.\d+)$")
-TEMPORARY_RELEASE_PATHS = (
-    ROOT / ".github/workflows/v0.0.1-normalize.yml",
-)
+TEMPORARY_RELEASE_PATHS = (ROOT / ".github/workflows/v0.0.1-normalize.yml",)
 
 
 def _version(value: str) -> str:
@@ -26,7 +24,10 @@ def _toml(path: Path) -> dict[str, object]:
 
 def _python_packages() -> dict[str, tuple[str, Path]]:
     result: dict[str, tuple[str, Path]] = {}
-    for path in [ROOT / "pyproject.toml", *sorted((ROOT / "packages/python").glob("**/pyproject.toml"))]:
+    for path in [
+        ROOT / "pyproject.toml",
+        *sorted((ROOT / "packages/python").glob("**/pyproject.toml")),
+    ]:
         project = _toml(path).get("project")
         if not isinstance(project, dict):
             continue
@@ -87,8 +88,7 @@ def verify(expected: str) -> list[str]:
         failures.append(f"CHANGELOG.md has no released {expected} section")
 
     app_text = (
-        ROOT
-        / "packages/python/prodkit-control-fastapi/src/prodkit_control_fastapi/app.py"
+        ROOT / "packages/python/prodkit-control-fastapi/src/prodkit_control_fastapi/app.py"
     ).read_text(encoding="utf-8")
     if f'version="{expected}"' not in app_text:
         failures.append(f"FastAPI metadata does not expose version {expected}")
