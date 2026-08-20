@@ -1,12 +1,25 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import pytest
 
-from scripts import publish_release as publisher
+
+def _load_publisher() -> ModuleType:
+    script = Path(__file__).resolve().parents[1] / "scripts" / "publish_release.py"
+    spec = importlib.util.spec_from_file_location("prodkit_publish_release", script)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load release publisher from {script}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+publisher = _load_publisher()
 
 
 def _asset_record(path: Path) -> dict[str, Any]:
