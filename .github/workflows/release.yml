@@ -6,18 +6,87 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  release:
+    runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - run: uv sync --all-packages --group dev --locked
-      - run: uv run pytest
-      - run: uv build --all-packages
-      - uses: actions/upload-artifact@v4
+      - name: Check out exact tag
+        uses: actions/checkout@v7
         with:
-          name: distributions
-          path: "**/dist/*"
+          fetch-depth: 0
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Verify release source contract
+        run: |
+          uv sync --all-packages --group dev --locked
+          uv run python scripts/release_check.py --tag "$GITHUB_REF_NAME"
+
+      - name: Verify Python source
+        run: |
+          uv run ruff format --check .
+          uv run ruff check .
+          uv run mypy
+          uv run pytest --cov-report=term-missing
+          uv run python scripts/export_schemas.py --check
+
+      - name: Verify TypeScript source
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm typecheck:ts
+          pnpm build:ts
+
+      - name: Build Python distributions
+        run: |
+          rm -rf .release
+          mkdir -p .release/python
+          uv build --all-packages --out-dir .release/python
+          test -n "$(find .release/python -maxdepth 1 -type f -print -quit)"
+
+      - name: Generate release checksums
+        shell: bash
+        run: |
+          (
+            cd .release/python
+            find . -maxdepth 1 -type f -printf '%P\0' \
+              | sort -z \
+              | xargs -0 sha256sum
+          ) > .release/SHA256SUMS
+          test -s .release/SHA256SUMS
+          cat .release/SHA256SUMS
+
+      - name: Preserve verified distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ github.ref_name }}
+          path: |
+            .release/python/*
+            .release/SHA256SUMS
+          if-no-files-found: error
+
+      - name: Publish immutable GitHub Release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mapfile -t assets < <(find .release/python -maxdepth 1 -type f -print | sort)
+          assets+=(.release/SHA256SUMS)
+          uv run python scripts/publish_release.py \
+            --tag "$GITHUB_REF_NAME" \
+            --notes "docs/releases/$GITHUB_REF_NAME.md" \
+            "${assets[@]}"
