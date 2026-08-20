@@ -6,7 +6,6 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  actions: read
   contents: write
 
 concurrency:
@@ -17,7 +16,7 @@ jobs:
   finalize:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     env:
       RELEASE_SHA: a43a33e9d9ab52c5447bf623eaf919d70f50d728
@@ -34,136 +33,16 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Prove exact release tree equals green PR tree
+      - name: Re-prove immutable source identity
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
           test "$(git rev-parse "$RELEASE_SHA^{tree}")" = "$(git rev-parse "$PROVEN_PR_SHA^{tree}")"
           git diff --exit-code "$PROVEN_PR_SHA" "$RELEASE_SHA"
-          echo "release tree is byte-identical to proven PR head $PROVEN_PR_SHA"
+          python3 scripts/release_check.py --version "$RELEASE_VERSION"
 
-      - name: Verify main still points at release source
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import os
-          import urllib.request
-          repo = os.environ["GITHUB_REPOSITORY"]
-          token = os.environ["GITHUB_TOKEN"]
-          expected = os.environ["RELEASE_SHA"]
-          request = urllib.request.Request(
-              f"https://api.github.com/repos/{repo}/git/ref/heads/main",
-              headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
-          )
-          with urllib.request.urlopen(request) as response:
-              payload = json.load(response)
-          actual = payload["object"]["sha"]
-          if actual != expected:
-              raise SystemExit(f"main moved: expected {expected}, got {actual}")
-          print(f"verified main -> {actual}")
-          PY
-
-      - name: Install uv and Python
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
-        with:
-          version: "0.10.0"
-          python-version: "3.13"
-          enable-cache: true
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-
-      - name: Install Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install locked workspaces
-        run: |
-          uv sync --all-packages --group dev --locked
-          pnpm install --frozen-lockfile
-
-      - name: Verify exact release source contract
-        run: uv run python scripts/release_check.py --version "$RELEASE_VERSION"
-
-      - name: Build TypeScript release packages
-        run: pnpm build:ts
-
-      - name: Build all release distributions from exact release commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf .release
-          mkdir -p .release/assets
-          uv build --all-packages --out-dir .release/assets
-          for package_dir in packages/typescript/*; do
-            test -f "$package_dir/package.json" || continue
-            pnpm --dir "$package_dir" pack --pack-destination "$GITHUB_WORKSPACE/.release/assets"
-          done
-          rm -f .release/assets/.gitignore
-          test "$(find .release/assets -maxdepth 1 -type f | wc -l)" -eq 68
-
-      - name: Inspect all release distributions
-        run: uv run python scripts/inspect_release_artifacts.py .release/assets --version "$RELEASE_VERSION"
-
-      - name: Generate release checksums
-        shell: bash
-        run: |
-          set -euo pipefail
-          (
-            cd .release/assets
-            find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\0' | sort -z | xargs -0 sha256sum
-          ) > .release/assets/SHA256SUMS
-          test -s .release/assets/SHA256SUMS
-          test "$(wc -l < .release/assets/SHA256SUMS)" -eq 68
-          test "$(find .release/assets -maxdepth 1 -type f | wc -l)" -eq 69
-
-      - name: Reverify main before release mutation
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import os
-          import urllib.request
-          repo = os.environ["GITHUB_REPOSITORY"]
-          token = os.environ["GITHUB_TOKEN"]
-          expected = os.environ["RELEASE_SHA"]
-          request = urllib.request.Request(
-              f"https://api.github.com/repos/{repo}/git/ref/heads/main",
-              headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
-          )
-          with urllib.request.urlopen(request) as response:
-              payload = json.load(response)
-          if payload["object"]["sha"] != expected:
-              raise SystemExit("main moved during release proof; refusing release mutation")
-          print("main remained exact through artifact proof")
-          PY
-
-      - name: Create or verify immutable v0.0.0 tag
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: uv run python scripts/ensure_release_tag.py --tag "$RELEASE_TAG" --sha "$RELEASE_SHA"
-
-      - name: Publish canonical ProdKit Control v0.0.0 release
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          mapfile -t assets < <(find .release/assets -maxdepth 1 -type f -print | sort)
-          uv run python scripts/publish_release.py --tag "$RELEASE_TAG" --notes "docs/releases/$RELEASE_TAG.md" "${assets[@]}"
-
-      - name: Independently verify replacement, retire v0.0.1, and clean branches
+      - name: Verify uploaded draft, publish it, retire v0.0.1, and clean branches
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -171,9 +50,12 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from __future__ import annotations
+
           import hashlib
           import json
           import os
+          import subprocess
+          import sys
           import urllib.error
           import urllib.parse
           import urllib.request
@@ -183,76 +65,117 @@ jobs:
           repo = os.environ["GITHUB_REPOSITORY"]
           token = os.environ["GITHUB_TOKEN"]
           expected_sha = os.environ["RELEASE_SHA"]
+          proven_sha = os.environ["PROVEN_PR_SHA"]
+          version = os.environ["RELEASE_VERSION"]
           new_tag = os.environ["RELEASE_TAG"]
           old_tag = os.environ["OLD_TAG"]
           expected_name = f"ProdKit Control {new_tag}"
-          headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "prodkit-control-release-finalizer"}
+          headers = {
+              "Authorization": f"Bearer {token}",
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+              "User-Agent": "prodkit-control-v0.0.0-finalizer",
+          }
 
           def api(method: str, path: str, data: object | None = None, *, allow_404: bool = False):
-              body = None if data is None else json.dumps(data).encode()
+              body = None if data is None else json.dumps(data).encode("utf-8")
               request = urllib.request.Request(API + path, data=body, method=method, headers=headers)
               try:
-                  with urllib.request.urlopen(request) as response:
+                  with urllib.request.urlopen(request, timeout=90) as response:
                       raw = response.read()
                       return None if not raw else json.loads(raw)
               except urllib.error.HTTPError as exc:
                   if allow_404 and exc.code == 404:
                       return None
-                  detail = exc.read().decode(errors="replace")
+                  detail = exc.read().decode("utf-8", errors="replace")
                   raise RuntimeError(f"{method} {path} -> HTTP {exc.code}: {detail}") from exc
 
-          def releases() -> list[dict[str, object]]:
+          def all_releases() -> list[dict[str, object]]:
               result: list[dict[str, object]] = []
               page = 1
               while True:
                   batch = api("GET", f"/repos/{repo}/releases?per_page=100&page={page}")
                   if not isinstance(batch, list):
                       raise RuntimeError("unexpected release-list response")
-                  result.extend(batch)
+                  result.extend(item for item in batch if isinstance(item, dict))
                   if len(batch) < 100:
                       return result
                   page += 1
 
-          def ref(tag: str):
-              return api("GET", f"/repos/{repo}/git/ref/tags/{urllib.parse.quote(tag, safe='')}", allow_404=True)
+          def git_ref(kind: str, name: str):
+              encoded = urllib.parse.quote(name, safe="")
+              return api("GET", f"/repos/{repo}/git/ref/{kind}/{encoded}", allow_404=True)
 
-          def download_asset(asset: dict[str, object]) -> bytes:
+          def delete_ref(kind: str, name: str) -> None:
+              encoded = urllib.parse.quote(name, safe="")
+              api("DELETE", f"/repos/{repo}/git/refs/{kind}/{encoded}")
+
+          def asset_bytes(asset: dict[str, object]) -> bytes:
               url = asset.get("url")
               if not isinstance(url, str):
-                  raise RuntimeError("release asset has no API URL")
-              request = urllib.request.Request(url, headers={**headers, "Accept": "application/octet-stream"})
-              with urllib.request.urlopen(request) as response:
+                  raise RuntimeError("asset has no API URL")
+              request = urllib.request.Request(
+                  url,
+                  headers={**headers, "Accept": "application/octet-stream"},
+              )
+              with urllib.request.urlopen(request, timeout=90) as response:
                   return response.read()
 
-          tag_ref = ref(new_tag)
-          if not isinstance(tag_ref, dict) or not isinstance(tag_ref.get("object"), dict) or tag_ref["object"].get("sha") != expected_sha:
+          # Main and tag must still identify the exact release commit.
+          main_ref = git_ref("heads", "main")
+          if not isinstance(main_ref, dict) or not isinstance(main_ref.get("object"), dict):
+              raise RuntimeError("main ref is unavailable")
+          if main_ref["object"].get("sha") != expected_sha:
+              raise RuntimeError(f"main moved away from release commit {expected_sha}")
+
+          tag_ref = git_ref("tags", new_tag)
+          if not isinstance(tag_ref, dict) or not isinstance(tag_ref.get("object"), dict):
+              raise RuntimeError(f"{new_tag} tag is missing")
+          if tag_ref["object"].get("sha") != expected_sha:
               raise RuntimeError(f"{new_tag} does not resolve exactly to {expected_sha}")
 
-          matching = [r for r in releases() if r.get("tag_name") == new_tag]
+          matching = [r for r in all_releases() if r.get("tag_name") == new_tag]
           if len(matching) != 1:
-              raise RuntimeError(f"expected exactly one {new_tag} release, found {len(matching)}")
+              raise RuntimeError(f"expected exactly one {new_tag} release record, found {len(matching)}")
           release = matching[0]
-          if release.get("name") != expected_name or release.get("draft") is not False or release.get("prerelease") is not False:
-              raise RuntimeError("canonical release metadata/state mismatch")
+          release_id = release.get("id")
+          if not isinstance(release_id, int):
+              raise RuntimeError("v0.0.0 release has no numeric id")
 
-          assets = release.get("assets")
+          # Fetch by release ID because GitHub's /releases/tags endpoint hides drafts.
+          current = api("GET", f"/repos/{repo}/releases/{release_id}")
+          if not isinstance(current, dict):
+              raise RuntimeError("cannot fetch v0.0.0 release by id")
+          if current.get("tag_name") != new_tag:
+              raise RuntimeError("v0.0.0 release id changed tag")
+
+          assets = current.get("assets")
           if not isinstance(assets, list):
-              raise RuntimeError("release assets missing")
-          local = {path.name: path for path in sorted(Path(".release/assets").iterdir()) if path.is_file()}
-          remote = {str(asset.get("name")): asset for asset in assets if isinstance(asset, dict)}
-          if set(local) != set(remote) or len(remote) != 69:
-              raise RuntimeError(f"asset-set mismatch: local={len(local)}, remote={len(remote)}")
+              raise RuntimeError("v0.0.0 release assets are missing")
+          remote = {
+              str(asset.get("name")): asset
+              for asset in assets
+              if isinstance(asset, dict) and isinstance(asset.get("name"), str)
+          }
+          if len(remote) != 69 or "SHA256SUMS" not in remote:
+              raise RuntimeError(
+                  f"expected 69 uploaded assets including SHA256SUMS, found {len(remote)}"
+              )
 
+          root = Path(".release-repair")
+          payload_dir = root / "payloads"
+          payload_dir.mkdir(parents=True, exist_ok=True)
           downloaded: dict[str, bytes] = {}
-          for name, path in sorted(local.items()):
-              local_sha = hashlib.sha256(path.read_bytes()).hexdigest()
-              asset = remote[name]
-              if asset.get("digest") != f"sha256:{local_sha}":
-                  raise RuntimeError(f"GitHub digest mismatch for {name}")
-              remote_bytes = download_asset(asset)
-              if hashlib.sha256(remote_bytes).hexdigest() != local_sha:
-                  raise RuntimeError(f"downloaded asset mismatch for {name}")
-              downloaded[name] = remote_bytes
+
+          # Independently download every uploaded asset and verify GitHub's digest metadata.
+          for name, asset in sorted(remote.items()):
+              data = asset_bytes(asset)
+              actual = hashlib.sha256(data).hexdigest()
+              if asset.get("digest") != f"sha256:{actual}":
+                  raise RuntimeError(f"GitHub SHA-256 metadata mismatch for {name}")
+              downloaded[name] = data
+              if name != "SHA256SUMS":
+                  (payload_dir / name).write_bytes(data)
 
           sums: dict[str, str] = {}
           for line in downloaded["SHA256SUMS"].decode("utf-8").splitlines():
@@ -262,37 +185,100 @@ jobs:
           if len(payload_names) != 68 or set(sums) != set(payload_names):
               raise RuntimeError("SHA256SUMS does not cover exactly the 68 payload assets")
           for name in payload_names:
-              if hashlib.sha256(downloaded[name]).hexdigest() != sums[name]:
+              actual = hashlib.sha256(downloaded[name]).hexdigest()
+              if sums[name] != actual:
                   raise RuntimeError(f"SHA256SUMS mismatch for downloaded {name}")
 
-          print(f"verified canonical {expected_name}: {new_tag} -> {expected_sha}, release {release.get('id')}, 69 assets; all remote downloads and digests match")
+          # Validate package identities/content from the remote downloads themselves.
+          subprocess.run(
+              [
+                  sys.executable,
+                  "scripts/inspect_release_artifacts.py",
+                  str(payload_dir),
+                  "--version",
+                  version,
+              ],
+              check=True,
+          )
 
-          for old in [r for r in releases() if r.get("tag_name") == old_tag]:
+          notes = Path(f"docs/releases/{new_tag}.md").read_text(encoding="utf-8")
+          published = api(
+              "PATCH",
+              f"/repos/{repo}/releases/{release_id}",
+              {
+                  "name": expected_name,
+                  "body": notes,
+                  "draft": False,
+                  "prerelease": False,
+              },
+          )
+          if not isinstance(published, dict):
+              raise RuntimeError("release publish response is invalid")
+          if (
+              published.get("name") != expected_name
+              or published.get("tag_name") != new_tag
+              or published.get("draft") is not False
+              or published.get("prerelease") is not False
+          ):
+              raise RuntimeError("v0.0.0 did not reach required published state")
+
+          encoded_tag = urllib.parse.quote(new_tag, safe="")
+          tag_release = api("GET", f"/repos/{repo}/releases/tags/{encoded_tag}")
+          if not isinstance(tag_release, dict) or tag_release.get("id") != release_id:
+              raise RuntimeError("published tag endpoint does not resolve to canonical release")
+          if len(tag_release.get("assets", [])) != 69:
+              raise RuntimeError("published release asset count changed")
+
+          print(
+              f"verified and published {expected_name}: {new_tag} -> {expected_sha}; "
+              f"release {release_id}; 69 assets; 68 payloads independently downloaded, "
+              "GitHub-digest checked, SHA256SUMS checked, and archive-inspected"
+          )
+
+          # Destructive retirement starts only after replacement publication + verification.
+          for old in [r for r in all_releases() if r.get("tag_name") == old_tag]:
               old_id = old.get("id")
               if not isinstance(old_id, int):
                   raise RuntimeError("old release has invalid id")
               api("DELETE", f"/repos/{repo}/releases/{old_id}")
               print(f"deleted provisional release {old_id} for {old_tag}")
 
-          if ref(old_tag) is not None:
-              api("DELETE", f"/repos/{repo}/git/refs/tags/{urllib.parse.quote(old_tag, safe='')}")
+          if git_ref("tags", old_tag) is not None:
+              delete_ref("tags", old_tag)
               print(f"deleted provisional tag {old_tag}")
 
-          if any(r.get("tag_name") == old_tag for r in releases()) or ref(old_tag) is not None:
-              raise RuntimeError(f"{old_tag} still exists after retirement")
-          matching = [r for r in releases() if r.get("tag_name") == new_tag]
-          tag_ref = ref(new_tag)
-          if len(matching) != 1 or not isinstance(tag_ref, dict) or not isinstance(tag_ref.get("object"), dict) or tag_ref["object"].get("sha") != expected_sha:
-              raise RuntimeError("replacement release/tag changed during retirement")
+          if any(r.get("tag_name") == old_tag for r in all_releases()):
+              raise RuntimeError(f"{old_tag} release record still exists")
+          if git_ref("tags", old_tag) is not None:
+              raise RuntimeError(f"{old_tag} tag still exists")
 
+          # Re-verify the replacement after old-version retirement.
+          replacement = api("GET", f"/repos/{repo}/releases/tags/{encoded_tag}")
+          replacement_ref = git_ref("tags", new_tag)
+          if not isinstance(replacement, dict) or replacement.get("id") != release_id:
+              raise RuntimeError("replacement release changed during retirement")
+          if (
+              not isinstance(replacement_ref, dict)
+              or not isinstance(replacement_ref.get("object"), dict)
+              or replacement_ref["object"].get("sha") != expected_sha
+          ):
+              raise RuntimeError("replacement tag changed during retirement")
+
+          # Remove merged preparation branch and this operational branch.
           for branch in ["docs/enterprise-architecture-baseline"]:
-              encoded = urllib.parse.quote(branch, safe="")
-              if api("GET", f"/repos/{repo}/git/ref/heads/{encoded}", allow_404=True) is not None:
-                  api("DELETE", f"/repos/{repo}/git/refs/heads/{encoded}")
+              if git_ref("heads", branch) is not None:
+                  delete_ref("heads", branch)
                   print(f"deleted branch {branch}")
 
-          self_branch = (os.environ.get("GITHUB_HEAD_REF") or os.environ["GITHUB_REF_NAME"]).strip()
-          api("DELETE", f"/repos/{repo}/git/refs/heads/{urllib.parse.quote(self_branch, safe='')}")
-          print(f"deleted finalizer branch {self_branch}")
-          print("v0.0.0 bootstrap renumber closure complete")
+          self_branch = (os.environ.get("GITHUB_HEAD_REF") or "").strip()
+          if not self_branch:
+              raise RuntimeError("cannot resolve finalizer PR head branch")
+          if git_ref("heads", self_branch) is not None:
+              delete_ref("heads", self_branch)
+              print(f"deleted finalizer branch {self_branch}")
+
+          print(
+              f"v0.0.0 bootstrap renumber closure complete; release tree was already proven "
+              f"identical to green PR head {proven_sha}"
+          )
           PY
