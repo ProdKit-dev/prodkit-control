@@ -2,7 +2,8 @@
 set -euo pipefail
 
 node_version="${PRODKIT_NODE_VERSION:?PRODKIT_NODE_VERSION is required}"
-npm install --global pnpm@10.15.0
+corepack enable
+corepack prepare pnpm@10.15.0 --activate
 pnpm install --frozen-lockfile
 pnpm typecheck:ts
 pnpm build:ts
