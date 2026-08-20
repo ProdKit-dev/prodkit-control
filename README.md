@@ -260,7 +260,7 @@ Protected routes fail closed unless authentication is configured. For local deve
 PRODKIT_ALLOW_INSECURE_HEADER_AUTH=true uv run prodkit-control-api
 ```
 
-Open `http://127.0.0.0:8000/docs`. Development requests to protected routes must provide `X-ProdKit-Tenant-Id`, `X-ProdKit-Actor-Id`, and `X-ProdKit-Actor-Kind`; production deployments must inject an authenticated `PrincipalResolver` instead of enabling header authentication.
+Open `http://127.0.0.1:8000/docs`. Development requests to protected routes must provide `X-ProdKit-Tenant-Id`, `X-ProdKit-Actor-Id`, and `X-ProdKit-Actor-Kind`; production deployments must inject an authenticated `PrincipalResolver` instead of enabling header authentication.
 
 ### Run the deterministic demo
 
@@ -317,6 +317,7 @@ Compatibility with a standard means the data model and adapter boundary are desi
 - [Threat model](docs/security/threat-model.md)
 - [Secure deployment](docs/security/secure-deployment.md)
 - [Operations runbook](docs/operations/runbook.md)
+- [Releases and versioning](docs/releases/README.md)
 - [Roadmap](ROADMAP.md)
 
 ## Roadmap philosophy
