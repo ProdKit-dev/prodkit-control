@@ -1,0 +1,12 @@
+title = "ProdKit Control Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Mermaid API result arrow is documentation, not a credential"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^docs/architecture/overview\.md$''']
+regexTarget = "line"
+regexes = ['''^[[:space:]]*Runtime-->>API: Verified/mismatched/unverifiable result[[:space:]]*$''']
