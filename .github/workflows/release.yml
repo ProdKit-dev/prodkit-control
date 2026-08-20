@@ -2,38 +2,43 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
 
 permissions:
+  actions: read
   contents: write
+  security-events: write
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release-main
   cancel-in-progress: false
 
 jobs:
   release:
+    if: ${{ startsWith(github.event.head_commit.message, 'release: v') }}
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30
+    timeout-minutes: 40
+
     steps:
-      - name: Check out exact tag
+      - name: Check out exact release commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify tag is exact current main
+      - name: Resolve release identity
+        id: release
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          test "$(git tag --points-at HEAD --list "$GITHUB_REF_NAME")" = "$GITHUB_REF_NAME"
-          main_sha="$(curl -fsSL \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/ref/heads/main" \
-            | python3 -c 'import json,sys; print(json.load(sys.stdin)["object"]["sha"])')"
-          test "$GITHUB_SHA" = "$main_sha"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          tag="v$version"
+          subject="$(git log -1 --format=%s)"
+          test "$subject" = "release: $tag"
+          test -f "docs/releases/$tag.md"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Install uv and Python
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
@@ -58,7 +63,7 @@ jobs:
           pnpm install --frozen-lockfile
 
       - name: Verify release source contract
-        run: uv run python scripts/release_check.py --tag "$GITHUB_REF_NAME"
+        run: uv run python scripts/release_check.py --version "${{ steps.release.outputs.version }}"
 
       - name: Verify Python source
         run: |
@@ -78,6 +83,29 @@ jobs:
           uv run --with pip-audit==2.10.1 pip-audit --local --skip-editable
           pnpm audit --audit-level=high
 
+      - name: Initialize CodeQL release proof
+        uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        with:
+          languages: python,javascript-typescript,actions
+
+      - name: Analyze release source locally
+        uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        with:
+          upload: never
+          upload-database: false
+          output: .release-evidence/codeql
+
+      - name: Enforce zero CodeQL findings
+        run: python3 scripts/check_codeql_sarif.py .release-evidence/codeql
+
+      - name: Preserve CodeQL evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: prodkit-control-${{ steps.release.outputs.tag }}-codeql
+          path: .release-evidence/codeql/*.sarif
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Build all release distributions
         shell: bash
         run: |
@@ -91,8 +119,9 @@ jobs:
 
       - name: Inspect all release distributions
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          uv run python scripts/inspect_release_artifacts.py .release/assets --version "$version"
+          uv run python scripts/inspect_release_artifacts.py \
+            .release/assets \
+            --version "${{ steps.release.outputs.version }}"
 
       - name: Generate release checksums
         shell: bash
@@ -109,10 +138,18 @@ jobs:
       - name: Preserve verified distributions
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: prodkit-control-${{ github.ref_name }}
+          name: prodkit-control-${{ steps.release.outputs.tag }}
           path: .release/assets/*
           if-no-files-found: error
           retention-days: 30
+
+      - name: Create or verify immutable release tag
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          uv run python scripts/ensure_release_tag.py \
+            --tag "${{ steps.release.outputs.tag }}" \
+            --sha "$GITHUB_SHA"
 
       - name: Publish immutable GitHub Release
         shell: bash
@@ -121,6 +158,6 @@ jobs:
         run: |
           mapfile -t assets < <(find .release/assets -maxdepth 1 -type f -print | sort)
           uv run python scripts/publish_release.py \
-            --tag "$GITHUB_REF_NAME" \
-            --notes "docs/releases/$GITHUB_REF_NAME.md" \
+            --tag "${{ steps.release.outputs.tag }}" \
+            --notes "docs/releases/${{ steps.release.outputs.tag }}.md" \
             "${assets[@]}"
