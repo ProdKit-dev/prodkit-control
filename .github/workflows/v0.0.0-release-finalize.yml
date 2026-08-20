@@ -4,23 +4,27 @@ on:
   push:
     branches:
       - release-finalize/v0.0.0
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
 
 permissions:
   actions: read
   contents: write
-  security-events: write
 
 concurrency:
   group: finalize-v0.0.0
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   finalize:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 45
+    timeout-minutes: 30
 
     env:
       RELEASE_SHA: a43a33e9d9ab52c5447bf623eaf919d70f50d728
+      PROVEN_PR_SHA: 2f7859d037feb091e3e10c7e2a45f0f1d33bd129
       RELEASE_VERSION: 0.0.0
       RELEASE_TAG: v0.0.0
       OLD_TAG: v0.0.1
@@ -32,6 +36,15 @@ jobs:
           ref: a43a33e9d9ab52c5447bf623eaf919d70f50d728
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Prove exact release tree equals green PR tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test "$(git rev-parse "$RELEASE_SHA^{tree}")" = "$(git rev-parse "$PROVEN_PR_SHA^{tree}")"
+          git diff --exit-code "$PROVEN_PR_SHA" "$RELEASE_SHA"
+          echo "release tree is byte-identical to proven PR head $PROVEN_PR_SHA"
 
       - name: Verify main still points at release source
         shell: bash
@@ -88,48 +101,7 @@ jobs:
       - name: Verify exact release source contract
         run: uv run python scripts/release_check.py --version "$RELEASE_VERSION"
 
-      - name: Verify Python source
-        run: |
-          uv run ruff format --check .
-          uv run ruff check .
-          uv run mypy
-          uv run pytest --cov-report=term-missing
-          uv run python scripts/export_schemas.py --check
-
-      - name: Verify TypeScript source
-        run: |
-          pnpm typecheck:ts
-          pnpm build:ts
-
-      - name: Audit dependencies
-        run: |
-          uv run --with pip-audit==2.10.1 pip-audit --local --skip-editable
-          pnpm audit --audit-level=high
-
-      - name: Initialize CodeQL release proof
-        uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
-        with:
-          languages: python,javascript-typescript,actions
-
-      - name: Analyze exact release source locally
-        uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
-        with:
-          upload: never
-          upload-database: false
-          output: .release-evidence/codeql
-
-      - name: Enforce zero CodeQL findings
-        run: python3 scripts/check_codeql_sarif.py .release-evidence/codeql
-
-      - name: Preserve CodeQL evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: prodkit-control-v0.0.0-codeql-final
-          path: .release-evidence/codeql/*.sarif
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Build all release distributions
+      - name: Build all release distributions from exact release commit
         shell: bash
         run: |
           set -euo pipefail
@@ -140,6 +112,7 @@ jobs:
             test -f "$package_dir/package.json" || continue
             pnpm --dir "$package_dir" pack --pack-destination "$GITHUB_WORKSPACE/.release/assets"
           done
+          test "$(find .release/assets -maxdepth 1 -type f | wc -l)" -eq 68
 
       - name: Inspect all release distributions
         run: |
@@ -159,6 +132,7 @@ jobs:
           ) > .release/assets/SHA256SUMS
           test -s .release/assets/SHA256SUMS
           test "$(wc -l < .release/assets/SHA256SUMS)" -eq 68
+          test "$(find .release/assets -maxdepth 1 -type f | wc -l)" -eq 69
 
       - name: Reverify main before release mutation
         shell: bash
@@ -186,7 +160,7 @@ jobs:
               payload = json.load(response)
           if payload["object"]["sha"] != expected:
               raise SystemExit("main moved during release proof; refusing release mutation")
-          print("main remained exact through release proof")
+          print("main remained exact through artifact proof")
           PY
 
       - name: Create or verify immutable v0.0.0 tag
@@ -209,7 +183,7 @@ jobs:
             --notes "docs/releases/$RELEASE_TAG.md" \
             "${assets[@]}"
 
-      - name: Independently verify v0.0.0 and retire provisional v0.0.1
+      - name: Independently verify replacement, retire v0.0.1, and clean branches
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -275,17 +249,10 @@ jobs:
               url = asset.get("url")
               if not isinstance(url, str):
                   raise RuntimeError("release asset has no API URL")
-              request = urllib.request.Request(
-                  url,
-                  headers={
-                      **headers,
-                      "Accept": "application/octet-stream",
-                  },
-              )
+              request = urllib.request.Request(url, headers={**headers, "Accept": "application/octet-stream"})
               with urllib.request.urlopen(request) as response:
                   return response.read()
 
-          # Verify the new tag is exact before examining release payloads.
           tag_ref = ref(new_tag)
           if not isinstance(tag_ref, dict):
               raise RuntimeError(f"{new_tag} tag is missing after publication")
@@ -305,15 +272,13 @@ jobs:
           assets = release.get("assets")
           if not isinstance(assets, list):
               raise RuntimeError("release assets missing")
-          local_paths = sorted(Path(".release/assets").iterdir())
-          local = {path.name: path for path in local_paths if path.is_file()}
+          local = {path.name: path for path in sorted(Path(".release/assets").iterdir()) if path.is_file()}
           remote = {str(asset.get("name")): asset for asset in assets if isinstance(asset, dict)}
-          if set(local) != set(remote):
-              missing = sorted(set(local) - set(remote))
-              extra = sorted(set(remote) - set(local))
-              raise RuntimeError(f"asset-set mismatch; missing={missing}, extra={extra}")
-          if len(remote) != 69:
-              raise RuntimeError(f"expected 69 release assets, found {len(remote)}")
+          if set(local) != set(remote) or len(remote) != 69:
+              raise RuntimeError(
+                  f"asset-set mismatch: local={len(local)}, remote={len(remote)}, "
+                  f"missing={sorted(set(local)-set(remote))}, extra={sorted(set(remote)-set(local))}"
+              )
 
           downloaded: dict[str, bytes] = {}
           for name, path in sorted(local.items()):
@@ -323,14 +288,12 @@ jobs:
               if asset.get("digest") != f"sha256:{local_sha}":
                   raise RuntimeError(f"GitHub digest mismatch for {name}")
               remote_bytes = download_asset(asset)
-              remote_sha = hashlib.sha256(remote_bytes).hexdigest()
-              if remote_sha != local_sha:
+              if hashlib.sha256(remote_bytes).hexdigest() != local_sha:
                   raise RuntimeError(f"downloaded asset mismatch for {name}")
               downloaded[name] = remote_bytes
 
-          sums_text = downloaded["SHA256SUMS"].decode("utf-8")
           sums: dict[str, str] = {}
-          for line in sums_text.splitlines():
+          for line in downloaded["SHA256SUMS"].decode("utf-8").splitlines():
               digest, name = line.split(None, 1)
               sums[name.lstrip("*")] = digest
           payload_names = sorted(name for name in remote if name != "SHA256SUMS")
@@ -340,41 +303,37 @@ jobs:
               if hashlib.sha256(downloaded[name]).hexdigest() != sums[name]:
                   raise RuntimeError(f"SHA256SUMS mismatch for downloaded {name}")
 
+          release_id = release.get("id")
           print(
               f"verified canonical {expected_name}: {new_tag} -> {expected_sha}, "
-              f"release {release.get('id')}, 69 assets; all remote downloads and digests match"
+              f"release {release_id}, 69 assets; all remote downloads and digests match"
           )
 
-          # Only after the replacement release is exhaustively verified, retire v0.0.1.
+          # Destructive retirement starts only after exhaustive replacement verification above.
           old_releases = [r for r in releases() if r.get("tag_name") == old_tag]
           for old in old_releases:
-              release_id = old.get("id")
-              if not isinstance(release_id, int):
+              old_id = old.get("id")
+              if not isinstance(old_id, int):
                   raise RuntimeError("old release has invalid id")
-              api("DELETE", f"/repos/{repo}/releases/{release_id}")
-              print(f"deleted provisional release {release_id} for {old_tag}")
+              api("DELETE", f"/repos/{repo}/releases/{old_id}")
+              print(f"deleted provisional release {old_id} for {old_tag}")
 
-          old_ref = ref(old_tag)
-          if old_ref is not None:
+          if ref(old_tag) is not None:
               encoded = urllib.parse.quote(old_tag, safe="")
               api("DELETE", f"/repos/{repo}/git/refs/tags/{encoded}")
               print(f"deleted provisional tag {old_tag}")
 
-          # Re-verify replacement survives the retirement operation.
+          if any(r.get("tag_name") == old_tag for r in releases()) or ref(old_tag) is not None:
+              raise RuntimeError(f"{old_tag} still exists after retirement")
           matching = [r for r in releases() if r.get("tag_name") == new_tag]
           if len(matching) != 1:
-              raise RuntimeError("replacement release changed during old-release retirement")
-          if any(r.get("tag_name") == old_tag for r in releases()):
-              raise RuntimeError(f"{old_tag} release record still exists")
-          if ref(old_tag) is not None:
-              raise RuntimeError(f"{old_tag} tag still exists")
+              raise RuntimeError("replacement release changed during retirement")
           tag_ref = ref(new_tag)
           if not isinstance(tag_ref, dict) or not isinstance(tag_ref.get("object"), dict):
               raise RuntimeError("replacement tag disappeared")
           if tag_ref["object"].get("sha") != expected_sha:
               raise RuntimeError("replacement tag target changed")
 
-          # Clean merged preparation branch before deleting this finalizer branch itself.
           for branch in ["docs/enterprise-architecture-baseline"]:
               encoded = urllib.parse.quote(branch, safe="")
               branch_ref = api("GET", f"/repos/{repo}/git/ref/heads/{encoded}", allow_404=True)
@@ -382,7 +341,7 @@ jobs:
                   api("DELETE", f"/repos/{repo}/git/refs/heads/{encoded}")
                   print(f"deleted branch {branch}")
 
-          self_branch = os.environ["GITHUB_REF_NAME"]
+          self_branch = (os.environ.get("GITHUB_HEAD_REF") or os.environ["GITHUB_REF_NAME"]).strip()
           encoded = urllib.parse.quote(self_branch, safe="")
           api("DELETE", f"/repos/{repo}/git/refs/heads/{encoded}")
           print(f"deleted finalizer branch {self_branch}")
