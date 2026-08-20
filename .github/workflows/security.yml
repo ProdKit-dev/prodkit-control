@@ -41,21 +41,37 @@ jobs:
        (github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    continue-on-error: true
+    outputs:
+      available: ${{ steps.probe.outputs.available }}
     steps:
-      - name: Confirm GitHub-hosted runner availability
-        run: echo "GitHub-hosted runner is available"
+      - id: probe
+        name: Confirm GitHub-hosted runner availability
+        run: echo "available=true" >> "$GITHUB_OUTPUT"
 
   security:
     name: security
     needs: runner-probe
-    if: >-
-      always() && !cancelled() &&
-      (needs.runner-probe.result == 'success' ||
-       needs.runner-probe.result == 'failure' ||
-       needs.runner-probe.result == 'skipped')
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-security.yml@3587dc8db2c0ca6aadcd4fc259344df8e29521a1
+    if: always() && !cancelled()
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-security.yml@a19315d6b0a301f8d641d223692fdc85b2409835
     with:
-      runner_json: ${{ (((((github.event_name == 'workflow_dispatch') && ((inputs.runner == 'self-hosted') || ((inputs.runner == 'policy') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted')))) || ((github.event_name != 'workflow_dispatch') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted'))) && ((github.event_name != 'pull_request') || (github.event.pull_request.head.repo.full_name == github.repository))) || (needs.runner-probe.result == 'failure')) && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"' }}
+      runner_json: >-
+        ${{ (
+          (
+            ((github.event_name == 'workflow_dispatch') && (inputs.runner == 'self-hosted')) ||
+            ((github.event_name == 'workflow_dispatch') && (inputs.runner == 'policy') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted')) ||
+            ((github.event_name != 'workflow_dispatch') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted')) ||
+            (
+              (
+                ((github.event_name == 'workflow_dispatch') && (inputs.runner == 'auto')) ||
+                ((github.event_name == 'workflow_dispatch') && (inputs.runner == 'policy') && ((vars.PRODKIT_RUNNER_MODE == '') || (vars.PRODKIT_RUNNER_MODE == 'auto'))) ||
+                ((github.event_name != 'workflow_dispatch') && ((vars.PRODKIT_RUNNER_MODE == '') || (vars.PRODKIT_RUNNER_MODE == 'auto')))
+              ) &&
+              (needs.runner-probe.outputs.available != 'true')
+            )
+          ) &&
+          ((github.event_name != 'pull_request') || (github.event.pull_request.head.repo.full_name == github.repository))
+        ) && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"' }}
       secret_scan_enabled: true
       gitleaks_config_path: .gitleaks.toml
       sbom_enabled: true
