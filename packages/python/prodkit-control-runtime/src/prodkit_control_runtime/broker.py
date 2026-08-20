@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from prodkit_control_core import (
     ActionSpec,
@@ -12,6 +12,7 @@ from prodkit_control_core import (
     ApprovalProvider,
     ApprovalRequiredError,
     ArtifactStore,
+    AttemptAwareExecutor,
     AuthorizationDeniedError,
     ControlledExecutor,
     ControlEventDraft,
@@ -19,6 +20,9 @@ from prodkit_control_core import (
     EffectVerifier,
     EventLedger,
     EventType,
+    ExecutionAttemptRecord,
+    ExecutionAttemptState,
+    ExecutionAttemptStore,
     ExecutionResult,
     IdempotencyStore,
     IntegrityViolationError,
@@ -43,7 +47,13 @@ class BrokerOutcome:
 
 
 class ActionBroker:
-    """Fail-closed lifecycle owner for externally visible actions."""
+    """Fail-closed lifecycle owner for externally visible actions.
+
+    When ``execution_attempts`` is configured the broker requires attempt-aware executors,
+    allocates the attempt identifier before the side effect, and durably moves that attempt
+    through claimed/started/terminal states. An executor exception leaves the idempotency claim
+    owned and records an ``uncertain`` attempt; the broker never silently retries it.
+    """
 
     def __init__(
         self,
@@ -55,6 +65,7 @@ class ActionBroker:
         executors: ExecutorRegistry,
         verifier: EffectVerifier,
         artifact_store: ArtifactStore | None = None,
+        execution_attempts: ExecutionAttemptStore | None = None,
     ) -> None:
         self._ledger = ledger
         self._policy = policy
@@ -63,6 +74,7 @@ class ActionBroker:
         self._executors = executors
         self._verifier = verifier
         self._artifact_store = artifact_store
+        self._execution_attempts = execution_attempts
 
     async def execute(
         self,
@@ -131,6 +143,14 @@ class ActionBroker:
                 raise ApprovalDeniedError(f"approval {approval.approval_id} is not approved")
 
         executor: ControlledExecutor = self._executors.get(action.executor)
+        durable_executor: AttemptAwareExecutor | None = None
+        if self._execution_attempts is not None:
+            if not isinstance(executor, AttemptAwareExecutor):
+                raise AuthorizationDeniedError(
+                    f"executor {executor.name!r} does not support durable attempt ownership"
+                )
+            durable_executor = executor
+
         claimed = await self._idempotency.claim(
             tenant_id=action.tenant_id,
             key=action.idempotency_key,
@@ -143,7 +163,7 @@ class ActionBroker:
             )
             if existing is None:
                 raise DuplicateActionError(
-                    "an identical action is already in progress; execution is not duplicated"
+                    "an identical action is already in progress or uncertain; execution is not duplicated"
                 )
             self._validate_result(action, executor, existing, require_current_version=False)
             observation, verification = await self._observe_and_verify(
@@ -162,6 +182,29 @@ class ActionBroker:
                 reused_idempotent_result=True,
             )
 
+        attempt_id: UUID | None = None
+        attempt: ExecutionAttemptRecord | None = None
+        if durable_executor is not None and self._execution_attempts is not None:
+            attempt_id = uuid4()
+            attempt = ExecutionAttemptRecord(
+                attempt_id=attempt_id,
+                action_id=action.action_id,
+                run_id=action.run_id,
+                tenant_id=action.tenant_id,
+                idempotency_key=action.idempotency_key,
+                action_digest=action.digest,
+                executor_name=durable_executor.name,
+                executor_version=durable_executor.version,
+                executor_identity=durable_executor.identity,
+                state=ExecutionAttemptState.CLAIMED,
+                claimed_at=datetime.now(UTC),
+            )
+            await self._execution_attempts.create(attempt)
+            attempt = attempt.model_copy(
+                update={"state": ExecutionAttemptState.STARTED, "started_at": datetime.now(UTC)}
+            )
+            await self._execution_attempts.replace(attempt)
+
         await self._event(
             action,
             actor,
@@ -171,11 +214,26 @@ class ActionBroker:
                 "executor": executor.name,
                 "executor_version": executor.version,
                 "action_digest": action.digest,
+                "execution_attempt_id": str(attempt_id) if attempt_id is not None else None,
             },
         )
         try:
-            result = await executor.execute(action)
+            if durable_executor is not None and attempt_id is not None:
+                result = await durable_executor.execute_attempt(action, attempt_id=attempt_id)
+            else:
+                result = await executor.execute(action)
         except Exception as exc:
+            if attempt is not None and self._execution_attempts is not None:
+                uncertain = attempt.model_copy(
+                    update={
+                        "state": ExecutionAttemptState.UNCERTAIN,
+                        "finished_at": datetime.now(UTC),
+                        "error_type": type(exc).__name__,
+                        "error_message": str(exc),
+                        "uncertainty_reason": "executor raised after execution was marked started",
+                    }
+                )
+                await self._execution_attempts.replace(uncertain)
             await self._event(
                 action,
                 actor,
@@ -185,13 +243,34 @@ class ActionBroker:
                     "executor": executor.name,
                     "executor_version": executor.version,
                     "action_digest": action.digest,
+                    "execution_attempt_id": str(attempt_id) if attempt_id is not None else None,
                     "error_type": type(exc).__name__,
                     "idempotency_key_retained": True,
+                    "automatic_retry_permitted": False,
                 },
             )
             raise
 
         self._validate_result(action, executor, result, require_current_version=True)
+        if attempt_id is not None and result.execution_attempt_id != attempt_id:
+            raise IntegrityViolationError("executor changed the broker-owned execution attempt id")
+
+        if attempt is not None and self._execution_attempts is not None:
+            terminal_state = (
+                ExecutionAttemptState.SUCCEEDED if result.succeeded else ExecutionAttemptState.FAILED
+            )
+            terminal = attempt.model_copy(
+                update={
+                    "state": terminal_state,
+                    "finished_at": result.completed_at,
+                    "result_digest": sha256_hex(result),
+                    "provider_operation_id": result.provider_operation_id,
+                    "error_type": result.error_type,
+                    "error_message": result.error_message,
+                }
+            )
+            await self._execution_attempts.replace(terminal)
+
         await self._idempotency.complete(
             tenant_id=action.tenant_id,
             key=action.idempotency_key,
