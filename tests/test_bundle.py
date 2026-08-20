@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 
 from prodkit_control_core import (
+    IntegrityViolationError,
     LineageGraph,
     ProductionObservationNode,
     RunStatus,
@@ -17,6 +18,7 @@ from prodkit_control_runtime import (
     EvidenceBundleVerifier,
     InMemoryEventLedger,
     RunCoordinator,
+    evidence_bundle_sha256,
 )
 
 
@@ -52,8 +54,15 @@ async def test_evidence_bundle_roundtrip(tmp_path: Path, human) -> None:
         tmp_path / "bundle",
         lineage=lineage,
     )
-    manifest = EvidenceBundleVerifier().verify(archive)
+    digest = evidence_bundle_sha256(archive)
+    manifest = EvidenceBundleVerifier().verify(
+        archive,
+        expected_archive_sha256=digest,
+    )
     assert manifest["run_id"] == str(run.run_id)
     assert manifest["event_count"] == 2
     assert manifest["lineage_node_count"] == 1
     assert manifest["lineage_relation_count"] == 0
+
+    with pytest.raises(IntegrityViolationError, match="external trust anchor"):
+        EvidenceBundleVerifier().verify(archive, expected_archive_sha256="0" * 64)
