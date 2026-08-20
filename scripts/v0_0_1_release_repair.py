@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -15,6 +16,20 @@ EXPECTED_RELEASE_SHA = "889a754f416bd9454bc9e7d407a6f3d0327241d8"
 PERMANENT_FIX_SHA = "d3649917ad7e0e115e5860d1ef2da8769e1e49f5"
 RELEASE_PR = 6
 REPAIR_BRANCH = "release-repair/v0.0.1"
+EXPECTED_PAYLOAD_ASSETS = 68
+_ALLOWED_HOST = "api.github.com"
+_REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+
+
+def validate_url(url: str) -> None:
+    parsed = urllib.parse.urlsplit(url)
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname != _ALLOWED_HOST
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise RuntimeError("GitHub API request URL is outside the allowed HTTPS origin")
 
 
 def request(
@@ -26,6 +41,7 @@ def request(
     accept: str = "application/vnd.github+json",
     allow_404: bool = False,
 ) -> tuple[int, bytes] | None:
+    validate_url(url)
     headers = {
         "Accept": accept,
         "Authorization": f"Bearer {token}",
@@ -36,9 +52,11 @@ def request(
     if payload is not None:
         data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
         headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    req = urllib.request.Request(  # noqa: S310 - URL is allow-listed above.
+        url, data=data, headers=headers, method=method
+    )
     try:
-        with urllib.request.urlopen(req, timeout=120) as response:
+        with urllib.request.urlopen(req, timeout=120) as response:  # noqa: S310
             return response.status, response.read()
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
@@ -85,6 +103,48 @@ def resolve_tag_commit(api: str, token: str) -> str:
     return target_sha
 
 
+def list_tag_releases(api: str, token: str) -> list[dict[str, Any]]:
+    payload = json_request("GET", f"{api}/releases?per_page=100", token)
+    if not isinstance(payload, list):
+        raise RuntimeError("GitHub returned an invalid release listing")
+    return [
+        item
+        for item in payload
+        if isinstance(item, dict) and item.get("tag_name") == TAG
+    ]
+
+
+def canonical_release(api: str, token: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    matches = list_tag_releases(api, token)
+    if not matches:
+        raise RuntimeError(f"no GitHub Release record exists for {TAG}")
+
+    encoded_tag = urllib.parse.quote(TAG, safe="")
+    canonical = json_request(
+        "GET",
+        f"{api}/releases/tags/{encoded_tag}",
+        token,
+        allow_404=True,
+    )
+    if canonical is None:
+        published = [item for item in matches if item.get("draft") is False]
+        if len(published) != 1:
+            raise RuntimeError(
+                f"cannot determine one canonical published GitHub Release for {TAG}"
+            )
+        canonical = published[0]
+    if not isinstance(canonical, dict):
+        raise RuntimeError("canonical GitHub Release response is malformed")
+    release_id = canonical.get("id")
+    if not isinstance(release_id, int):
+        raise RuntimeError("canonical release has no numeric id")
+    if canonical.get("tag_name") != TAG:
+        raise RuntimeError("canonical release tag_name does not match immutable tag")
+
+    duplicates = [item for item in matches if item.get("id") != release_id]
+    return canonical, duplicates
+
+
 def download(asset: dict[str, Any], token: str) -> bytes:
     url = asset.get("url")
     if not isinstance(url, str):
@@ -112,11 +172,21 @@ def delete_branch(api: str, token: str, branch: str) -> str:
     return "already absent" if result is None else "deleted"
 
 
+def delete_duplicate_release(api: str, token: str, release: dict[str, Any]) -> int:
+    release_id = release.get("id")
+    if not isinstance(release_id, int):
+        raise RuntimeError("duplicate release has no numeric id")
+    if release.get("tag_name") != TAG:
+        raise RuntimeError("refusing to delete a release for a different tag")
+    request("DELETE", f"{api}/releases/{release_id}", token)
+    return release_id
+
+
 def main() -> int:
     repo = os.environ.get("GITHUB_REPOSITORY", "").strip()
     token = os.environ.get("GITHUB_TOKEN", "").strip()
-    if not repo or "/" not in repo:
-        raise RuntimeError("GITHUB_REPOSITORY must be owner/name")
+    if not _REPOSITORY_RE.fullmatch(repo):
+        raise RuntimeError("GITHUB_REPOSITORY must be a safe owner/name value")
     if not token:
         raise RuntimeError("GITHUB_TOKEN is required")
     api = f"https://api.github.com/repos/{repo}"
@@ -127,15 +197,10 @@ def main() -> int:
             f"immutable tag {TAG} points at {target_sha}, expected {EXPECTED_RELEASE_SHA}"
         )
 
-    encoded_tag = urllib.parse.quote(TAG, safe="")
-    release = json_request("GET", f"{api}/releases/tags/{encoded_tag}", token)
-    if not isinstance(release, dict):
-        raise RuntimeError(f"GitHub Release for {TAG} does not exist")
+    release, duplicates = canonical_release(api, token)
     release_id = release.get("id")
     if not isinstance(release_id, int):
         raise RuntimeError("release has no numeric id")
-    if release.get("tag_name") != TAG:
-        raise RuntimeError("release tag_name does not match immutable tag")
 
     release = json_request(
         "PATCH",
@@ -156,6 +221,11 @@ def main() -> int:
     assets = json_request("GET", f"{api}/releases/{release_id}/assets?per_page=100", token)
     if not isinstance(assets, list) or not assets:
         raise RuntimeError("published release has no assets")
+    if len(assets) != EXPECTED_PAYLOAD_ASSETS + 1:
+        raise RuntimeError(
+            f"published release has {len(assets)} assets; expected {EXPECTED_PAYLOAD_ASSETS + 1}"
+        )
+
     by_name: dict[str, dict[str, Any]] = {}
     for asset in assets:
         if not isinstance(asset, dict) or not isinstance(asset.get("name"), str):
@@ -188,6 +258,10 @@ def main() -> int:
         checksums[name] = digest.lower()
 
     payload_names = set(by_name) - {"SHA256SUMS"}
+    if len(payload_names) != EXPECTED_PAYLOAD_ASSETS:
+        raise RuntimeError(
+            f"published payload asset count is {len(payload_names)}; expected {EXPECTED_PAYLOAD_ASSETS}"
+        )
     if set(checksums) != payload_names:
         raise RuntimeError(
             f"published asset set does not match SHA256SUMS: assets={sorted(payload_names)} "
@@ -199,17 +273,28 @@ def main() -> int:
         if actual != checksums[name]:
             raise RuntimeError(f"SHA256SUMS mismatch for {name}: {actual} != {checksums[name]}")
 
+    deleted_release_ids = [delete_duplicate_release(api, token, item) for item in duplicates]
+    final_matches = list_tag_releases(api, token)
+    if len(final_matches) != 1 or final_matches[0].get("id") != release_id:
+        raise RuntimeError("duplicate GitHub Release cleanup did not leave one canonical release")
+
     cleanup = {
         "release/v0.0.1": delete_branch(api, token, "release/v0.0.1"),
         "fix/release-title-pattern": delete_branch(api, token, "fix/release-title-pattern"),
     }
+    duplicate_summary = (
+        ", ".join(f"`{release_id}`" for release_id in deleted_release_ids)
+        if deleted_release_ids
+        else "none"
+    )
     comment = "\n".join(
         [
             "## v0.0.1 release closure",
             "",
             f"- Immutable tag: `{TAG}` → `{EXPECTED_RELEASE_SHA}` (unchanged)",
             f"- GitHub Release: **{RELEASE_NAME}**",
-            f"- Release ID: `{release_id}`; published, non-draft, non-prerelease",
+            f"- Canonical Release ID: `{release_id}`; published, non-draft, non-prerelease",
+            f"- Duplicate Release records removed: {duplicate_summary}",
             f"- Published assets: **{len(assets)} total** (`SHA256SUMS` + {len(payload_names)} payload assets)",
             "- Every payload was downloaded and matched `SHA256SUMS`",
             "- Every published asset matched GitHub SHA-256 digest metadata",
