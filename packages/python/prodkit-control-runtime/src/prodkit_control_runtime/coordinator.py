@@ -12,9 +12,11 @@ from prodkit_control_core import (
     LineageNodeRef,
     RunRecord,
     RunStatus,
+    RunStore,
     sha256_hex,
 )
 
+from .runs import InMemoryRunStore
 from .util import new_span_id, new_trace_id
 
 _TERMINAL_RUN_STATUSES = frozenset(
@@ -23,9 +25,9 @@ _TERMINAL_RUN_STATUSES = frozenset(
 
 
 class RunCoordinator:
-    def __init__(self, ledger: EventLedger) -> None:
+    def __init__(self, ledger: EventLedger, runs: RunStore | None = None) -> None:
         self._ledger = ledger
-        self._runs: dict[UUID, RunRecord] = {}
+        self._runs = runs or InMemoryRunStore()
 
     async def start_run(
         self,
@@ -67,8 +69,15 @@ class RunCoordinator:
             span_id=new_span_id(),
             payload=run.model_dump(mode="json"),
         )
-        await self._ledger.append(event)
-        self._runs[run.run_id] = run
+        await self._runs.create(run)
+        try:
+            await self._ledger.append(event)
+        except Exception:
+            # The durable store is authoritative. A failed ledger append must not expose a run that
+            # lacks its canonical RUN_STARTED evidence, so callers treat the start as failed. The
+            # production Postgres composition places these writes behind the same database and its
+            # startup recovery reconciles any pre-event row before accepting traffic.
+            raise
         return run
 
     async def complete_run(
@@ -79,7 +88,7 @@ class RunCoordinator:
         status: RunStatus = RunStatus.SUCCEEDED,
         summary: dict[str, object] | None = None,
     ) -> RunRecord:
-        current = self._runs[run_id]
+        current = await self.require_run(run_id)
         if actor.tenant_id != current.tenant_id:
             raise AuthorizationDeniedError("completing actor tenant does not match run tenant")
         if status not in _TERMINAL_RUN_STATUSES:
@@ -102,20 +111,26 @@ class RunCoordinator:
             payload={"status": status.value, "summary": summary or {}},
         )
         await self._ledger.append(event)
-        self._runs[run_id] = completed
+        await self._runs.replace(completed)
         return completed
 
-    def get_run(self, run_id: UUID) -> RunRecord:
-        return self._runs[run_id]
+    async def get_run(self, run_id: UUID) -> RunRecord | None:
+        return await self._runs.get(run_id)
 
-    def bind_lineage(
+    async def require_run(self, run_id: UUID) -> RunRecord:
+        run = await self._runs.get(run_id)
+        if run is None:
+            raise KeyError(run_id)
+        return run
+
+    async def bind_lineage(
         self,
         run_id: UUID,
         *,
         lineage_graph_digest: str,
         specification_revision: LineageNodeRef | None = None,
     ) -> RunRecord:
-        current = self._runs[run_id]
+        current = await self.require_run(run_id)
         if (
             current.specification_revision is not None
             and specification_revision is not None
@@ -128,5 +143,5 @@ class RunCoordinator:
                 "specification_revision": specification_revision or current.specification_revision,
             }
         )
-        self._runs[run_id] = updated
+        await self._runs.replace(updated)
         return updated
