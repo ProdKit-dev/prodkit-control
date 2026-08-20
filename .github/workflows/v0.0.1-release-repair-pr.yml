@@ -1,0 +1,30 @@
+name: Repair v0.0.1 Release Metadata (PR)
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: repair-v0.0.1-release
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    if: ${{ github.head_ref == 'release-repair/v0.0.1' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Check out one-shot repair source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Repair metadata, verify published assets, and clean branches
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/v0_0_1_release_repair.py
