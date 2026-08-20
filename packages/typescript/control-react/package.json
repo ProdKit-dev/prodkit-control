@@ -1,15 +1,19 @@
 {
   "name": "@prodkit/control-react",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "React query and lifecycle integration boundary.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
-  "devDependencies": { "typescript": "^5.8.0" }
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
 }

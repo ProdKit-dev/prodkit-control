@@ -15,6 +15,7 @@ from prodkit_control_core import (
     AuthorizationDeniedError,
     ControlledExecutor,
     ControlEventDraft,
+    DuplicateActionError,
     EffectVerifier,
     EventLedger,
     EventType,
@@ -141,7 +142,7 @@ class ActionBroker:
                 key=action.idempotency_key,
             )
             if existing is None:
-                raise ApprovalDeniedError(
+                raise DuplicateActionError(
                     "an identical action is already in progress; execution is not duplicated"
                 )
             self._validate_result(action, executor, existing, require_current_version=False)
@@ -271,7 +272,9 @@ class ActionBroker:
         if result.executor_name != executor.name:
             raise IntegrityViolationError("execution result does not match the selected executor")
         if require_current_version and result.executor_version != executor.version:
-            raise IntegrityViolationError("execution result does not match the selected executor version")
+            raise IntegrityViolationError(
+                "execution result does not match the selected executor version"
+            )
 
     async def _event(
         self,

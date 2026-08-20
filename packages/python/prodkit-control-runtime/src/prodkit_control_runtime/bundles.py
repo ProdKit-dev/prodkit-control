@@ -168,6 +168,8 @@ class EvidenceBundleVerifier:
                     "evidence bundle lineage relation count does not match"
                 )
         elif manifest.get("lineage_node_count") != 0 or manifest.get("lineage_relation_count") != 0:
-            raise IntegrityViolationError("evidence bundle declares lineage without lineage evidence")
+            raise IntegrityViolationError(
+                "evidence bundle declares lineage without lineage evidence"
+            )
 
         return cast(dict[str, object], manifest)

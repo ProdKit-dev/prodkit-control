@@ -9,6 +9,7 @@ from prodkit_control_core import (
     ApprovalDecision,
     ApprovalOutcome,
     ApprovalRequiredError,
+    DuplicateActionError,
     EffectClass,
     EventType,
     RiskClass,
@@ -98,7 +99,7 @@ async def test_executor_exception_records_uncertainty_and_retains_idempotency(hu
     assert events[-1].event_type is EventType.EXECUTION_UNCERTAIN
     assert events[-1].payload["idempotency_key_retained"] is True
 
-    with pytest.raises(ApprovalRequiredError, match="already in progress"):
+    with pytest.raises(DuplicateActionError, match="already in progress"):
         await broker.execute(action, actor=agent, trace_id=run.trace_id)
 
 

@@ -20,9 +20,7 @@ def _env_bool(name: str, *, default: bool = False) -> bool:
 
 
 def main() -> None:
-    app = create_app(
-        allow_insecure_header_auth=_env_bool("PRODKIT_ALLOW_INSECURE_HEADER_AUTH")
-    )
+    app = create_app(allow_insecure_header_auth=_env_bool("PRODKIT_ALLOW_INSECURE_HEADER_AUTH"))
     uvicorn.run(
         app,
         host=os.getenv("PRODKIT_API_HOST", "127.0.0.1"),

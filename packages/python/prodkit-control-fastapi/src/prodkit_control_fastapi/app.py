@@ -70,9 +70,7 @@ class RequestPrincipal(APIModel):
         )
 
 
-PrincipalResolver = Callable[
-    [Request], RequestPrincipal | Awaitable[RequestPrincipal]
-]
+PrincipalResolver = Callable[[Request], RequestPrincipal | Awaitable[RequestPrincipal]]
 
 
 class StartRunRequest(APIModel):
@@ -195,6 +193,7 @@ def create_app(
         return _insecure_header_principal(request)
 
     Principal = Annotated[RequestPrincipal, Depends(require_principal)]
+    globals()["Principal"] = Principal
 
     @app.get("/healthz", tags=["operations"])
     async def healthz() -> dict[str, str]:
