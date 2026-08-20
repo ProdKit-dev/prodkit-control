@@ -7,35 +7,52 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   release:
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
     steps:
       - name: Check out exact tag
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify tag is exact current main
+        shell: bash
+        run: |
+          test "$(git tag --points-at HEAD --list "$GITHUB_REF_NAME")" = "$GITHUB_REF_NAME"
+          git fetch --no-tags origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
 
       - name: Install uv and Python
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
+          version: "0.10.0"
           python-version: "3.13"
           enable-cache: true
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
       - name: Install Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      - name: Verify release source contract
+      - name: Install locked workspaces
         run: |
           uv sync --all-packages --group dev --locked
-          uv run python scripts/release_check.py --tag "$GITHUB_REF_NAME"
+          pnpm install --frozen-lockfile
+
+      - name: Verify release source contract
+        run: uv run python scripts/release_check.py --tag "$GITHUB_REF_NAME"
 
       - name: Verify Python source
         run: |
@@ -47,45 +64,56 @@ jobs:
 
       - name: Verify TypeScript source
         run: |
-          pnpm install --frozen-lockfile
           pnpm typecheck:ts
           pnpm build:ts
 
-      - name: Build Python distributions
+      - name: Audit dependencies
+        run: |
+          uv run --with pip-audit==2.10.1 pip-audit --local --skip-editable
+          pnpm audit --audit-level=high
+
+      - name: Build all release distributions
+        shell: bash
         run: |
           rm -rf .release
-          mkdir -p .release/python
-          uv build --all-packages --out-dir .release/python
-          test -n "$(find .release/python -maxdepth 1 -type f -print -quit)"
+          mkdir -p .release/assets
+          uv build --all-packages --out-dir .release/assets
+          for package_dir in packages/typescript/*; do
+            test -f "$package_dir/package.json" || continue
+            pnpm --dir "$package_dir" pack --pack-destination "$GITHUB_WORKSPACE/.release/assets"
+          done
+
+      - name: Inspect all release distributions
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          uv run python scripts/inspect_release_artifacts.py .release/assets --version "$version"
 
       - name: Generate release checksums
         shell: bash
         run: |
           (
-            cd .release/python
-            find . -maxdepth 1 -type f -printf '%P\0' \
+            cd .release/assets
+            find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\0' \
               | sort -z \
               | xargs -0 sha256sum
-          ) > .release/SHA256SUMS
-          test -s .release/SHA256SUMS
-          cat .release/SHA256SUMS
+          ) > .release/assets/SHA256SUMS
+          test -s .release/assets/SHA256SUMS
+          cat .release/assets/SHA256SUMS
 
       - name: Preserve verified distributions
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: release-${{ github.ref_name }}
-          path: |
-            .release/python/*
-            .release/SHA256SUMS
+          name: prodkit-control-${{ github.ref_name }}
+          path: .release/assets/*
           if-no-files-found: error
+          retention-days: 30
 
       - name: Publish immutable GitHub Release
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          mapfile -t assets < <(find .release/python -maxdepth 1 -type f -print | sort)
-          assets+=(.release/SHA256SUMS)
+          mapfile -t assets < <(find .release/assets -maxdepth 1 -type f -print | sort)
           uv run python scripts/publish_release.py \
             --tag "$GITHUB_REF_NAME" \
             --notes "docs/releases/$GITHUB_REF_NAME.md" \
