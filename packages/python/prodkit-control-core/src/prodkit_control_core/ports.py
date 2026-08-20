@@ -91,6 +91,19 @@ class AttemptAwareExecutor(ControlledExecutor, Protocol):
 
 
 @runtime_checkable
+class CredentialLeaseAwareExecutor(AttemptAwareExecutor, Protocol):
+    """Isolated executor that consumes only a short-lived credential lease reference."""
+
+    async def execute_attempt_with_lease(
+        self,
+        action: ActionSpec,
+        *,
+        attempt_id: UUID,
+        credential_lease: CredentialLease,
+    ) -> ExecutionResult: ...
+
+
+@runtime_checkable
 class EffectVerifier(Protocol):
     name: str
     version: str
