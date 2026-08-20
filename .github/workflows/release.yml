@@ -17,11 +17,15 @@ on:
         default: false
         type: boolean
       runner:
-        description: Runner target for explicit failover
+        description: Runner override; policy uses PRODKIT_RUNNER_MODE
         required: true
         type: choice
-        default: github-hosted
-        options: [github-hosted, self-hosted]
+        default: policy
+        options:
+          - policy
+          - auto
+          - github-hosted
+          - self-hosted
 
 permissions:
   contents: write
@@ -31,14 +35,32 @@ permissions:
   artifact-metadata: write
 
 jobs:
+  runner-probe:
+    name: Hosted runner availability
+    if: >-
+      (inputs.runner == 'auto') ||
+      ((inputs.runner == 'policy') &&
+       ((vars.PRODKIT_RUNNER_MODE == '') || (vars.PRODKIT_RUNNER_MODE == 'auto')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Confirm GitHub-hosted runner availability
+        run: echo "GitHub-hosted runner is available"
+
   release:
     name: release
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@2decc8b2240a815de62ce2de7d0c42297288988e
+    needs: runner-probe
+    if: >-
+      always() && !cancelled() &&
+      (needs.runner-probe.result == 'success' ||
+       needs.runner-probe.result == 'failure' ||
+       needs.runner-probe.result == 'skipped')
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@3587dc8db2c0ca6aadcd4fc259344df8e29521a1
     with:
       version: ${{ inputs.version }}
       target_sha: ${{ inputs.target_sha }}
       prerelease: ${{ inputs.prerelease }}
-      runner_json: ${{ inputs.runner == 'self-hosted' && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"' }}
+      runner_json: ${{ (((inputs.runner == 'self-hosted') || ((inputs.runner == 'policy') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted'))) || (needs.runner-probe.result == 'failure')) && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"' }}
       required_workflows_json: '["CI","Security","CodeQL"]'
       python_enabled: true
       python_version: "3.13"
