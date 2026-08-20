@@ -81,20 +81,7 @@ jobs:
           test "$(wc -l < .release/assets/SHA256SUMS)" = "68"
           (cd .release/assets && sha256sum -c SHA256SUMS)
 
-      - name: Publish missing GitHub Release with organization naming
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          mapfile -t assets < <(find release-source/.release/assets -maxdepth 1 -type f -print | sort)
-          test "${#assets[@]}" = "69"
-          python3 scripts/publish_release.py \
-            --tag v0.0.1 \
-            --notes release-source/docs/releases/v0.0.1.md \
-            "${assets[@]}"
-
-      - name: Independently verify published release and clean branches
+      - name: Normalize release metadata, deduplicate, verify, and clean branches
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 scripts/v0_0_1_release_repair.py
