@@ -19,6 +19,7 @@ _SUSPICIOUS_PARTS = {
     "node_modules",
 }
 _SUSPICIOUS_SUFFIXES = {".key", ".pem", ".pyc", ".pyo"}
+_IGNORED_BUILD_MARKERS = {".gitignore"}
 
 
 def _canonical_name(name: str) -> str:
@@ -119,7 +120,11 @@ def _expected_typescript() -> set[str]:
 
 
 def inspect(directory: Path, expected_version: str) -> None:
-    artifacts = sorted(path for path in directory.iterdir() if path.is_file())
+    artifacts = sorted(
+        path
+        for path in directory.iterdir()
+        if path.is_file() and path.name not in _IGNORED_BUILD_MARKERS
+    )
     if not artifacts:
         raise ValueError("release artifact directory is empty")
 
