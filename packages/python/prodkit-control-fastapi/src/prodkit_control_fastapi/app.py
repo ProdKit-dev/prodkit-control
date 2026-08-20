@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import inspect
 import secrets
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, cast
 from uuid import UUID, uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from prodkit_control_core import (
@@ -17,15 +19,16 @@ from prodkit_control_core import (
     ApprovalOutcome,
     ApprovalRequiredError,
     AuthorizationDeniedError,
+    ControlEvent,
     ControlEventDraft,
     DuplicateActionError,
-    ControlEvent,
     EventType,
     LineageGraph,
     LineageNode,
     LineageNodeKind,
     LineageNodeRef,
     LineageRelation,
+    PolicyOutcome,
     ProductionLineageAssessment,
     RunRecord,
     RunStatus,
@@ -51,11 +54,28 @@ class APIModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class RequestPrincipal(APIModel):
+    tenant_id: str = Field(min_length=1)
+    actor_id: str = Field(min_length=1)
+    actor_kind: ActorKind
+    display_name: str | None = None
+    roles: tuple[str, ...] = ()
+
+    def actor(self) -> ActorRef:
+        return ActorRef(
+            kind=self.actor_kind,
+            id=self.actor_id,
+            display_name=self.display_name,
+            tenant_id=self.tenant_id,
+        )
+
+
+PrincipalResolver = Callable[[Request], RequestPrincipal | Awaitable[RequestPrincipal]]
+
+
 class StartRunRequest(APIModel):
     environment: str = "development"
     purpose: str
-    actor_id: str
-    actor_display_name: str | None = None
     source_intent: dict[str, object] | None = None
     specification_revision: LineageNodeRef | None = None
     workflow_id: str | None = None
@@ -63,14 +83,10 @@ class StartRunRequest(APIModel):
 
 class ExecuteActionRequest(APIModel):
     action: ActionSpec
-    actor_id: str
-    actor_display_name: str | None = None
 
 
 class ApprovalRequest(APIModel):
     action: ActionSpec
-    approver_id: str
-    approver_role: str
     reason: str
     outcome: ApprovalOutcome = ApprovalOutcome.APPROVED
     ttl_seconds: int = Field(default=900, ge=30, le=86400)
@@ -78,12 +94,10 @@ class ApprovalRequest(APIModel):
 
 class RecordLineageNodeRequest(APIModel):
     node: LineageNode
-    actor_id: str
 
 
 class RecordLineageRelationRequest(APIModel):
     relation: LineageRelation
-    actor_id: str
 
 
 class AssessLineageRequest(APIModel):
@@ -104,6 +118,7 @@ class AppServices:
 
 
 def build_services() -> AppServices:
+    """Build an in-memory standalone service graph for tests and development."""
     ledger = InMemoryEventLedger()
     artifacts = InMemoryArtifactStore()
     approvals = InMemoryApprovalStore()
@@ -131,23 +146,72 @@ def build_services() -> AppServices:
     )
 
 
-def create_app(services: AppServices | None = None) -> FastAPI:
-    state = services or build_services()
+def _get_services(request: Request) -> AppServices:
+    try:
+        services = request.app.state.services
+    except AttributeError as exc:  # pragma: no cover - app factory always wires services
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="control services are not configured",
+        ) from exc
+    return cast(AppServices, services)
+
+
+async def _require_principal(request: Request) -> RequestPrincipal:
+    resolver = cast(
+        PrincipalResolver | None,
+        getattr(request.app.state, "principal_resolver", None),
+    )
+    allow_insecure_header_auth = bool(
+        getattr(request.app.state, "allow_insecure_header_auth", False)
+    )
+    if resolver is not None:
+        resolved = resolver(request)
+        if inspect.isawaitable(resolved):
+            resolved = await resolved
+        if not isinstance(resolved, RequestPrincipal):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="principal resolver returned an invalid principal",
+            )
+        return resolved
+    if not allow_insecure_header_auth:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "authentication_not_configured",
+                "message": "configure a principal resolver for protected API routes",
+            },
+        )
+    return _insecure_header_principal(request)
+
+
+Principal = Annotated[RequestPrincipal, Depends(_require_principal)]
+Services = Annotated[AppServices, Depends(_get_services)]
+
+
+def create_app(
+    services: AppServices | None = None,
+    *,
+    principal_resolver: PrincipalResolver | None = None,
+    allow_insecure_header_auth: bool = False,
+) -> FastAPI:
+    """Create the API.
+
+    Production deployments must provide ``principal_resolver``. Header-based identity is
+    intentionally disabled unless ``allow_insecure_header_auth`` is explicitly enabled.
+    """
     app = FastAPI(
         title="ProdKit Control",
-        version="0.1.0",
+        version="0.0.1",
         description=(
             "Provider-neutral intent-to-production lineage, action control, verification, "
             "reconciliation, and evidence API."
         ),
     )
-    app.state.services = state
-
-    def get_services() -> AppServices:
-        return cast(AppServices, app.state.services)
-
-    def require_tenant(x_prodkit_tenant_id: Annotated[str, Header(min_length=1)]) -> str:
-        return x_prodkit_tenant_id
+    app.state.services = services or build_services()
+    app.state.principal_resolver = principal_resolver
+    app.state.allow_insecure_header_auth = allow_insecure_header_auth
 
     @app.get("/healthz", tags=["operations"])
     async def healthz() -> dict[str, str]:
@@ -155,23 +219,22 @@ def create_app(services: AppServices | None = None) -> FastAPI:
 
     @app.get("/readyz", tags=["operations"])
     async def readyz() -> dict[str, str]:
+        if principal_resolver is None and not allow_insecure_header_auth:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={"status": "not_ready", "reason": "authentication_not_configured"},
+            )
         return {"status": "ready"}
 
     @app.post("/v1/runs", response_model=RunRecord, status_code=status.HTTP_201_CREATED)
     async def start_run(
         request: StartRunRequest,
-        services: AppServices = Depends(get_services),
-        tenant_id: str = Depends(require_tenant),
+        principal: Principal,
+        services: Services,
     ) -> RunRecord:
-        actor = ActorRef(
-            kind=ActorKind.HUMAN,
-            id=request.actor_id,
-            display_name=request.actor_display_name,
-            tenant_id=tenant_id,
-        )
         return await services.coordinator.start_run(
-            tenant_id=tenant_id,
-            initiated_by=actor,
+            tenant_id=principal.tenant_id,
+            initiated_by=principal.actor(),
             environment=request.environment,
             purpose=request.purpose,
             source_intent=request.source_intent,
@@ -180,55 +243,35 @@ def create_app(services: AppServices | None = None) -> FastAPI:
         )
 
     @app.get("/v1/runs/{run_id}", response_model=RunRecord)
-    async def get_run(
-        run_id: UUID,
-        services: AppServices = Depends(get_services),
-        tenant_id: str = Depends(require_tenant),
-    ) -> RunRecord:
-        try:
-            run = services.coordinator.get_run(run_id)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="run not found") from exc
-        if run.tenant_id != tenant_id:
-            raise HTTPException(status_code=404, detail="run not found")
-        return run
+    async def get_run(run_id: UUID, principal: Principal, services: Services) -> RunRecord:
+        return _scoped_run(services, run_id, principal.tenant_id)
 
     @app.get("/v1/runs/{run_id}/events", response_model=list[ControlEvent])
     async def list_events(
         run_id: UUID,
-        services: AppServices = Depends(get_services),
-        tenant_id: str = Depends(require_tenant),
+        principal: Principal,
+        services: Services,
     ) -> list[ControlEvent]:
-        try:
-            run = services.coordinator.get_run(run_id)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="run not found") from exc
-        if run.tenant_id != tenant_id:
-            raise HTTPException(status_code=404, detail="run not found")
+        _scoped_run(services, run_id, principal.tenant_id)
         return await services.ledger.list_run_events(run_id)
 
     @app.post("/v1/runs/{run_id}/actions:execute")
     async def execute_action(
         run_id: UUID,
         request: ExecuteActionRequest,
-        services: AppServices = Depends(get_services),
-        tenant_id: str = Depends(require_tenant),
+        principal: Principal,
+        services: Services,
     ) -> dict[str, object]:
         action = request.action
-        if action.run_id != run_id or action.tenant_id != tenant_id:
+        if action.run_id != run_id or action.tenant_id != principal.tenant_id:
             raise HTTPException(status_code=422, detail="action scope does not match request scope")
+        run = _scoped_run(services, run_id, principal.tenant_id)
         try:
-            run = services.coordinator.get_run(run_id)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="run not found") from exc
-        actor = ActorRef(
-            kind=ActorKind.AGENT,
-            id=request.actor_id,
-            display_name=request.actor_display_name,
-            tenant_id=tenant_id,
-        )
-        try:
-            outcome = await services.broker.execute(action, actor=actor, trace_id=run.trace_id)
+            outcome = await services.broker.execute(
+                action,
+                actor=principal.actor(),
+                trace_id=run.trace_id,
+            )
         except ApprovalRequiredError as exc:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -238,7 +281,12 @@ def create_app(services: AppServices | None = None) -> FastAPI:
                     "action_digest": exc.action_digest,
                 },
             ) from exc
-        except (AuthorizationDeniedError, DuplicateActionError) as exc:
+        except DuplicateActionError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": "duplicate_action", "message": str(exc)},
+            ) from exc
+        except AuthorizationDeniedError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
         return {
             "action": action.model_dump(mode="json"),
@@ -252,30 +300,34 @@ def create_app(services: AppServices | None = None) -> FastAPI:
     async def approve_action(
         run_id: UUID,
         request: ApprovalRequest,
-        services: AppServices = Depends(get_services),
-        tenant_id: str = Depends(require_tenant),
+        principal: Principal,
+        services: Services,
     ) -> ApprovalDecision:
         action = request.action
-        if action.run_id != run_id or action.tenant_id != tenant_id:
+        if action.run_id != run_id or action.tenant_id != principal.tenant_id:
             raise HTTPException(status_code=422, detail="action scope does not match request scope")
+        _scoped_run(services, run_id, principal.tenant_id)
         policy = await services.policy.evaluate(action)
+        if policy.outcome is not PolicyOutcome.REQUIRE_APPROVAL:
+            raise HTTPException(status_code=409, detail="action does not require approval")
+        authorized_roles = sorted(set(principal.roles).intersection(policy.required_approval_roles))
+        if not authorized_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="authenticated principal does not hold a required approval role",
+            )
         now = datetime.now(UTC)
-        approver = ActorRef(
-            kind=ActorKind.HUMAN,
-            id=request.approver_id,
-            tenant_id=tenant_id,
-        )
         decision = ApprovalDecision(
             approval_id=uuid4(),
             action_id=action.action_id,
             action_digest=action.digest,
             target_digest=sha256_hex(action.target),
-            tenant_id=tenant_id,
+            tenant_id=principal.tenant_id,
             environment=action.target.environment,
             policy_decision_id=policy.decision_id,
             policy_revision=policy.policy_revision,
-            approver=approver,
-            approver_role=request.approver_role,
+            approver=principal.actor(),
+            approver_role=authorized_roles[0],
             decided_at=now,
             outcome=request.outcome,
             expires_at=now + timedelta(seconds=request.ttl_seconds),
@@ -287,16 +339,19 @@ def create_app(services: AppServices | None = None) -> FastAPI:
     @app.post("/v1/runs/{run_id}:complete", response_model=RunRecord)
     async def complete_run(
         run_id: UUID,
-        actor_id: str,
+        principal: Principal,
+        services: Services,
         final_status: RunStatus = RunStatus.SUCCEEDED,
-        services: AppServices = Depends(get_services),
-        tenant_id: str = Depends(require_tenant),
     ) -> RunRecord:
-        actor = ActorRef(kind=ActorKind.HUMAN, id=actor_id, tenant_id=tenant_id)
+        _scoped_run(services, run_id, principal.tenant_id)
         try:
-            return await services.coordinator.complete_run(run_id, actor=actor, status=final_status)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="run not found") from exc
+            return await services.coordinator.complete_run(
+                run_id,
+                actor=principal.actor(),
+                status=final_status,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @app.post(
         "/v1/runs/{run_id}/lineage/nodes",
@@ -306,12 +361,12 @@ def create_app(services: AppServices | None = None) -> FastAPI:
     async def record_lineage_node(
         run_id: UUID,
         request: RecordLineageNodeRequest,
-        services: AppServices = Depends(get_services),
-        tenant_id: str = Depends(require_tenant),
+        principal: Principal,
+        services: Services,
     ) -> LineageNode:
-        run = _scoped_run(services, run_id, tenant_id)
+        run = _scoped_run(services, run_id, principal.tenant_id)
         node = request.node
-        if node.run_id != run_id or node.tenant_id != tenant_id:
+        if node.run_id != run_id or node.tenant_id != principal.tenant_id:
             raise HTTPException(status_code=422, detail="lineage node scope does not match run")
         await services.lineage.record_node(node)
         graph = await services.lineage.get_graph(run_id)
@@ -327,11 +382,11 @@ def create_app(services: AppServices | None = None) -> FastAPI:
             ControlEventDraft(
                 event_id=uuid4(),
                 run_id=run_id,
-                tenant_id=tenant_id,
+                tenant_id=principal.tenant_id,
                 event_type=EventType.LINEAGE_NODE_RECORDED,
                 occurred_at=now,
                 recorded_at=now,
-                actor=ActorRef(kind=ActorKind.SERVICE, id=request.actor_id, tenant_id=tenant_id),
+                actor=principal.actor(),
                 trace_id=run.trace_id,
                 span_id=secrets.token_hex(8),
                 lineage=(node.ref,),
@@ -348,29 +403,26 @@ def create_app(services: AppServices | None = None) -> FastAPI:
     async def record_lineage_relation(
         run_id: UUID,
         request: RecordLineageRelationRequest,
-        services: AppServices = Depends(get_services),
-        tenant_id: str = Depends(require_tenant),
+        principal: Principal,
+        services: Services,
     ) -> LineageRelation:
-        run = _scoped_run(services, run_id, tenant_id)
+        run = _scoped_run(services, run_id, principal.tenant_id)
         try:
             await services.lineage.record_relation(run_id, request.relation)
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         graph = await services.lineage.get_graph(run_id)
-        services.coordinator.bind_lineage(
-            run_id,
-            lineage_graph_digest=sha256_hex(graph),
-        )
+        services.coordinator.bind_lineage(run_id, lineage_graph_digest=sha256_hex(graph))
         now = datetime.now(UTC)
         await services.ledger.append(
             ControlEventDraft(
                 event_id=uuid4(),
                 run_id=run_id,
-                tenant_id=tenant_id,
+                tenant_id=principal.tenant_id,
                 event_type=EventType.LINEAGE_RELATION_RECORDED,
                 occurred_at=now,
                 recorded_at=now,
-                actor=ActorRef(kind=ActorKind.SERVICE, id=request.actor_id, tenant_id=tenant_id),
+                actor=principal.actor(),
                 trace_id=run.trace_id,
                 span_id=secrets.token_hex(8),
                 lineage=(request.relation.subject, request.relation.object),
@@ -382,10 +434,10 @@ def create_app(services: AppServices | None = None) -> FastAPI:
     @app.get("/v1/runs/{run_id}/lineage", response_model=LineageGraph)
     async def get_lineage(
         run_id: UUID,
-        services: AppServices = Depends(get_services),
-        tenant_id: str = Depends(require_tenant),
+        principal: Principal,
+        services: Services,
     ) -> LineageGraph:
-        _scoped_run(services, run_id, tenant_id)
+        _scoped_run(services, run_id, principal.tenant_id)
         try:
             return await services.lineage.get_graph(run_id)
         except KeyError as exc:
@@ -398,10 +450,10 @@ def create_app(services: AppServices | None = None) -> FastAPI:
     async def assess_lineage(
         run_id: UUID,
         request: AssessLineageRequest,
-        services: AppServices = Depends(get_services),
-        tenant_id: str = Depends(require_tenant),
+        principal: Principal,
+        services: Services,
     ) -> ProductionLineageAssessment:
-        run = _scoped_run(services, run_id, tenant_id)
+        run = _scoped_run(services, run_id, principal.tenant_id)
         try:
             graph = await services.lineage.get_graph(run_id)
             assessment = services.lineage_policy.assess(graph, request.observation_id)
@@ -412,11 +464,11 @@ def create_app(services: AppServices | None = None) -> FastAPI:
             ControlEventDraft(
                 event_id=uuid4(),
                 run_id=run_id,
-                tenant_id=tenant_id,
+                tenant_id=principal.tenant_id,
                 event_type=EventType.LINEAGE_ASSESSED,
                 occurred_at=now,
                 recorded_at=now,
-                actor=ActorRef(kind=ActorKind.SERVICE, id="lineage-policy", tenant_id=tenant_id),
+                actor=principal.actor(),
                 trace_id=run.trace_id,
                 span_id=secrets.token_hex(8),
                 lineage=assessment.lineage_path,
@@ -435,13 +487,41 @@ def create_app(services: AppServices | None = None) -> FastAPI:
             )
         return assessment
 
-    def _scoped_run(services: AppServices, run_id: UUID, tenant_id: str) -> RunRecord:
-        try:
-            run = services.coordinator.get_run(run_id)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="run not found") from exc
-        if run.tenant_id != tenant_id:
-            raise HTTPException(status_code=404, detail="run not found")
-        return run
-
     return app
+
+
+def _insecure_header_principal(request: Request) -> RequestPrincipal:
+    tenant_id = request.headers.get("x-prodkit-tenant-id", "").strip()
+    actor_id = request.headers.get("x-prodkit-actor-id", "").strip()
+    actor_kind_raw = request.headers.get("x-prodkit-actor-kind", "").strip()
+    if not tenant_id or not actor_id or not actor_kind_raw:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="development header authentication requires tenant, actor id, and actor kind",
+        )
+    try:
+        actor_kind = ActorKind(actor_kind_raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail="invalid actor kind") from exc
+    roles = tuple(
+        role.strip()
+        for role in request.headers.get("x-prodkit-roles", "").split(",")
+        if role.strip()
+    )
+    return RequestPrincipal(
+        tenant_id=tenant_id,
+        actor_id=actor_id,
+        actor_kind=actor_kind,
+        display_name=request.headers.get("x-prodkit-actor-display-name"),
+        roles=roles,
+    )
+
+
+def _scoped_run(services: AppServices, run_id: UUID, tenant_id: str) -> RunRecord:
+    try:
+        run = services.coordinator.get_run(run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="run not found") from exc
+    if run.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="run not found")
+    return run

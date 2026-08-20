@@ -26,6 +26,7 @@ class EventType(StrEnum):
     APPROVAL_DECIDED = "approval.decided"
     EXECUTION_STARTED = "execution.started"
     EXECUTION_COMPLETED = "execution.completed"
+    EXECUTION_UNCERTAIN = "execution.uncertain"
     STATE_OBSERVED = "state.observed"
     VERIFICATION_COMPLETED = "verification.completed"
     RECONCILIATION_COMPLETED = "reconciliation.completed"

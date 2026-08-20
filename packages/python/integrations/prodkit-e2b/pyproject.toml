@@ -1,6 +1,6 @@
 [project]
 name = "prodkit-e2b"
-version = "0.1.0"
+version = "0.0.1"
 description = "E2B sandbox-execution adapter."
 requires-python = ">=3.12,<3.15"
 license = { text = "Apache-2.0" }

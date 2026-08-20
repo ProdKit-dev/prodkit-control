@@ -248,6 +248,7 @@
         "approval.decided",
         "execution.started",
         "execution.completed",
+        "execution.uncertain",
         "state.observed",
         "verification.completed",
         "reconciliation.completed",

@@ -4,6 +4,7 @@ from .broker import ActionBroker as ActionBroker
 from .broker import BrokerOutcome as BrokerOutcome
 from .bundles import EvidenceBundleBuilder as EvidenceBundleBuilder
 from .bundles import EvidenceBundleVerifier as EvidenceBundleVerifier
+from .bundles import evidence_bundle_sha256 as evidence_bundle_sha256
 from .coordinator import RunCoordinator as RunCoordinator
 from .executors import DigestEffectVerifier as DigestEffectVerifier
 from .executors import DryRunExecutor as DryRunExecutor
@@ -20,4 +21,4 @@ from .policy import DefaultPolicyEngine as DefaultPolicyEngine
 from .projectors import RunProjection as RunProjection
 from .projectors import project_run as project_run
 
-__version__ = "0.1.0"
+__version__ = "0.0.1"

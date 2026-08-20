@@ -10,20 +10,41 @@ from prodkit_control_core import ProductionObservationNode, sha256_hex
 from prodkit_control_fastapi import create_app
 
 
+def auth_headers(*, actor_id: str = "user-1", actor_kind: str = "human") -> dict[str, str]:
+    return {
+        "x-prodkit-tenant-id": "tenant-api",
+        "x-prodkit-actor-id": actor_id,
+        "x-prodkit-actor-kind": actor_kind,
+    }
+
+
 @pytest.mark.asyncio
-async def test_start_and_read_run() -> None:
-    headers = {"x-prodkit-tenant-id": "tenant-api"}
+async def test_protected_routes_fail_closed_without_auth_configuration() -> None:
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=create_app()),
+        base_url="http://test",
+    ) as client:
+        ready = await client.get("/readyz")
+        assert ready.status_code == 503
+        response = await client.post("/v1/runs", json={"purpose": "blocked"})
+        assert response.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_start_and_read_run() -> None:
+    headers = auth_headers()
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_app(allow_insecure_header_auth=True)),
         base_url="http://test",
     ) as client:
         response = await client.post(
             "/v1/runs",
             headers=headers,
-            json={"purpose": "api test", "actor_id": "user-1"},
+            json={"purpose": "api test"},
         )
         assert response.status_code == 201
         run = response.json()
+        assert run["initiated_by"]["id"] == "user-1"
         fetched = await client.get(f"/v1/runs/{run['run_id']}", headers=headers)
         assert fetched.status_code == 200
         events = await client.get(f"/v1/runs/{run['run_id']}/events", headers=headers)
@@ -33,16 +54,16 @@ async def test_start_and_read_run() -> None:
 
 @pytest.mark.asyncio
 async def test_record_and_assess_lineage() -> None:
-    headers = {"x-prodkit-tenant-id": "tenant-api"}
+    headers = auth_headers(actor_id="recorder", actor_kind="service")
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=create_app()),
+        transport=httpx.ASGITransport(app=create_app(allow_insecure_header_auth=True)),
         base_url="http://test",
     ) as client:
         run = (
             await client.post(
                 "/v1/runs",
                 headers=headers,
-                json={"purpose": "lineage api test", "actor_id": "user-1"},
+                json={"purpose": "lineage api test"},
             )
         ).json()
         node = ProductionObservationNode(
@@ -60,7 +81,7 @@ async def test_record_and_assess_lineage() -> None:
         recorded = await client.post(
             f"/v1/runs/{run['run_id']}/lineage/nodes",
             headers=headers,
-            json={"node": node.model_dump(mode="json"), "actor_id": "recorder"},
+            json={"node": node.model_dump(mode="json")},
         )
         assert recorded.status_code == 201
         anchored_run = (await client.get(f"/v1/runs/{run['run_id']}", headers=headers)).json()

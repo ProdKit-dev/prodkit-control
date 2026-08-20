@@ -5,16 +5,21 @@ from uuid import UUID, uuid4
 
 from prodkit_control_core import (
     ActorRef,
+    AuthorizationDeniedError,
+    ControlEventDraft,
     EventLedger,
     EventType,
     LineageNodeRef,
-    ControlEventDraft,
     RunRecord,
     RunStatus,
     sha256_hex,
 )
 
 from .util import new_span_id, new_trace_id
+
+_TERMINAL_RUN_STATUSES = frozenset(
+    {RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.CANCELLED, RunStatus.INCOMPLETE}
+)
 
 
 class RunCoordinator:
@@ -33,6 +38,9 @@ class RunCoordinator:
         specification_revision: LineageNodeRef | None = None,
         workflow_id: str | None = None,
     ) -> RunRecord:
+        if initiated_by.tenant_id != tenant_id:
+            raise AuthorizationDeniedError("initiating actor tenant does not match run tenant")
+
         now = datetime.now(UTC)
         run = RunRecord(
             run_id=uuid4(),
@@ -47,21 +55,20 @@ class RunCoordinator:
             specification_revision=specification_revision,
             workflow_id=workflow_id,
         )
-        self._runs[run.run_id] = run
-        await self._ledger.append(
-            ControlEventDraft(
-                event_id=uuid4(),
-                run_id=run.run_id,
-                tenant_id=tenant_id,
-                event_type=EventType.RUN_STARTED,
-                occurred_at=now,
-                recorded_at=now,
-                actor=initiated_by,
-                trace_id=run.trace_id,
-                span_id=new_span_id(),
-                payload=run.model_dump(mode="json"),
-            )
+        event = ControlEventDraft(
+            event_id=uuid4(),
+            run_id=run.run_id,
+            tenant_id=tenant_id,
+            event_type=EventType.RUN_STARTED,
+            occurred_at=now,
+            recorded_at=now,
+            actor=initiated_by,
+            trace_id=run.trace_id,
+            span_id=new_span_id(),
+            payload=run.model_dump(mode="json"),
         )
+        await self._ledger.append(event)
+        self._runs[run.run_id] = run
         return run
 
     async def complete_run(
@@ -73,26 +80,29 @@ class RunCoordinator:
         summary: dict[str, object] | None = None,
     ) -> RunRecord:
         current = self._runs[run_id]
+        if actor.tenant_id != current.tenant_id:
+            raise AuthorizationDeniedError("completing actor tenant does not match run tenant")
+        if status not in _TERMINAL_RUN_STATUSES:
+            raise ValueError("run completion requires a terminal status")
+        if current.status in _TERMINAL_RUN_STATUSES:
+            raise ValueError("run is already terminal")
+
         now = datetime.now(UTC)
         completed = current.model_copy(update={"status": status, "completed_at": now})
-        self._runs[run_id] = completed
-        await self._ledger.append(
-            ControlEventDraft(
-                event_id=uuid4(),
-                run_id=run_id,
-                tenant_id=current.tenant_id,
-                event_type=EventType.RUN_COMPLETED,
-                occurred_at=now,
-                recorded_at=now,
-                actor=actor,
-                trace_id=current.trace_id,
-                span_id=new_span_id(),
-                payload={
-                    "status": status.value,
-                    "summary": summary or {},
-                },
-            )
+        event = ControlEventDraft(
+            event_id=uuid4(),
+            run_id=run_id,
+            tenant_id=current.tenant_id,
+            event_type=EventType.RUN_COMPLETED,
+            occurred_at=now,
+            recorded_at=now,
+            actor=actor,
+            trace_id=current.trace_id,
+            span_id=new_span_id(),
+            payload={"status": status.value, "summary": summary or {}},
         )
+        await self._ledger.append(event)
+        self._runs[run_id] = completed
         return completed
 
     def get_run(self, run_id: UUID) -> RunRecord:
@@ -115,9 +125,7 @@ class RunCoordinator:
         updated = current.model_copy(
             update={
                 "lineage_graph_digest": lineage_graph_digest,
-                "specification_revision": (
-                    specification_revision or current.specification_revision
-                ),
+                "specification_revision": specification_revision or current.specification_revision,
             }
         )
         self._runs[run_id] = updated
