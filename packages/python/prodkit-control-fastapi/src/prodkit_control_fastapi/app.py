@@ -5,7 +5,7 @@ import secrets
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, TypeAlias, cast
+from typing import Annotated, cast
 from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -186,8 +186,8 @@ async def _require_principal(request: Request) -> RequestPrincipal:
     return _insecure_header_principal(request)
 
 
-Principal: TypeAlias = Annotated[RequestPrincipal, Depends(_require_principal)]
-Services: TypeAlias = Annotated[AppServices, Depends(_get_services)]
+type Principal = Annotated[RequestPrincipal, Depends(_require_principal)]
+type Services = Annotated[AppServices, Depends(_get_services)]
 
 
 def create_app(
