@@ -1,6 +1,6 @@
 # Threat model
 
-This threat model defines the primary assets, trust boundaries, attacker capabilities, abuse cases, and required mitigations for ProdKit Control. It is an architectural baseline, not a claim that every mitigation is already implemented in `v0.0.1`.
+This threat model defines the primary assets, trust boundaries, attacker capabilities, abuse cases, and required mitigations for ProdKit Control. It is an architectural baseline, not a claim that every mitigation is already implemented in `v0.0.0`.
 
 ## Security objective
 
@@ -248,4 +248,4 @@ Before the 1.0 enterprise assurance claim, the project roadmap requires:
 - independent security review;
 - resolution of release-blocking critical findings.
 
-`v0.0.1` establishes many canonical mitigations at the contract/reference level but does not claim threat-model closure for the complete production/enterprise profile.
+`v0.0.0` establishes many canonical mitigations at the contract/reference level but does not claim threat-model closure for the complete production/enterprise profile.

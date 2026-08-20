@@ -202,4 +202,4 @@ A green API dashboard with stale reconciliation is not a green assurance system.
 
 ## Current implementation boundary
 
-`v0.0.1` provides OpenTelemetry-compatible correlation/adapter boundaries and canonical identities suitable for projection. Formal production SLOs, complete dashboards/alerts, scale envelopes, and enterprise operational validation are roadmap-gated.
+`v0.0.0` provides OpenTelemetry-compatible correlation/adapter boundaries and canonical identities suitable for projection. Formal production SLOs, complete dashboards/alerts, scale envelopes, and enterprise operational validation are roadmap-gated.

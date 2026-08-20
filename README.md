@@ -13,9 +13,9 @@ ProdKit Control is designed to be advanced, general-purpose, provider-neutral, a
 
 ## Project status and maturity
 
-`v0.0.1` is the **canonical engineering foundation**. It establishes the contracts and boundaries from which the production control plane is being built; it is not a claim that the full enterprise deployment profile is already complete.
+`v0.0.0` is the **canonical engineering foundation**. It establishes the contracts and boundaries from which the production control plane is being built; it is not a claim that the full enterprise deployment profile is already complete.
 
-| Capability | v0.0.1 status | Target |
+| Capability | v0.0.0 status | Target |
 | --- | --- | --- |
 | Canonical contracts and typed lineage | Implemented foundation | Stable core |
 | Deterministic hashing and hash-chained ledger | Implemented foundation | Durable + externally anchored |
@@ -122,7 +122,7 @@ flowchart TB
     Lineage --> Projectors
 ```
 
-The diagram is the **target control-plane architecture**. `v0.0.1` implements the canonical foundation and reference boundaries; later roadmap gates harden durable storage, authenticated service wiring, isolated executors, reconciliation, signing, HA/DR, and enterprise isolation.
+The diagram is the **target control-plane architecture**. `v0.0.0` implements the canonical foundation and reference boundaries; later roadmap gates harden durable storage, authenticated service wiring, isolated executors, reconciliation, signing, HA/DR, and enterprise isolation.
 
 See the [architecture overview](docs/architecture/overview.md) for the canonical layer model, trust boundaries, data ownership, invariants, and end-to-end flows.
 
@@ -260,7 +260,7 @@ Protected routes fail closed unless authentication is configured. For local deve
 PRODKIT_ALLOW_INSECURE_HEADER_AUTH=true uv run prodkit-control-api
 ```
 
-Open `http://127.0.0.1:8000/docs`. Development requests to protected routes must provide `X-ProdKit-Tenant-Id`, `X-ProdKit-Actor-Id`, and `X-ProdKit-Actor-Kind`; production deployments must inject an authenticated `PrincipalResolver` instead of enabling header authentication.
+Open `http://127.0.0.0:8000/docs`. Development requests to protected routes must provide `X-ProdKit-Tenant-Id`, `X-ProdKit-Actor-Id`, and `X-ProdKit-Actor-Kind`; production deployments must inject an authenticated `PrincipalResolver` instead of enabling header authentication.
 
 ### Run the deterministic demo
 

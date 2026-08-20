@@ -161,4 +161,4 @@ A single-tenant deployment can simplify isolation but should still preserve expl
 
 ## Current implementation boundary
 
-`v0.0.1` contains tenant-scoped contracts and a fail-closed principal-resolution boundary, but the complete enterprise multi-tenant isolation profile—including systematic cross-tenant verification, hardened production storage/task/executor isolation, and independent security review—is roadmap work.
+`v0.0.0` contains tenant-scoped contracts and a fail-closed principal-resolution boundary, but the complete enterprise multi-tenant isolation profile—including systematic cross-tenant verification, hardened production storage/task/executor isolation, and independent security review—is roadmap work.

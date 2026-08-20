@@ -206,4 +206,4 @@ Disaster recovery must restore **assurance state**, not merely application avail
 
 ## Current implementation boundary
 
-`v0.0.1` defines core uncertain-outcome and idempotency semantics and reference behavior. Durable crash recovery, lease/fencing, full production reconciler coverage, and enterprise DR exercises are roadmap-gated capabilities.
+`v0.0.0` defines core uncertain-outcome and idempotency semantics and reference behavior. Durable crash recovery, lease/fencing, full production reconciler coverage, and enterprise DR exercises are roadmap-gated capabilities.

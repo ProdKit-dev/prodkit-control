@@ -177,4 +177,4 @@ Break-glass must not be a hidden generic bypass around the broker.
 
 ## Current implementation boundary
 
-`v0.0.1` implements the canonical action digest, policy/approval contracts, approval binding, broker lifecycle, and fail-closed development authentication boundary. Production identity/approval service integration, workload identity, advanced separation-of-duties profiles, and enterprise administrative controls are roadmap-gated.
+`v0.0.0` implements the canonical action digest, policy/approval contracts, approval binding, broker lifecycle, and fail-closed development authentication boundary. Production identity/approval service integration, workload identity, advanced separation-of-duties profiles, and enterprise administrative controls are roadmap-gated.

@@ -293,4 +293,4 @@ For significant incidents:
 
 ## Current implementation boundary
 
-`v0.0.1` provides canonical integrity, action lifecycle, uncertainty, evidence, and fail-closed contract foundations. Environment-specific production automation, SLOs, HA/DR exercises, enterprise escalation ownership, and complete reconciler coverage are roadmap-gated and must be added by the supported production profile.
+`v0.0.0` provides canonical integrity, action lifecycle, uncertainty, evidence, and fail-closed contract foundations. Environment-specific production automation, SLOs, HA/DR exercises, enterprise escalation ownership, and complete reconciler coverage are roadmap-gated and must be added by the supported production profile.

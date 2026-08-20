@@ -254,4 +254,4 @@ Use deployment claims precisely:
 - **Production control** — hardened for the explicitly supported production action profile after its release gates are met.
 - **Enterprise assurance** — adds verified HA, DR, tenancy/governance, lifecycle, security, and review requirements.
 
-`v0.0.1` is the canonical engineering foundation and does not yet satisfy the complete production or enterprise profiles described here.
+`v0.0.0` is the canonical engineering foundation and does not yet satisfy the complete production or enterprise profiles described here.

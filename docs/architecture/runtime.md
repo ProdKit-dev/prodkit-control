@@ -193,4 +193,4 @@ ProdKit Control may use Temporal or another workflow engine for durable orchestr
 
 ## Current implementation boundary
 
-`v0.0.1` provides the canonical contracts, reference coordinator/broker behavior, in-memory ledger, evidence bundle model, API/CLI surfaces, and adapter boundaries. The hardened durable execution semantics in this document define the target production profile and are gated in the roadmap where not yet implemented.
+`v0.0.0` provides the canonical contracts, reference coordinator/broker behavior, in-memory ledger, evidence bundle model, API/CLI surfaces, and adapter boundaries. The hardened durable execution semantics in this document define the target production profile and are gated in the roadmap where not yet implemented.

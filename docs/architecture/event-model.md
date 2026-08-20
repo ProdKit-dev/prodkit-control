@@ -161,4 +161,4 @@ For a production profile, the event layer should provide:
 - externally trusted checkpoints/archives where required;
 - unsampled canonical recording of required control events.
 
-`v0.0.1` provides the canonical event contract, deterministic hashing, hash-chained reference ledger, and evidence-bundle semantics. Durable enterprise anchoring/HA/DR are roadmap-gated.
+`v0.0.0` provides the canonical event contract, deterministic hashing, hash-chained reference ledger, and evidence-bundle semantics. Durable enterprise anchoring/HA/DR are roadmap-gated.

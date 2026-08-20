@@ -195,4 +195,4 @@ Lineage schema evolution should preserve these rules:
 
 ## Current implementation boundary
 
-`v0.0.1` contains the typed graph, endpoint-constrained relations, deterministic identities, production-lineage policy, evidence-bundle representation, and reference validation. Durable enterprise lineage persistence, full external reconciler coverage, organization-specific assurance profiles, and signed interoperability gates remain roadmap work.
+`v0.0.0` contains the typed graph, endpoint-constrained relations, deterministic identities, production-lineage policy, evidence-bundle representation, and reference validation. Durable enterprise lineage persistence, full external reconciler coverage, organization-specific assurance profiles, and signed interoperability gates remain roadmap work.

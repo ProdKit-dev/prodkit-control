@@ -123,7 +123,7 @@ Examples:
 - **production profile complete** — all required production controls and release gates for that profile are implemented and evidenced;
 - **enterprise profile complete** — the enterprise operational/security/governance gates are implemented, tested, and reviewed.
 
-A `v0.0.1` release can be complete while the overall product is intentionally not yet at the 1.0 enterprise production assurance profile.
+A `v0.0.0` release can be complete while the overall product is intentionally not yet at the 1.0 enterprise production assurance profile.
 
 ## Provider neutrality guarantee boundary
 
@@ -151,6 +151,6 @@ Operational SLOs must respect this principle.
 
 ## Current release boundary
 
-`v0.0.1` is the canonical engineering foundation. It includes the core contracts, typed lineage graph and completeness policy, deterministic hashing, in-memory ledger, approval binding, broker lifecycle, evidence bundles, HTTP API, CLI, PostgreSQL adapter boundary, and representative extension package boundaries.
+`v0.0.0` is the canonical engineering foundation. It includes the core contracts, typed lineage graph and completeness policy, deterministic hashing, in-memory ledger, approval binding, broker lifecycle, evidence bundles, HTTP API, CLI, PostgreSQL adapter boundary, and representative extension package boundaries.
 
 It does **not** claim the complete production or enterprise deployment profiles. Those require the roadmap-gated durable service wiring, authenticated principals, hardened executors, short-lived workload credentials, external reconciliation coverage, managed signing/trust policy, multi-tenant isolation verification, HA/DR, lifecycle governance, SLOs, and independent security review.

@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_RE = re.compile(r"^v?(\d+\.\d+\.\d+)$")
-TEMPORARY_RELEASE_PATHS = (ROOT / ".github/workflows/v0.0.1-normalize.yml",)
+TEMPORARY_RELEASE_PATHS = (ROOT / ".github/workflows/v0.0.0-normalize.yml",)
 
 
 def _version(value: str) -> str:

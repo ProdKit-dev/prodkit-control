@@ -314,4 +314,4 @@ In addition to the production checklist:
 
 ## Current implementation boundary
 
-`v0.0.1` is a canonical engineering foundation. The reference API can explicitly enable insecure header authentication for development only. A full production deployment still requires the roadmap-gated durable service wiring, authenticated principals, hardened executors, workload credentials, external reconciliation, managed signing/trust policy, and operational controls described above.
+`v0.0.0` is a canonical engineering foundation. The reference API can explicitly enable insecure header authentication for development only. A full production deployment still requires the roadmap-gated durable service wiring, authenticated principals, hardened executors, workload credentials, external reconciliation, managed signing/trust policy, and operational controls described above.
