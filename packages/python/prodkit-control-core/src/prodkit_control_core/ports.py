@@ -22,6 +22,7 @@ from .contracts import (
     LineageRelation,
     PolicyDecision,
     ReconciliationFinding,
+    RunRecord,
     StateObservation,
     VerificationResult,
 )
@@ -33,6 +34,13 @@ class EventLedger(Protocol):
     async def list_run_events(self, run_id: UUID) -> list[ControlEvent]: ...
     def stream_run_events(self, run_id: UUID) -> AsyncIterator[ControlEvent]: ...
     async def verify_run(self, run_id: UUID) -> None: ...
+
+
+@runtime_checkable
+class RunStore(Protocol):
+    async def create(self, run: RunRecord) -> None: ...
+    async def replace(self, run: RunRecord) -> None: ...
+    async def get(self, run_id: UUID) -> RunRecord | None: ...
 
 
 @runtime_checkable
@@ -70,6 +78,11 @@ class ApprovalProvider(Protocol):
         policy_decision: PolicyDecision,
         target_digest: str,
     ) -> ApprovalDecision | None: ...
+
+
+@runtime_checkable
+class ApprovalRecorder(Protocol):
+    async def record(self, decision: ApprovalDecision) -> None: ...
 
 
 @runtime_checkable
