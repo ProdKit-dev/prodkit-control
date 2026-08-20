@@ -8,11 +8,15 @@ on:
   workflow_dispatch:
     inputs:
       runner:
-        description: Runner target for explicit failover
+        description: Runner override; policy uses PRODKIT_RUNNER_MODE
         required: true
         type: choice
-        default: github-hosted
-        options: [github-hosted, self-hosted]
+        default: policy
+        options:
+          - policy
+          - auto
+          - github-hosted
+          - self-hosted
 
 permissions:
   contents: read
@@ -22,12 +26,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  runner-probe:
+    name: Hosted runner availability
+    if: >-
+      (((github.event_name == 'workflow_dispatch') &&
+        ((inputs.runner == 'auto') ||
+         ((inputs.runner == 'policy') &&
+          ((vars.PRODKIT_RUNNER_MODE == '') || (vars.PRODKIT_RUNNER_MODE == 'auto'))))) ||
+       ((github.event_name != 'workflow_dispatch') &&
+        ((vars.PRODKIT_RUNNER_MODE == '') || (vars.PRODKIT_RUNNER_MODE == 'auto')))) &&
+      ((github.event_name != 'pull_request') ||
+       (github.event.pull_request.head.repo.full_name == github.repository))
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Confirm GitHub-hosted runner availability
+        run: echo "GitHub-hosted runner is available"
+
   ci:
     name: ci
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci.yml@2decc8b2240a815de62ce2de7d0c42297288988e
+    needs: runner-probe
+    if: >-
+      always() && !cancelled() &&
+      (needs.runner-probe.result == 'success' ||
+       needs.runner-probe.result == 'failure' ||
+       needs.runner-probe.result == 'skipped')
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci.yml@3587dc8db2c0ca6aadcd4fc259344df8e29521a1
     with:
-      runner_json: ${{ (github.event_name == 'workflow_dispatch' && inputs.runner == 'self-hosted') && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"' }}
+      runner_json: ${{ (((((github.event_name == 'workflow_dispatch') && ((inputs.runner == 'self-hosted') || ((inputs.runner == 'policy') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted')))) || ((github.event_name != 'workflow_dispatch') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted'))) && ((github.event_name != 'pull_request') || (github.event.pull_request.head.repo.full_name == github.repository))) || (needs.runner-probe.result == 'failure')) && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"' }}
       hygiene_enabled: true
       hygiene_script: .prodkit/workflows/ci-hygiene.sh
       python_enabled: true
