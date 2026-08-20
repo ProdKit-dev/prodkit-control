@@ -1,0 +1,104 @@
+name: v0.0.1 Normalize
+
+on:
+  push:
+    branches:
+      - release/v0.0.1
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Normalize release metadata and known pre-release drifts
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import re
+          from pathlib import Path
+
+          version_pattern = re.compile(r'(?m)^version = "0\.1\.0"$')
+          pyprojects = [Path("pyproject.toml"), *Path("packages/python").glob("**/pyproject.toml")]
+          for path in pyprojects:
+              text = path.read_text(encoding="utf-8")
+              updated = version_pattern.sub('version = "0.0.1"', text, count=1)
+              if updated != text:
+                  path.write_text(updated, encoding="utf-8")
+
+          for path in Path("packages/python").glob("**/__init__.py"):
+              text = path.read_text(encoding="utf-8")
+              updated = text.replace('__version__ = "0.1.0"', '__version__ = "0.0.1"')
+              if updated != text:
+                  path.write_text(updated, encoding="utf-8")
+
+          package_jsons = [Path("package.json"), *Path("packages/typescript").glob("**/package.json")]
+          for path in package_jsons:
+              data = json.loads(path.read_text(encoding="utf-8"))
+              if data.get("version") == "0.1.0":
+                  data["version"] = "0.0.1"
+                  path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+          app_path = Path("packages/python/prodkit-control-fastapi/src/prodkit_control_fastapi/app.py")
+          app_text = app_path.read_text(encoding="utf-8")
+          marker = "    Principal = Annotated[RequestPrincipal, Depends(require_principal)]\n"
+          if 'globals()["Principal"] = Principal' not in app_text:
+              app_text = app_text.replace(marker, marker + '    globals()["Principal"] = Principal\n')
+              app_path.write_text(app_text, encoding="utf-8")
+
+          broker_path = Path("packages/python/prodkit-control-runtime/src/prodkit_control_runtime/broker.py")
+          broker_text = broker_path.read_text(encoding="utf-8")
+          if "    DuplicateActionError,\n" not in broker_text:
+              broker_text = broker_text.replace(
+                  "    ControlEventDraft,\n",
+                  "    ControlEventDraft,\n    DuplicateActionError,\n",
+              )
+          broker_text = broker_text.replace(
+              'raise ApprovalDeniedError(\n                    "an identical action is already in progress; execution is not duplicated"\n                )',
+              'raise DuplicateActionError(\n                    "an identical action is already in progress; execution is not duplicated"\n                )',
+          )
+          broker_path.write_text(broker_text, encoding="utf-8")
+
+          test_path = Path("tests/test_broker.py")
+          test_text = test_path.read_text(encoding="utf-8")
+          if "    DuplicateActionError,\n" not in test_text:
+              test_text = test_text.replace(
+                  "    ApprovalRequiredError,\n",
+                  "    ApprovalRequiredError,\n    DuplicateActionError,\n",
+              )
+          test_text = test_text.replace(
+              'with pytest.raises(ApprovalRequiredError, match="already in progress"):',
+              'with pytest.raises(DuplicateActionError, match="already in progress"): ',
+          )
+          test_path.write_text(test_text, encoding="utf-8")
+          PY
+      - name: Regenerate lock and schemas
+        run: |
+          uv lock
+          uv sync --all-packages --group dev
+          uv run python scripts/export_schemas.py
+          uv run ruff check . --fix
+          uv run ruff format .
+      - name: Commit normalized state
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Repository is already normalized."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "chore: normalize v0.0.1 generated state"
+          git push origin HEAD:release/v0.0.1
