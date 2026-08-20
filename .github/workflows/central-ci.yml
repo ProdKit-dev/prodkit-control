@@ -1,0 +1,39 @@
+name: Central CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: Runner target
+        required: true
+        type: choice
+        default: github-hosted
+        options: [github-hosted, self-hosted]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: central-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: ci
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci.yml@3b8adbb377f02eea0ef7e41a7dfcdfb4b45dfe7f
+    with:
+      runner_json: ${{ (github.event_name == 'workflow_dispatch' && inputs.runner == 'self-hosted') && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"' }}
+      hygiene_enabled: true
+      hygiene_script: .prodkit/workflows/ci-hygiene.sh
+      python_enabled: true
+      python_versions_json: '["3.12","3.13","3.14"]'
+      python_script: .prodkit/workflows/ci-python.sh
+      node_enabled: true
+      node_versions_json: '["22","24"]'
+      node_script: .prodkit/workflows/ci-node.sh
+      postgres_enabled: false
+      container_enabled: false
+      custom_enabled: false
