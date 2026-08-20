@@ -43,24 +43,31 @@ jobs:
        ((vars.PRODKIT_RUNNER_MODE == '') || (vars.PRODKIT_RUNNER_MODE == 'auto')))
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    continue-on-error: true
+    outputs:
+      available: ${{ steps.probe.outputs.available }}
     steps:
-      - name: Confirm GitHub-hosted runner availability
-        run: echo "GitHub-hosted runner is available"
+      - id: probe
+        name: Confirm GitHub-hosted runner availability
+        run: echo "available=true" >> "$GITHUB_OUTPUT"
 
   release:
     name: release
     needs: runner-probe
-    if: >-
-      always() && !cancelled() &&
-      (needs.runner-probe.result == 'success' ||
-       needs.runner-probe.result == 'failure' ||
-       needs.runner-probe.result == 'skipped')
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@3587dc8db2c0ca6aadcd4fc259344df8e29521a1
+    if: always() && !cancelled()
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@a19315d6b0a301f8d641d223692fdc85b2409835
     with:
       version: ${{ inputs.version }}
       target_sha: ${{ inputs.target_sha }}
       prerelease: ${{ inputs.prerelease }}
-      runner_json: ${{ (((inputs.runner == 'self-hosted') || ((inputs.runner == 'policy') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted'))) || (needs.runner-probe.result == 'failure')) && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"' }}
+      runner_json: >-
+        ${{ (
+          ((inputs.runner == 'self-hosted') ||
+           ((inputs.runner == 'policy') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted')) ||
+           (((inputs.runner == 'auto') ||
+             ((inputs.runner == 'policy') && ((vars.PRODKIT_RUNNER_MODE == '') || (vars.PRODKIT_RUNNER_MODE == 'auto')))) &&
+            (needs.runner-probe.outputs.available != 'true')))
+        ) && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"' }}
       required_workflows_json: '["CI","Security","CodeQL"]'
       python_enabled: true
       python_version: "3.13"
