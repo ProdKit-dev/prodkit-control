@@ -1,6 +1,6 @@
 [project]
 name = "prodkit-teleport"
-version = "0.0.1"
+version = "0.0.0"
 description = "Teleport privileged-access evidence adapter."
 requires-python = ">=3.12,<3.15"
 license = { text = "Apache-2.0" }

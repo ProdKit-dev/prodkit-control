@@ -1,6 +1,6 @@
 {
   "name": "@prodkit/control-react",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "description": "React query and lifecycle integration boundary.",
   "license": "Apache-2.0",
   "type": "module",

@@ -6,7 +6,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
-## [0.0.1] - 2026-08-20
+## [0.0.0] - 2026-08-20
 
 ### Added
 
@@ -23,7 +23,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 ### Changed
 
 - Normalized every first-party Python and TypeScript package from the initialization version `0.1.0`
-  to the first repository release version `0.0.1`, including `uv.lock` and exported schemas.
+  to the first repository release version `0.0.0`, including `uv.lock` and exported schemas.
 - Run creation/completion now validates actor tenancy before state mutation; completion accepts terminal
   states only and appends the audit event before committing in-memory state.
 - Execution results, state observations, and verification results are validated as bound to the requested action.
@@ -40,7 +40,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ### Release scope
 
-`0.0.1` is the canonical control-plane foundation. It does not claim that placeholder provider, executor,
+`0.0.0` is the canonical control-plane foundation. It does not claim that placeholder provider, executor,
 reconciler, signing, or external identity adapters are complete production integrations. Durable recovery,
 credential leasing, external reconciliation, signing/key management, and production deployment profiles are
 tracked as later milestones.
