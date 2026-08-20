@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "version": {
+    "sources": [
+      {"type": "toml", "path": "pyproject.toml", "selector": "project.version"}
+    ]
+  },
+  "notes": {
+    "path_template": "docs/releases/v{version}.md",
+    "changelog_path": "CHANGELOG.md",
+    "changelog_heading_template": "## [{version}]"
+  },
+  "build": {
+    "script": ".prodkit/workflows/release-build.sh",
+    "artifact_dir": ".artifacts/central-release",
+    "source_archive": true
+  },
+  "release": {
+    "name_template": "ProdKit Control {tag}"
+  }
+}
