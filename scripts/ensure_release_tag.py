@@ -41,28 +41,28 @@ def _request(
         raise RuntimeError(f"GitHub API {method} {url} failed ({exc.code}): {payload}") from exc
 
 
-def _tag_ref(repository: str, tag: str, token: str) -> dict[str, Any] | None:
-    encoded_tag = urllib.parse.quote(tag, safe="")
+def _ref(repository: str, ref: str, token: str) -> dict[str, Any] | None:
+    encoded_ref = urllib.parse.quote(ref, safe="/")
     status, payload = _request(
         "GET",
-        f"https://api.github.com/repos/{repository}/git/ref/tags/{encoded_tag}",
+        f"https://api.github.com/repos/{repository}/git/ref/{encoded_ref}",
         token,
     )
     if status == 404:
         return None
     if not isinstance(payload, dict):
-        raise RuntimeError("GitHub returned an invalid tag-ref response")
+        raise RuntimeError("GitHub returned an invalid ref response")
     return payload
 
 
-def _assert_exact_commit(ref: dict[str, Any], *, tag: str, sha: str) -> None:
-    if ref.get("ref") != f"refs/tags/{tag}":
-        raise RuntimeError(f"GitHub returned an unexpected ref for {tag}")
+def _assert_exact_commit(ref: dict[str, Any], *, expected_ref: str, sha: str) -> None:
+    if ref.get("ref") != f"refs/{expected_ref}":
+        raise RuntimeError(f"GitHub returned an unexpected ref for {expected_ref}")
     target = ref.get("object")
     if not isinstance(target, dict):
-        raise RuntimeError(f"tag {tag} has no target object")
+        raise RuntimeError(f"ref {expected_ref} has no target object")
     if target.get("type") != "commit" or target.get("sha") != sha:
-        raise RuntimeError(f"tag {tag} does not resolve directly to expected commit {sha}")
+        raise RuntimeError(f"ref {expected_ref} does not resolve directly to expected commit {sha}")
 
 
 def ensure(tag: str, sha: str) -> None:
@@ -74,10 +74,18 @@ def ensure(tag: str, sha: str) -> None:
         raise RuntimeError("GITHUB_TOKEN is required")
     if not tag.startswith("v") or not tag[1:]:
         raise ValueError("release tag must be v-prefixed")
-    if len(sha) != 40 or any(character not in "0123456789abcdef" for character in sha):
-        raise ValueError("release SHA must be a lowercase SHA-1 commit id")
+    if len(sha) not in {40, 64} or any(
+        character not in "0123456789abcdef" for character in sha
+    ):
+        raise ValueError("release SHA must be a lowercase Git object id")
 
-    existing = _tag_ref(repository, tag, token)
+    main_ref = _ref(repository, "heads/main", token)
+    if main_ref is None:
+        raise RuntimeError("main branch ref is missing")
+    _assert_exact_commit(main_ref, expected_ref="heads/main", sha=sha)
+
+    tag_ref_name = f"tags/{tag}"
+    existing = _ref(repository, tag_ref_name, token)
     if existing is None:
         _, payload = _request(
             "POST",
@@ -89,11 +97,11 @@ def ensure(tag: str, sha: str) -> None:
             raise RuntimeError("GitHub returned an invalid tag creation response")
         existing = payload
 
-    _assert_exact_commit(existing, tag=tag, sha=sha)
-    verified = _tag_ref(repository, tag, token)
+    _assert_exact_commit(existing, expected_ref=tag_ref_name, sha=sha)
+    verified = _ref(repository, tag_ref_name, token)
     if verified is None:
         raise RuntimeError(f"tag {tag} disappeared after creation")
-    _assert_exact_commit(verified, tag=tag, sha=sha)
+    _assert_exact_commit(verified, expected_ref=tag_ref_name, sha=sha)
     print(f"Verified immutable lightweight tag {tag} -> {sha}")
 
 
