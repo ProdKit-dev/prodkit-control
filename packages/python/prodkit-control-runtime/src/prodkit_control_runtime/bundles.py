@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import zipfile
 from datetime import UTC, datetime
@@ -16,6 +17,19 @@ from prodkit_control_core import (
 )
 
 from .projectors import project_run
+
+_MAX_MEMBER_BYTES = 64 * 1024 * 1024
+_MAX_TOTAL_BYTES = 128 * 1024 * 1024
+_ALLOWED_MEMBERS = frozenset({"manifest.json", "events.jsonl", "lineage.json"})
+
+
+def evidence_bundle_sha256(path: Path) -> str:
+    """Return the external trust-anchor digest for an evidence archive."""
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 class EvidenceBundleBuilder:
@@ -69,12 +83,51 @@ class EvidenceBundleBuilder:
 
 
 class EvidenceBundleVerifier:
-    def verify(self, archive: Path) -> dict[str, object]:
+    def verify(
+        self,
+        archive: Path,
+        *,
+        expected_archive_sha256: str | None = None,
+    ) -> dict[str, object]:
+        if expected_archive_sha256 is not None:
+            actual_archive_sha256 = evidence_bundle_sha256(archive)
+            if actual_archive_sha256 != expected_archive_sha256.lower():
+                raise IntegrityViolationError(
+                    "evidence bundle archive digest does not match external trust anchor"
+                )
+
         with zipfile.ZipFile(archive, "r") as zf:
+            infos = zf.infolist()
+            names = [info.filename for info in infos]
+            if len(names) != len(set(names)):
+                raise IntegrityViolationError("evidence bundle contains duplicate members")
+            member_names = set(names)
+            if not {"manifest.json", "events.jsonl"}.issubset(member_names):
+                raise IntegrityViolationError("evidence bundle is missing required members")
+            if member_names - _ALLOWED_MEMBERS:
+                raise IntegrityViolationError("evidence bundle contains unexpected members")
+            total_size = 0
+            for info in infos:
+                if info.is_dir() or info.file_size > _MAX_MEMBER_BYTES:
+                    raise IntegrityViolationError("evidence bundle contains an invalid member")
+                total_size += info.file_size
+            if total_size > _MAX_TOTAL_BYTES:
+                raise IntegrityViolationError("evidence bundle exceeds total size limit")
             manifest_bytes = zf.read("manifest.json")
             events_bytes = zf.read("events.jsonl")
+            lineage_bytes = zf.read("lineage.json") if "lineage.json" in member_names else None
+
         manifest = json.loads(manifest_bytes)
-        expected = manifest["files"]["events.jsonl"]
+        files = manifest.get("files")
+        if not isinstance(files, dict):
+            raise IntegrityViolationError("evidence bundle manifest files are invalid")
+        expected_members = {"events.jsonl"}
+        if lineage_bytes is not None:
+            expected_members.add("lineage.json")
+        if set(files) != expected_members:
+            raise IntegrityViolationError("evidence bundle manifest members do not match archive")
+
+        expected = files["events.jsonl"]
         actual = sha256_hex(events_bytes)
         if actual != expected or actual != manifest["events_sha256"]:
             raise IntegrityViolationError("evidence bundle events digest does not match manifest")
@@ -97,10 +150,9 @@ class EvidenceBundleVerifier:
             final_hash = previous
         if final_hash != manifest["final_event_hash"]:
             raise IntegrityViolationError("evidence bundle final hash does not match manifest")
-        if "lineage.json" in manifest["files"]:
-            with zipfile.ZipFile(archive, "r") as zf:
-                lineage_bytes = zf.read("lineage.json")
-            if sha256_hex(lineage_bytes) != manifest["files"]["lineage.json"]:
+
+        if lineage_bytes is not None:
+            if sha256_hex(lineage_bytes) != files["lineage.json"]:
                 raise IntegrityViolationError(
                     "evidence bundle lineage digest does not match manifest"
                 )
@@ -115,4 +167,7 @@ class EvidenceBundleVerifier:
                 raise IntegrityViolationError(
                     "evidence bundle lineage relation count does not match"
                 )
+        elif manifest.get("lineage_node_count") != 0 or manifest.get("lineage_relation_count") != 0:
+            raise IntegrityViolationError("evidence bundle declares lineage without lineage evidence")
+
         return cast(dict[str, object], manifest)
