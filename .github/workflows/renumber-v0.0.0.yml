@@ -1,26 +1,28 @@
 name: One-shot canonical v0.0.0 renumber
 
 on:
-  push:
-    branches:
-      - docs/enterprise-architecture-baseline
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
 
 permissions:
   contents: write
 
 concurrency:
-  group: renumber-v0.0.0
+  group: renumber-v0.0.0-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
   renumber:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 20
 
     steps:
-      - name: Check out branch
+      - name: Check out exact PR head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
           persist-credentials: true
 
@@ -107,4 +109,4 @@ jobs:
           git diff --cached --check
           git status --short
           git commit -m 'chore: renumber canonical foundation to v0.0.0'
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
