@@ -104,6 +104,13 @@ class CredentialLeaseAwareExecutor(AttemptAwareExecutor, Protocol):
 
 
 @runtime_checkable
+class CredentialMaterialResolver(Protocol):
+    """Worker-local resolver; credential material never crosses the control-plane API boundary."""
+
+    async def resolve(self, lease: CredentialLease) -> Mapping[str, str]: ...
+
+
+@runtime_checkable
 class EffectVerifier(Protocol):
     name: str
     version: str
