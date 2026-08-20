@@ -51,46 +51,29 @@ jobs:
         name: Confirm GitHub-hosted runner availability
         run: echo "available=true" >> "$GITHUB_OUTPUT"
 
-  analyze:
-    name: CodeQL (${{ matrix.language }})
+  codeql:
+    name: codeql
     needs: runner-probe
     if: >-
       always() && !cancelled() &&
       ((github.event_name != 'pull_request') ||
        (github.event.pull_request.head.repo.full_name == github.repository))
-    runs-on: ${{ fromJSON((((((github.event_name == 'workflow_dispatch') && (inputs.runner == 'self-hosted')) || ((github.event_name == 'workflow_dispatch') && (inputs.runner == 'policy') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted')) || ((github.event_name != 'workflow_dispatch') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted')) || (((((github.event_name == 'workflow_dispatch') && (inputs.runner == 'auto')) || ((github.event_name == 'workflow_dispatch') && (inputs.runner == 'policy') && ((vars.PRODKIT_RUNNER_MODE == '') || (vars.PRODKIT_RUNNER_MODE == 'auto'))) || ((github.event_name != 'workflow_dispatch') && ((vars.PRODKIT_RUNNER_MODE == '') || (vars.PRODKIT_RUNNER_MODE == 'auto')))) && (needs.runner-probe.outputs.available != 'true'))) && ((github.event_name != 'pull_request') || (github.event.pull_request.head.repo.full_name == github.repository))) && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"') }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [python, javascript-typescript, actions]
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
-        with:
-          languages: ${{ matrix.language }}
-
-      - name: Analyze locally
-        uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
-        with:
-          upload: never
-          upload-database: false
-          output: .artifacts/codeql/${{ matrix.language }}
-
-      - name: Enforce zero CodeQL findings
-        run: python3 scripts/check_codeql_sarif.py .artifacts/codeql/${{ matrix.language }}
-
-      - name: Preserve SARIF evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: codeql-${{ matrix.language }}-${{ github.sha }}
-          path: .artifacts/codeql/${{ matrix.language }}/*.sarif
-          if-no-files-found: error
-          retention-days: 14
+    uses: ./.github/workflows/reusable-codeql.yml
+    with:
+      runner_json: >-
+        ${{ (
+          (
+            ((github.event_name == 'workflow_dispatch') && (inputs.runner == 'self-hosted')) ||
+            ((github.event_name == 'workflow_dispatch') && (inputs.runner == 'policy') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted')) ||
+            ((github.event_name != 'workflow_dispatch') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted')) ||
+            (
+              (
+                ((github.event_name == 'workflow_dispatch') && (inputs.runner == 'auto')) ||
+                ((github.event_name == 'workflow_dispatch') && (inputs.runner == 'policy') && ((vars.PRODKIT_RUNNER_MODE == '') || (vars.PRODKIT_RUNNER_MODE == 'auto'))) ||
+                ((github.event_name != 'workflow_dispatch') && ((vars.PRODKIT_RUNNER_MODE == '') || (vars.PRODKIT_RUNNER_MODE == 'auto')))
+              ) &&
+              (needs.runner-probe.outputs.available != 'true')
+            )
+          ) &&
+          ((github.event_name != 'pull_request') || (github.event.pull_request.head.repo.full_name == github.repository))
+        ) && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"' }}
