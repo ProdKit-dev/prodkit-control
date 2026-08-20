@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from prodkit_control_core import (
     ActionSpec,
@@ -36,8 +36,12 @@ class DryRunExecutor:
 
     name = "dry-run"
     version = "1.0.0"
+    identity = "spiffe://prodkit.local/executor/dry-run"
 
     async def execute(self, action: ActionSpec) -> ExecutionResult:
+        return await self.execute_attempt(action, attempt_id=uuid4())
+
+    async def execute_attempt(self, action: ActionSpec, *, attempt_id: UUID) -> ExecutionResult:
         started = datetime.now(UTC)
         result = {
             "dry_run": True,
@@ -49,10 +53,10 @@ class DryRunExecutor:
         completed = datetime.now(UTC)
         return ExecutionResult(
             action_id=action.action_id,
-            execution_attempt_id=uuid4(),
+            execution_attempt_id=attempt_id,
             executor_name=self.name,
             executor_version=self.version,
-            executor_identity="spiffe://prodkit.local/executor/dry-run",
+            executor_identity=self.identity,
             started_at=started,
             completed_at=completed,
             succeeded=True,
