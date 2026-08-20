@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 API_VERSION = "2022-11-28"
+RELEASE_NAME_PREFIX = "ProdKit Control"
 _ALLOWED_GITHUB_HOSTS = frozenset({"api.github.com", "uploads.github.com"})
 
 
@@ -21,6 +22,10 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _release_name(tag: str) -> str:
+    return f"{RELEASE_NAME_PREFIX} {tag}"
 
 
 def _validate_github_url(url: str) -> None:
@@ -99,6 +104,7 @@ def _create_draft(
     tag: str,
     token: str,
     *,
+    name: str,
     body: str,
 ) -> dict[str, Any]:
     _, payload = _request(
@@ -107,7 +113,7 @@ def _create_draft(
         token,
         json_body={
             "tag_name": tag,
-            "name": tag,
+            "name": name,
             "body": body,
             "draft": True,
             "prerelease": False,
@@ -129,7 +135,14 @@ def _upload_asset(release: dict[str, Any], path: Path, token: str) -> None:
     _request("POST", url, token, data=path.read_bytes(), content_type=content_type)
 
 
-def _publish(repository: str, release: dict[str, Any], token: str, body: str) -> dict[str, Any]:
+def _publish(
+    repository: str,
+    release: dict[str, Any],
+    token: str,
+    *,
+    name: str,
+    body: str,
+) -> dict[str, Any]:
     release_id = release.get("id")
     if not isinstance(release_id, int):
         raise RuntimeError("release response does not contain a numeric id")
@@ -137,7 +150,12 @@ def _publish(repository: str, release: dict[str, Any], token: str, body: str) ->
         "PATCH",
         f"https://api.github.com/repos/{repository}/releases/{release_id}",
         token,
-        json_body={"draft": False, "prerelease": False, "body": body},
+        json_body={
+            "name": name,
+            "draft": False,
+            "prerelease": False,
+            "body": body,
+        },
     )
     if not isinstance(payload, dict):
         raise RuntimeError("GitHub returned an invalid release publish response")
@@ -161,9 +179,10 @@ def publish(tag: str, notes: Path, assets: list[Path]) -> None:
         raise RuntimeError("release asset filenames must be unique")
 
     body = notes.read_text(encoding="utf-8")
+    name = _release_name(tag)
     release = _release_by_tag(repository, tag, token)
     if release is None:
-        release = _create_draft(repository, tag, token, body=body)
+        release = _create_draft(repository, tag, token, name=name, body=body)
 
     remote_assets = {
         asset["name"]: asset
@@ -197,11 +216,19 @@ def publish(tag: str, notes: Path, assets: list[Path]) -> None:
         if remote is None or not _asset_matches(remote, path):
             raise RuntimeError(f"release asset SHA-256 verification failed for {path.name!r}")
 
-    if refreshed.get("draft") is not False:
-        refreshed = _publish(repository, refreshed, token, body)
-    if refreshed.get("draft") is not False or refreshed.get("prerelease") is not False:
-        raise RuntimeError("release did not reach final published state")
-    print(f"Published {tag} with {len(assets)} SHA-256-verified assets")
+    if (
+        refreshed.get("draft") is not False
+        or refreshed.get("prerelease") is not False
+        or refreshed.get("name") != name
+    ):
+        refreshed = _publish(repository, refreshed, token, name=name, body=body)
+    if (
+        refreshed.get("draft") is not False
+        or refreshed.get("prerelease") is not False
+        or refreshed.get("name") != name
+    ):
+        raise RuntimeError("release did not reach the required final published metadata state")
+    print(f"Published {name} with {len(assets)} SHA-256-verified assets")
 
 
 def main() -> int:
