@@ -4,15 +4,30 @@ ProdKit Control uses a **maturity-gated roadmap**. Version numbers communicate a
 
 The long-term target is an advanced, general-purpose, provider-neutral, standalone-capable control and assurance plane with a documented enterprise production profile.
 
+## Versioning model
+
+The pre-1.0 sequence is intentionally simple:
+
+- `v0.0.0` is the canonical foundation snapshot: architecture, contracts, reference runtime, package boundaries, release machinery, and the first complete documentation baseline.
+- Major pre-1.0 capability milestones advance the **minor** version: `v0.1.0`, `v0.2.0`, `v0.3.0`, and so on.
+- Patch versions such as `v0.1.1` are reserved for corrective releases of an already published milestone when needed; they are not roadmap milestones.
+- `v1.0.0` is reserved for the documented production assurance profile and must satisfy the full 1.0 release gate.
+
+This keeps the roadmap readable: `0.1.0` means the first capability milestone after the foundation, `0.2.0` the second, and so forth.
+
 ## Maturity ladder
 
 ```mermaid
 flowchart LR
-    F[0.0.x\nCanonical foundation] --> H[0.1.x\nHardened execution]
-    H --> R[0.2.x\nDelivery-chain reconciliation]
-    R --> A[0.3.x\nAttestation + interoperability]
-    A --> E[0.4-0.8\nEnterprise hardening]
-    E --> C[0.9.x\nProduction candidate]
+    F[0.0.0\nCanonical foundation] --> H[0.1.0\nHardened execution]
+    H --> R[0.2.0\nDelivery-chain reconciliation]
+    R --> A[0.3.0\nAttestation + interoperability]
+    A --> HA[0.4.0\nHigh availability + scale]
+    HA --> T[0.5.0\nMulti-tenant isolation]
+    T --> G[0.6.0\nGovernance + lifecycle]
+    G --> DR[0.7.0\nReliability + disaster recovery]
+    DR --> S[0.8.0\nSecurity + operational hardening]
+    S --> C[0.9.0\nProduction candidate]
     C --> P[1.0.0\nProduction assurance profile]
 ```
 
@@ -33,42 +48,43 @@ A release gate should be supported by one or more of:
 - documented operational procedures;
 - independent security or architecture review where required.
 
-## 0.0.x — Canonical foundation
+A milestone is not complete merely because package names or adapter boundaries exist. The implementation, proof, documentation, and operational boundary must agree.
+
+## v0.0.0 — Canonical foundation
 
 ### Goal
 
-Establish a stable semantic core, package architecture, evidence model, and reference runtime from which production controls can be hardened without coupling the system to one model, provider, cloud, policy engine, or orchestrator.
+Establish the semantic core, package architecture, evidence model, reference runtime, architectural invariants, release process, and documentation baseline from which production controls can be hardened without coupling the system to one model, provider, cloud, policy engine, or orchestrator.
 
-### 0.0.1 — Canonical engineering foundation — 2026-08-20
-
-Implemented foundation:
+### Foundation scope
 
 - canonical run, event, action, policy, approval, verification, reconciliation, and lineage contracts;
 - typed specification-to-production lineage and fail-closed production completeness assessment;
-- deterministic canonical JSON and hash-chained in-memory ledger;
+- deterministic canonical JSON and hash-chained reference ledger;
 - provider-neutral action broker and executor protocol;
 - internally tamper-evident evidence bundles with optional external archive-digest trust anchors;
 - fail-closed FastAPI authentication boundary with injectable principal resolution;
 - FastAPI and CLI surfaces;
 - PostgreSQL append-only adapter boundary;
-- Python and TypeScript package/contracts workspace normalized to `0.0.1`;
+- Python and TypeScript package/contracts workspace normalized to `0.0.0`;
+- canonical architecture, runtime, deployment, extension, failure/recovery, multi-tenancy, security, operations, and guarantee documentation;
+- ADR process for expensive-to-reverse architecture decisions;
 - release process with immutable tag and independently verified release assets.
-
-### Remaining 0.0.x documentation/contract hardening
-
-- canonical architecture diagrams and trust boundaries;
-- deployment profiles and maturity definitions;
-- formalized failure/recovery semantics;
-- multi-tenancy and isolation model;
-- extension/adapter compatibility rules;
-- architecture decision records for decisions that become expensive to reverse;
-- schema evolution and compatibility expectations for pre-1.0 consumers.
 
 ### Exit gate
 
-The 0.0.x foundation is ready to advance when the architectural invariants are documented, testable, provider-neutral, and reflected consistently across README, architecture, security, operations, and roadmap documentation.
+`v0.0.0` is complete only when:
 
-## 0.1.x — Hardened execution
+- all first-party package metadata and locks agree on `0.0.0`;
+- the canonical architecture and trust boundaries are documented consistently across README and architecture/security/operations docs;
+- reference behavior passes the repository's CI, typing, tests, security, schema-drift, dependency-audit, and release-artifact checks;
+- the exact release commit produces verified `0.0.0` Python and npm artifacts;
+- the GitHub Release is named **ProdKit Control v0.0.0** and its assets are checksum-verified;
+- no documentation claims that later production or enterprise milestones are already implemented.
+
+`v0.0.0` is a foundation release, not the enterprise production assurance profile.
+
+## v0.1.0 — Hardened execution
 
 ### Goal
 
@@ -99,7 +115,7 @@ Turn the reference action lifecycle into a durable production execution path tha
 - production-authenticated API integration tests;
 - documented operational rollback and incident paths.
 
-## 0.2.x — Delivery-chain reconciliation
+## v0.2.0 — Delivery-chain reconciliation
 
 ### Goal
 
@@ -126,7 +142,7 @@ Detect whether the observed production world agrees with the controlled intent-t
 - no silent conversion of unknown or unavailable evidence into success;
 - documented reconciliation SLOs and escalation behavior.
 
-## 0.3.x — Attestations and interoperability
+## v0.3.0 — Attestations and interoperability
 
 ### Goal
 
@@ -152,7 +168,7 @@ Make the evidence chain portable across organizations and existing supply-chain/
 - cross-version evidence verification tests;
 - interoperability fixtures for each claimed standard/integration.
 
-## 0.4.x — High availability and scale
+## v0.4.0 — High availability and scale
 
 ### Goal
 
@@ -176,7 +192,7 @@ Operate the control plane safely under concurrency, failover, and sustained prod
 - load and soak tests at a published supported envelope;
 - no duplicate external effect caused by control-plane failover.
 
-## 0.5.x — Multi-tenant enterprise isolation
+## v0.5.0 — Multi-tenant enterprise isolation
 
 ### Goal
 
@@ -200,7 +216,7 @@ Make tenant and organization isolation an independently verifiable property rath
 - privileged-support access audit tests;
 - independent tenant-isolation security review before enterprise claim language.
 
-## 0.6.x — Governance, retention, and lifecycle
+## v0.6.0 — Governance, retention, and lifecycle
 
 ### Goal
 
@@ -224,7 +240,7 @@ Support long-lived evidence, compliance workflows, and safe lifecycle changes.
 - key-rotation exercises;
 - migration tests across every supported upgrade path.
 
-## 0.7.x — Reliability and disaster recovery
+## v0.7.0 — Reliability and disaster recovery
 
 ### Goal
 
@@ -247,7 +263,7 @@ Define and prove how the system recovers without losing assurance semantics.
 - recovered evidence chain verifies against trusted anchors;
 - uncertain in-flight actions reconcile rather than blindly replay.
 
-## 0.8.x — Security and operational hardening
+## v0.8.0 — Security and operational hardening
 
 ### Goal
 
@@ -273,7 +289,7 @@ Close known threat-model gaps for the supported production profile.
 - incident-response exercise;
 - no open critical security finding for the supported profile.
 
-## 0.9.x — Production candidate
+## v0.9.0 — Production candidate
 
 ### Goal
 
@@ -298,7 +314,7 @@ Freeze the supported production profile long enough to prove compatibility, oper
 - independent architecture/security review initiated or completed;
 - no unresolved blocker against the 1.0 guarantee set.
 
-## 1.0.0 — Production assurance profile
+## v1.0.0 — Production assurance profile
 
 ### Goal
 
@@ -320,7 +336,7 @@ Provide a stable, documented, independently reviewable production assurance prof
 
 ### 1.0 release gate
 
-`1.0.0` must not be declared merely because all packages exist. The release requires evidence that the **supported production profile** satisfies the documented guarantees under normal operation, failure, recovery, upgrade, and adversarial conditions.
+`v1.0.0` must not be declared merely because all packages exist. The release requires evidence that the **supported production profile** satisfies the documented guarantees under normal operation, failure, recovery, upgrade, and adversarial conditions.
 
 ## Post-1.0 directions
 
