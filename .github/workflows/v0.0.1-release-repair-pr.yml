@@ -17,14 +17,80 @@ jobs:
   repair:
     if: ${{ github.head_ref == 'release-repair/v0.0.1' && github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - name: Check out one-shot repair source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Repair metadata, verify published assets, and clean branches
+      - name: Check out exact immutable v0.0.1 source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: v0.0.1
+          fetch-depth: 0
+          persist-credentials: false
+          path: release-source
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: "0.10.0"
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: release-source/pnpm-lock.yaml
+
+      - name: Rebuild exact-tag release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-source
+          test "$(git rev-parse HEAD)" = "889a754f416bd9454bc9e7d407a6f3d0327241d8"
+          test "$(git describe --tags --exact-match HEAD)" = "v0.0.1"
+          uv sync --all-packages --group dev --locked
+          pnpm install --frozen-lockfile
+          pnpm build:ts
+          rm -rf .release
+          mkdir -p .release/assets
+          uv build --all-packages --out-dir .release/assets
+          for package_dir in packages/typescript/*; do
+            test -f "$package_dir/package.json" || continue
+            pnpm --dir "$package_dir" pack --pack-destination "$PWD/.release/assets"
+          done
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          test "$version" = "0.0.1"
+          uv run python scripts/inspect_release_artifacts.py .release/assets --version "$version"
+          (
+            cd .release/assets
+            find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\0' \
+              | sort -z \
+              | xargs -0 sha256sum
+          ) > .release/assets/SHA256SUMS
+          test -s .release/assets/SHA256SUMS
+          (cd .release/assets && sha256sum -c SHA256SUMS)
+
+      - name: Publish missing GitHub Release with organization naming
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mapfile -t assets < <(find release-source/.release/assets -maxdepth 1 -type f -print | sort)
+          python3 scripts/publish_release.py \
+            --tag v0.0.1 \
+            --notes release-source/docs/releases/v0.0.1.md \
+            "${assets[@]}"
+
+      - name: Independently verify published release and clean branches
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 scripts/v0_0_1_release_repair.py
