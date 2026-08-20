@@ -29,9 +29,9 @@ ProdKit preserves the typed relationships between these identities. It treats mo
 
 ## Project status
 
-This repository is an **engineering foundation**, not a claim that production-grade guarantees are automatically enabled. The core contracts, typed lineage graph, production-lineage policy, deterministic hashing, in-memory ledger, approval binding, broker lifecycle, evidence bundles, HTTP API, CLI, PostgreSQL adapter, and representative adapters are implemented. Production deployment still requires hardened identity, durable lineage and event storage, key management, policy, executor isolation, external audit sources, and operational controls appropriate to your environment.
+`v0.0.1` is the **canonical engineering foundation**, not a claim that every production assurance control is already implemented. The core contracts, typed lineage graph, production-lineage policy, deterministic hashing, in-memory ledger, approval binding, broker lifecycle, evidence bundles, HTTP API, CLI, PostgreSQL adapter boundary, and representative extension packages are present. Production deployment still requires a real authenticated principal resolver, durable service wiring and storage, workload credential management, production executor isolation, external audit/reconciliation sources, managed signing/key policy where required, and operational controls appropriate to the environment.
 
-See [Guarantees and non-guarantees](docs/architecture/guarantees.md) before enabling production actions.
+See [Guarantees and non-guarantees](docs/architecture/guarantees.md) before enabling production actions and [the v0.0.1 release notes](docs/releases/v0.0.1.md) for the exact first-release boundary.
 
 ## Core guarantees
 
@@ -67,7 +67,7 @@ Deployment -----------------observed_as---> ProductionObservation
 ProductionObservation ------compared_by--> Reconciliation
 ```
 
-`LineageGraph` is the typed product lineage. The append-only `ControlEvent` ledger records how assertions and actions entered the system, including causality and evidence. Content-addressed artifacts preserve exact inputs and outputs; signed evidence bundles make the combined record independently portable. Query tables, Git history, traces, dashboards, and provider logs are projections or witnesses—not the canonical explanation of the system.
+`LineageGraph` is the typed product lineage. The append-only `ControlEvent` ledger records how assertions and actions entered the system, including causality and evidence. Content-addressed artifacts preserve exact inputs and outputs. Evidence bundles preserve the hash-chained record as a portable archive and can be verified against an externally trusted archive SHA-256 digest. Query tables, Git history, traces, dashboards, and provider logs are projections or witnesses—not the canonical explanation of the system.
 
 ## Repository layout
 
@@ -153,7 +153,7 @@ Some adapter packages begin as explicit extension points. They contain stable pa
 ### Install and verify
 
 ```bash
-uv sync --all-packages --group dev
+uv sync --all-packages --group dev --locked
 uv run pytest
 uv run ruff check .
 uv run mypy
@@ -161,11 +161,13 @@ uv run mypy
 
 ### Run the local API
 
+Protected routes fail closed unless authentication is configured. For local development only, explicitly enable the insecure header resolver:
+
 ```bash
-uv run prodkit-control-api
+PRODKIT_ALLOW_INSECURE_HEADER_AUTH=true uv run prodkit-control-api
 ```
 
-Open `http://127.0.0.1:8000/docs`.
+Open `http://127.0.0.1:8000/docs`. Development requests to protected routes must provide `X-ProdKit-Tenant-Id`, `X-ProdKit-Actor-Id`, and `X-ProdKit-Actor-Kind`; production deployments should inject an authenticated `PrincipalResolver` instead of enabling header authentication.
 
 ### Run the deterministic demo
 
@@ -184,7 +186,7 @@ docker compose up --build
 
 ## The action lifecycle
 
-Every externally visible action follows this state machine:
+Every externally visible action follows a fail-closed lifecycle. An executor exception after execution starts is recorded as `execution.uncertain`; the idempotency claim is retained because the external effect may have occurred and blindly retrying could duplicate it.
 
 ```text
 proposed
@@ -192,11 +194,11 @@ proposed
   -> approval_required -> approval_denied
   -> approval_required -> approved
   -> authorized
-  -> execution_started
-  -> execution_failed
-  -> execution_succeeded
-  -> effect_verified
-  -> effect_mismatched
+  -> execution_started -> execution_uncertain
+  -> execution_started -> execution_failed
+  -> execution_started -> execution_succeeded
+  -> state_observed
+  -> effect_verified | effect_mismatched
   -> reconciled
 ```
 
@@ -235,7 +237,7 @@ The trust boundary assumes:
 
 1. Models are untrusted proposers.
 2. Provider traces are supplemental and may be unavailable.
-3. Executors use short-lived, least-privilege workload identity.
+3. Production executors use short-lived, least-privilege workload identity supplied by the deployment environment.
 4. Secrets are referenced, not embedded in events.
 5. The authoritative ledger is unsampled and append-only.
 6. OpenTelemetry is an operational projection, not the audit database.
