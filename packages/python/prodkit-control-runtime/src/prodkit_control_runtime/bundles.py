@@ -128,9 +128,7 @@ class EvidenceBundleVerifier:
                     raise IntegrityViolationError("evidence bundle exceeds total size limit")
                 manifest_bytes = zf.read("manifest.json")
                 events_bytes = zf.read("events.jsonl")
-                lineage_bytes = (
-                    zf.read("lineage.json") if "lineage.json" in member_names else None
-                )
+                lineage_bytes = zf.read("lineage.json") if "lineage.json" in member_names else None
         except (zipfile.BadZipFile, KeyError, OSError) as exc:
             raise IntegrityViolationError("evidence bundle is not a valid archive") from exc
         return manifest_bytes, events_bytes, lineage_bytes
@@ -183,9 +181,8 @@ class EvidenceBundleVerifier:
         if not _is_sha256(events_digest):
             raise IntegrityViolationError("evidence bundle events digest is invalid")
         actual_events_digest = sha256_hex(events_bytes)
-        if (
-            actual_events_digest != events_digest
-            or actual_events_digest != manifest.get("events_sha256")
+        if actual_events_digest != events_digest or actual_events_digest != manifest.get(
+            "events_sha256"
         ):
             raise IntegrityViolationError("evidence bundle events digest does not match manifest")
 
@@ -224,14 +221,18 @@ class EvidenceBundleVerifier:
             try:
                 raw_event = json.loads(line)
             except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-                raise IntegrityViolationError("evidence bundle contains malformed event JSON") from exc
+                raise IntegrityViolationError(
+                    "evidence bundle contains malformed event JSON"
+                ) from exc
             if not isinstance(raw_event, dict):
                 raise IntegrityViolationError("evidence bundle event must be an object")
             event = cast(dict[str, Any], raw_event)
             if event.get("sequence") != index:
                 raise IntegrityViolationError("evidence bundle contains a sequence gap")
             if event.get("run_id") != run_id:
-                raise IntegrityViolationError("evidence bundle event run id does not match manifest")
+                raise IntegrityViolationError(
+                    "evidence bundle event run id does not match manifest"
+                )
             event_tenant = event.get("tenant_id")
             if not isinstance(event_tenant, str) or not event_tenant:
                 raise IntegrityViolationError("evidence bundle event tenant is invalid")
