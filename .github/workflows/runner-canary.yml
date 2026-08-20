@@ -2,9 +2,6 @@ name: Runner Canary
 
 on:
   pull_request:
-  push:
-    branches:
-      - test/workflow-runner-canary
   workflow_dispatch:
 
 permissions:
@@ -14,7 +11,7 @@ jobs:
   hosted-ci:
     name: hosted-ci
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci.yml@3ef994af5cfa92483785e899a38f86b6dfc008dd
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci.yml@df6dd2115c041bd1d603d12de66eefed3f6c8b42
     with:
       runner_json: '"ubuntu-latest"'
       hygiene_enabled: false
@@ -28,7 +25,7 @@ jobs:
   self-hosted-ci:
     name: self-hosted-ci
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci.yml@3ef994af5cfa92483785e899a38f86b6dfc008dd
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci.yml@df6dd2115c041bd1d603d12de66eefed3f6c8b42
     with:
       runner_json: '["self-hosted","Linux","X64"]'
       hygiene_enabled: false
@@ -42,7 +39,7 @@ jobs:
   hosted-security:
     name: hosted-security
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-security.yml@3ef994af5cfa92483785e899a38f86b6dfc008dd
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-security.yml@df6dd2115c041bd1d603d12de66eefed3f6c8b42
     with:
       runner_json: '"ubuntu-latest"'
       secret_scan_enabled: true
@@ -55,7 +52,7 @@ jobs:
   self-hosted-security:
     name: self-hosted-security
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-security.yml@3ef994af5cfa92483785e899a38f86b6dfc008dd
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-security.yml@df6dd2115c041bd1d603d12de66eefed3f6c8b42
     with:
       runner_json: '["self-hosted","Linux","X64"]'
       secret_scan_enabled: true
