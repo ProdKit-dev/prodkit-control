@@ -43,9 +43,13 @@ jobs:
        (github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    continue-on-error: true
+    outputs:
+      available: ${{ steps.probe.outputs.available }}
     steps:
-      - name: Confirm GitHub-hosted runner availability
-        run: echo "GitHub-hosted runner is available"
+      - id: probe
+        name: Confirm GitHub-hosted runner availability
+        run: echo "available=true" >> "$GITHUB_OUTPUT"
 
   analyze:
     name: CodeQL (${{ matrix.language }})
@@ -54,7 +58,7 @@ jobs:
       always() && !cancelled() &&
       ((github.event_name != 'pull_request') ||
        (github.event.pull_request.head.repo.full_name == github.repository))
-    runs-on: ${{ fromJSON((((github.event_name == 'workflow_dispatch') && ((inputs.runner == 'self-hosted') || ((inputs.runner == 'policy') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted')))) || ((github.event_name != 'workflow_dispatch') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted')) || (needs.runner-probe.result == 'failure')) && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"') }}
+    runs-on: ${{ fromJSON((((((github.event_name == 'workflow_dispatch') && (inputs.runner == 'self-hosted')) || ((github.event_name == 'workflow_dispatch') && (inputs.runner == 'policy') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted')) || ((github.event_name != 'workflow_dispatch') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted')) || (((((github.event_name == 'workflow_dispatch') && (inputs.runner == 'auto')) || ((github.event_name == 'workflow_dispatch') && (inputs.runner == 'policy') && ((vars.PRODKIT_RUNNER_MODE == '') || (vars.PRODKIT_RUNNER_MODE == 'auto'))) || ((github.event_name != 'workflow_dispatch') && ((vars.PRODKIT_RUNNER_MODE == '') || (vars.PRODKIT_RUNNER_MODE == 'auto')))) && (needs.runner-probe.outputs.available != 'true'))) && ((github.event_name != 'pull_request') || (github.event.pull_request.head.repo.full_name == github.repository))) && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"') }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
