@@ -120,15 +120,15 @@ def _release_by_tag(repository: str, tag: str, token: str) -> dict[str, Any] | N
     # GitHub's release-by-tag endpoint does not reliably expose draft releases.
     # Fall back to the authenticated release listing so an interrupted publication
     # resumes the existing draft instead of trying to create a duplicate.
-    matches = [release for release in _list_releases(repository, token) if release.get("tag_name") == tag]
+    matches = [
+        release for release in _list_releases(repository, token) if release.get("tag_name") == tag
+    ]
     if len(matches) > 1:
         raise RuntimeError(f"GitHub returned multiple release records for tag {tag!r}")
     return matches[0] if matches else None
 
 
-def _release_by_id(
-    repository: str, release_id: int, token: str
-) -> dict[str, Any] | None:
+def _release_by_id(repository: str, release_id: int, token: str) -> dict[str, Any] | None:
     status, payload = _request(
         "GET",
         f"https://api.github.com/repos/{repository}/releases/{release_id}",
