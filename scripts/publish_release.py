@@ -65,7 +65,7 @@ def _request(
         url, data=body, headers=headers, method=method
     )
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310
+        with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310
             payload = response.read()
             decoded = json.loads(payload) if payload else None
             return response.status, decoded
@@ -99,6 +99,36 @@ def _release_by_tag(repository: str, tag: str, token: str) -> dict[str, Any] | N
     return payload
 
 
+def _release_by_id(repository: str, release_id: int, token: str) -> dict[str, Any]:
+    status, payload = _request(
+        "GET",
+        f"https://api.github.com/repos/{repository}/releases/{release_id}",
+        token,
+    )
+    if status == 404 or not isinstance(payload, dict):
+        raise RuntimeError(f"GitHub Release {release_id} could not be read")
+    return payload
+
+
+def _find_release(repository: str, tag: str, token: str) -> dict[str, Any] | None:
+    published = _release_by_tag(repository, tag, token)
+    if published is not None:
+        return published
+    status, payload = _request(
+        "GET",
+        f"https://api.github.com/repos/{repository}/releases?per_page=100",
+        token,
+    )
+    if status == 404:
+        return None
+    if not isinstance(payload, list):
+        raise RuntimeError("GitHub returned an invalid release listing")
+    matches = [item for item in payload if isinstance(item, dict) and item.get("tag_name") == tag]
+    if len(matches) > 1:
+        raise RuntimeError(f"multiple GitHub Releases exist for {tag}")
+    return matches[0] if matches else None
+
+
 def _create_draft(
     repository: str,
     tag: str,
@@ -123,6 +153,19 @@ def _create_draft(
     if not isinstance(payload, dict):
         raise RuntimeError("GitHub returned an invalid release creation response")
     return payload
+
+
+def _delete_asset(repository: str, asset: dict[str, Any], token: str) -> None:
+    asset_id = asset.get("id")
+    if not isinstance(asset_id, int):
+        raise RuntimeError("release asset does not contain a numeric id")
+    status, _ = _request(
+        "DELETE",
+        f"https://api.github.com/repos/{repository}/releases/assets/{asset_id}",
+        token,
+    )
+    if status not in {204, 404}:
+        raise RuntimeError(f"GitHub returned unexpected asset deletion status {status}")
 
 
 def _upload_asset(release: dict[str, Any], path: Path, token: str) -> None:
@@ -180,52 +223,84 @@ def publish(tag: str, notes: Path, assets: list[Path]) -> None:
 
     body = notes.read_text(encoding="utf-8")
     name = _release_name(tag)
-    release = _release_by_tag(repository, tag, token)
+    release = _find_release(repository, tag, token)
     if release is None:
         release = _create_draft(repository, tag, token, name=name, body=body)
+    if release.get("tag_name") != tag:
+        raise RuntimeError("GitHub Release tag does not match requested tag")
 
+    release_id = release.get("id")
+    if not isinstance(release_id, int):
+        raise RuntimeError("release response does not contain a numeric id")
+
+    expected = {path.name: path for path in assets}
     remote_assets = {
         asset["name"]: asset
         for asset in release.get("assets", [])
         if isinstance(asset, dict) and isinstance(asset.get("name"), str)
     }
-    for path in assets:
-        existing = remote_assets.get(path.name)
-        if existing is not None:
-            if not _asset_matches(existing, path):
-                raise RuntimeError(
-                    f"existing release asset {path.name!r} has no matching SHA-256 digest"
-                )
-            continue
-        if release.get("draft") is False:
-            raise RuntimeError(
-                f"published release is missing expected immutable asset {path.name!r}"
-            )
-        _upload_asset(release, path, token)
 
-    refreshed = _release_by_tag(repository, tag, token)
-    if refreshed is None:
-        raise RuntimeError("release disappeared after asset upload")
-    refreshed_assets = {
+    if release.get("draft") is False:
+        if set(remote_assets) != set(expected):
+            raise RuntimeError("published release asset set is not the expected immutable set")
+        for filename, path in expected.items():
+            if not _asset_matches(remote_assets[filename], path):
+                raise RuntimeError(f"published release asset digest mismatch for {filename!r}")
+    else:
+        for filename, asset in list(remote_assets.items()):
+            path = expected.get(filename)
+            if path is None or not _asset_matches(asset, path):
+                _delete_asset(repository, asset, token)
+                remote_assets.pop(filename, None)
+        release = _release_by_id(repository, release_id, token)
+        remote_assets = {
+            asset["name"]: asset
+            for asset in release.get("assets", [])
+            if isinstance(asset, dict) and isinstance(asset.get("name"), str)
+        }
+        for filename, path in expected.items():
+            if filename not in remote_assets:
+                _upload_asset(release, path, token)
+
+        release = _release_by_id(repository, release_id, token)
+        refreshed_assets = {
+            asset["name"]: asset
+            for asset in release.get("assets", [])
+            if isinstance(asset, dict) and isinstance(asset.get("name"), str)
+        }
+        if set(refreshed_assets) != set(expected):
+            raise RuntimeError("draft release asset set does not exactly match expected assets")
+        for filename, path in expected.items():
+            if not _asset_matches(refreshed_assets[filename], path):
+                raise RuntimeError(f"release asset SHA-256 verification failed for {filename!r}")
+        release = _publish(repository, release, token, name=name, body=body)
+
+    if (
+        release.get("draft") is not False
+        or release.get("prerelease") is not False
+        or release.get("name") != name
+        or release.get("tag_name") != tag
+    ):
+        release = _publish(repository, release, token, name=name, body=body)
+
+    final_release = _release_by_tag(repository, tag, token)
+    if final_release is None:
+        raise RuntimeError("published release cannot be resolved by immutable tag")
+    final_assets = {
         asset["name"]: asset
-        for asset in refreshed.get("assets", [])
+        for asset in final_release.get("assets", [])
         if isinstance(asset, dict) and isinstance(asset.get("name"), str)
     }
-    for path in assets:
-        remote = refreshed_assets.get(path.name)
-        if remote is None or not _asset_matches(remote, path):
-            raise RuntimeError(f"release asset SHA-256 verification failed for {path.name!r}")
-
+    if set(final_assets) != set(expected):
+        raise RuntimeError("final published release asset set is not exact")
+    for filename, path in expected.items():
+        if not _asset_matches(final_assets[filename], path):
+            raise RuntimeError(f"final published release digest mismatch for {filename!r}")
     if (
-        refreshed.get("draft") is not False
-        or refreshed.get("prerelease") is not False
-        or refreshed.get("name") != name
-    ):
-        refreshed = _publish(repository, refreshed, token, name=name, body=body)
-    if (
-        refreshed.get("draft") is not False
-        or refreshed.get("prerelease") is not False
-        or refreshed.get("name") != name
+        final_release.get("draft") is not False
+        or final_release.get("prerelease") is not False
+        or final_release.get("name") != name
+        or final_release.get("tag_name") != tag
     ):
         raise RuntimeError("release did not reach the required final published metadata state")
     print(f"Published {name} with {len(assets)} SHA-256-verified assets")
