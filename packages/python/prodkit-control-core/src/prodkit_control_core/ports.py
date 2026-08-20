@@ -82,6 +82,13 @@ class ControlledExecutor(Protocol):
 
 
 @runtime_checkable
+class PreflightExecutor(ControlledExecutor, Protocol):
+    """Executor that can reject unsafe/invalid actions before idempotency ownership starts."""
+
+    async def validate(self, action: ActionSpec) -> None: ...
+
+
+@runtime_checkable
 class AttemptAwareExecutor(ControlledExecutor, Protocol):
     """Executor capable of using a broker-owned durable attempt identifier."""
 
