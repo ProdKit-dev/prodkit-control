@@ -186,8 +186,8 @@ async def _require_principal(request: Request) -> RequestPrincipal:
     return _insecure_header_principal(request)
 
 
-type Principal = Annotated[RequestPrincipal, Depends(_require_principal)]
-type Services = Annotated[AppServices, Depends(_get_services)]
+Principal = Annotated[RequestPrincipal, Depends(_require_principal)]
+Services = Annotated[AppServices, Depends(_get_services)]
 
 
 def create_app(
