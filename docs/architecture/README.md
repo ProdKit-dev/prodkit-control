@@ -15,6 +15,7 @@ This directory defines the architectural contract for ProdKit Control. Start wit
 9. [Failure and recovery](failure-recovery.md) — crash, uncertainty, retry, reconciliation, and recovery semantics.
 10. [Observability](observability.md) — operational telemetry, correlation, SLOs, and its boundary from canonical evidence.
 11. [Guarantees and non-guarantees](guarantees.md) — safe claim language and assurance prerequisites.
+12. [Architecture Decision Records](decisions/README.md) — decision criteria, lifecycle, naming, and [ADR template](decisions/0000-template.md).
 
 Security and operations continue in:
 
@@ -44,7 +45,7 @@ The exact release boundary is always defined by that release's notes, code, test
 
 ## Architecture changes
 
-A change should receive an Architecture Decision Record (ADR) when it materially changes one or more of:
+A change should receive an [Architecture Decision Record](decisions/README.md) when it materially changes one or more of:
 
 - canonical source-of-truth ownership;
 - authorization or trust boundaries;
