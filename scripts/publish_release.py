@@ -85,6 +85,26 @@ def _asset_matches(asset: dict[str, Any], path: Path) -> bool:
     return digest == f"sha256:{_sha256(path)}"
 
 
+def _list_releases(repository: str, token: str) -> list[dict[str, Any]]:
+    releases: list[dict[str, Any]] = []
+    page = 1
+    while True:
+        query = urllib.parse.urlencode({"per_page": 100, "page": page})
+        status, payload = _request(
+            "GET",
+            f"https://api.github.com/repos/{repository}/releases?{query}",
+            token,
+        )
+        if status == 404:
+            raise RuntimeError("GitHub release listing unexpectedly returned 404")
+        if not isinstance(payload, list) or any(not isinstance(item, dict) for item in payload):
+            raise RuntimeError("GitHub returned an invalid release-list response")
+        releases.extend(payload)
+        if len(payload) < 100:
+            return releases
+        page += 1
+
+
 def _release_by_tag(repository: str, tag: str, token: str) -> dict[str, Any] | None:
     encoded = urllib.parse.quote(tag, safe="")
     status, payload = _request(
@@ -92,10 +112,32 @@ def _release_by_tag(repository: str, tag: str, token: str) -> dict[str, Any] | N
         f"https://api.github.com/repos/{repository}/releases/tags/{encoded}",
         token,
     )
+    if status != 404:
+        if not isinstance(payload, dict):
+            raise RuntimeError("GitHub returned an invalid release response")
+        return payload
+
+    # GitHub's release-by-tag endpoint does not reliably expose draft releases.
+    # Fall back to the authenticated release listing so an interrupted publication
+    # resumes the existing draft instead of trying to create a duplicate.
+    matches = [release for release in _list_releases(repository, token) if release.get("tag_name") == tag]
+    if len(matches) > 1:
+        raise RuntimeError(f"GitHub returned multiple release records for tag {tag!r}")
+    return matches[0] if matches else None
+
+
+def _release_by_id(
+    repository: str, release_id: int, token: str
+) -> dict[str, Any] | None:
+    status, payload = _request(
+        "GET",
+        f"https://api.github.com/repos/{repository}/releases/{release_id}",
+        token,
+    )
     if status == 404:
         return None
     if not isinstance(payload, dict):
-        raise RuntimeError("GitHub returned an invalid release response")
+        raise RuntimeError("GitHub returned an invalid release-by-id response")
     return payload
 
 
@@ -184,6 +226,12 @@ def publish(tag: str, notes: Path, assets: list[Path]) -> None:
     if release is None:
         release = _create_draft(repository, tag, token, name=name, body=body)
 
+    if release.get("tag_name") != tag:
+        raise RuntimeError("release record does not match the requested tag")
+    release_id = release.get("id")
+    if not isinstance(release_id, int):
+        raise RuntimeError("release response does not contain a numeric id")
+
     remote_assets = {
         asset["name"]: asset
         for asset in release.get("assets", [])
@@ -203,9 +251,14 @@ def publish(tag: str, notes: Path, assets: list[Path]) -> None:
             )
         _upload_asset(release, path, token)
 
-    refreshed = _release_by_tag(repository, tag, token)
+    # Refresh by immutable release ID. Draft releases may still be hidden from the
+    # tag endpoint at this point even though all uploads succeeded.
+    refreshed = _release_by_id(repository, release_id, token)
     if refreshed is None:
         raise RuntimeError("release disappeared after asset upload")
+    if refreshed.get("id") != release_id or refreshed.get("tag_name") != tag:
+        raise RuntimeError("release identity changed after asset upload")
+
     refreshed_assets = {
         asset["name"]: asset
         for asset in refreshed.get("assets", [])
@@ -221,11 +274,17 @@ def publish(tag: str, notes: Path, assets: list[Path]) -> None:
         or refreshed.get("prerelease") is not False
         or refreshed.get("name") != name
     ):
-        refreshed = _publish(repository, refreshed, token, name=name, body=body)
+        _publish(repository, refreshed, token, name=name, body=body)
+
+    finalized = _release_by_id(repository, release_id, token)
+    if finalized is None:
+        raise RuntimeError("release disappeared after publication")
     if (
-        refreshed.get("draft") is not False
-        or refreshed.get("prerelease") is not False
-        or refreshed.get("name") != name
+        finalized.get("id") != release_id
+        or finalized.get("tag_name") != tag
+        or finalized.get("draft") is not False
+        or finalized.get("prerelease") is not False
+        or finalized.get("name") != name
     ):
         raise RuntimeError("release did not reach the required final published metadata state")
     print(f"Published {name} with {len(assets)} SHA-256-verified assets")
