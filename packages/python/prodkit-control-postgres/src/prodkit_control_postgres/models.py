@@ -3,7 +3,16 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, UniqueConstraint, text
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -74,6 +83,54 @@ class LineageRelationRow(Base):
         PGUUID(as_uuid=True), ForeignKey("lineage_nodes.node_id"), nullable=False
     )
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    document: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+
+
+class IdempotencyRow(Base):
+    """Durable ownership of one tenant-scoped externally intended action."""
+
+    __tablename__ = "idempotency_claims"
+    __table_args__ = (
+        CheckConstraint("state IN ('claimed', 'completed')", name="ck_idempotency_state"),
+        Index("ix_idempotency_tenant_state", "tenant_id", "state", "claimed_at"),
+    )
+
+    tenant_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    key: Mapped[str] = mapped_column(String(512), primary_key=True)
+    action_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    result: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+
+
+class ExecutionAttemptRow(Base):
+    """Durable execution-attempt journal; identity columns never change after insertion."""
+
+    __tablename__ = "execution_attempts"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('claimed', 'started', 'succeeded', 'failed', 'uncertain')",
+            name="ck_execution_attempt_state",
+        ),
+        Index("ix_execution_attempt_action", "action_id", "claimed_at"),
+        Index("ix_execution_attempt_tenant_state", "tenant_id", "state", "claimed_at"),
+        Index("ix_execution_attempt_idempotency", "tenant_id", "idempotency_key"),
+    )
+
+    attempt_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    action_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    run_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    action_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    executor_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    executor_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    executor_identity: Mapped[str] = mapped_column(String(512), nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     document: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
 
 
