@@ -74,9 +74,7 @@ def ensure(tag: str, sha: str) -> None:
         raise RuntimeError("GITHUB_TOKEN is required")
     if not tag.startswith("v") or not tag[1:]:
         raise ValueError("release tag must be v-prefixed")
-    if len(sha) not in {40, 64} or any(
-        character not in "0123456789abcdef" for character in sha
-    ):
+    if len(sha) not in {40, 64} or any(character not in "0123456789abcdef" for character in sha):
         raise ValueError("release SHA must be a lowercase Git object id")
 
     main_ref = _ref(repository, "heads/main", token)
