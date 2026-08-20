@@ -2,6 +2,9 @@ name: Runner Canary
 
 on:
   pull_request:
+  push:
+    branches:
+      - test/workflow-runner-canary
   workflow_dispatch:
 
 permissions:
