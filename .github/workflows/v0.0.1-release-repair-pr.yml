@@ -1,87 +1,97 @@
-name: Repair v0.0.1 Release Metadata (PR)
+name: Finalize v0.0.1 Release Cleanup
 
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened]
+    types: [synchronize]
 
 permissions:
   contents: write
-  issues: write
 
 concurrency:
-  group: repair-v0.0.1-release
+  group: finalize-v0.0.1-release-cleanup
   cancel-in-progress: true
 
 jobs:
-  repair:
+  finalize:
     if: ${{ github.head_ref == 'release-repair/v0.0.1' && github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30
+    timeout-minutes: 5
     steps:
-      - name: Check out one-shot repair source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Check out exact immutable v0.0.1 source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: v0.0.1
-          fetch-depth: 0
-          persist-credentials: false
-          path: release-source
-
-      - name: Install uv and Python
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
-        with:
-          version: "0.10.0"
-          python-version: "3.13"
-          enable-cache: true
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-
-      - name: Install Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-          cache: pnpm
-          cache-dependency-path: release-source/pnpm-lock.yaml
-
-      - name: Rebuild exact-tag release assets
+      - name: Verify final release state and delete repair branch
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EXPECTED_RELEASE_SHA: 889a754f416bd9454bc9e7d407a6f3d0327241d8
+          RELEASE_TAG: v0.0.1
+          RELEASE_NAME: ProdKit Control v0.0.1
+          REPAIR_BRANCH: release-repair/v0.0.1
         shell: bash
         run: |
           set -euo pipefail
-          cd release-source
-          test "$(git rev-parse HEAD)" = "889a754f416bd9454bc9e7d407a6f3d0327241d8"
-          test "$(git describe --tags --exact-match HEAD)" = "v0.0.1"
-          uv sync --all-packages --group dev --locked
-          pnpm install --frozen-lockfile
-          pnpm build:ts
-          rm -rf .release
-          mkdir -p .release/assets
-          uv build --all-packages --out-dir .release/assets
-          for package_dir in packages/typescript/*; do
-            test -f "$package_dir/package.json" || continue
-            pnpm --dir "$package_dir" pack --pack-destination "$PWD/.release/assets"
-          done
-          rm -f .release/assets/.gitignore
-          version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
-          test "$version" = "0.0.1"
-          uv run python scripts/inspect_release_artifacts.py .release/assets --version "$version"
-          test "$(find .release/assets -maxdepth 1 -type f | wc -l)" = "68"
-          (
-            cd .release/assets
-            find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\0' \
-              | sort -z \
-              | xargs -0 sha256sum
-          ) > .release/assets/SHA256SUMS
-          test -s .release/assets/SHA256SUMS
-          test "$(wc -l < .release/assets/SHA256SUMS)" = "68"
-          (cd .release/assets && sha256sum -c SHA256SUMS)
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
 
-      - name: Normalize release metadata, deduplicate, verify, and clean branches
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/v0_0_1_release_repair.py
+          repo = os.environ["GITHUB_REPOSITORY"]
+          token = os.environ["GITHUB_TOKEN"]
+          tag = os.environ["RELEASE_TAG"]
+          expected_sha = os.environ["EXPECTED_RELEASE_SHA"]
+          expected_name = os.environ["RELEASE_NAME"]
+          repair_branch = os.environ["REPAIR_BRANCH"]
+          api = f"https://api.github.com/repos/{repo}"
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": f"Bearer {token}",
+              "X-GitHub-Api-Version": "2022-11-28",
+              "User-Agent": "prodkit-control-v0.0.1-finalizer",
+          }
+
+          def call(method: str, url: str):
+              req = urllib.request.Request(url, headers=headers, method=method)
+              with urllib.request.urlopen(req, timeout=120) as response:
+                  body = response.read()
+                  return json.loads(body) if body else None
+
+          encoded_tag = urllib.parse.quote(tag, safe="")
+          tag_ref = call("GET", f"{api}/git/ref/tags/{encoded_tag}")
+          obj = tag_ref["object"]
+          target_sha = obj["sha"]
+          if obj["type"] == "tag":
+              target_sha = call("GET", f"{api}/git/tags/{target_sha}")["object"]["sha"]
+          if target_sha != expected_sha:
+              raise RuntimeError(f"tag points to {target_sha}, expected {expected_sha}")
+
+          release = call("GET", f"{api}/releases/tags/{encoded_tag}")
+          if release.get("tag_name") != tag:
+              raise RuntimeError("release tag mismatch")
+          if release.get("name") != expected_name:
+              raise RuntimeError(f"release title is {release.get('name')!r}")
+          if release.get("draft") is not False or release.get("prerelease") is not False:
+              raise RuntimeError("release is not in final published state")
+          release_id = release.get("id")
+          if not isinstance(release_id, int):
+              raise RuntimeError("release ID missing")
+
+          releases = call("GET", f"{api}/releases?per_page=100")
+          matches = [item for item in releases if item.get("tag_name") == tag]
+          if len(matches) != 1 or matches[0].get("id") != release_id:
+              raise RuntimeError(f"expected one canonical release for {tag}, found {len(matches)}")
+
+          assets = call("GET", f"{api}/releases/{release_id}/assets?per_page=100")
+          names = [asset.get("name") for asset in assets]
+          if len(assets) != 69:
+              raise RuntimeError(f"expected 69 release assets, found {len(assets)}")
+          if names.count("SHA256SUMS") != 1:
+              raise RuntimeError("release must contain exactly one SHA256SUMS asset")
+          for asset in assets:
+              digest = asset.get("digest")
+              if not isinstance(digest, str) or not digest.startswith("sha256:"):
+                  raise RuntimeError(f"asset {asset.get('name')!r} lacks GitHub SHA-256 metadata")
+
+          encoded_branch = urllib.parse.quote(repair_branch, safe="")
+          call("DELETE", f"{api}/git/refs/heads/{encoded_branch}")
+          print(f"verified {expected_name}: {tag} -> {expected_sha}, release {release_id}, 69 assets")
+          print(f"deleted {repair_branch}")
+          PY
