@@ -24,6 +24,8 @@ class EventType(StrEnum):
     POLICY_EVALUATED = "policy.evaluated"
     APPROVAL_REQUESTED = "approval.requested"
     APPROVAL_DECIDED = "approval.decided"
+    CREDENTIAL_LEASE_ISSUED = "credential.lease_issued"
+    CREDENTIAL_LEASE_REVOKED = "credential.lease_revoked"
     EXECUTION_STARTED = "execution.started"
     EXECUTION_COMPLETED = "execution.completed"
     EXECUTION_UNCERTAIN = "execution.uncertain"
