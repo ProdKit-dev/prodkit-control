@@ -17,11 +17,11 @@ on:
         default: false
         type: boolean
       runner:
-        description: Runner target for explicit failover
+        description: Runner override; policy uses PRODKIT_RUNNER_MODE
         required: true
         type: choice
-        default: github-hosted
-        options: [github-hosted, self-hosted]
+        default: policy
+        options: [policy, github-hosted, self-hosted]
 
 permissions:
   contents: write
@@ -33,12 +33,12 @@ permissions:
 jobs:
   release:
     name: release
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@2decc8b2240a815de62ce2de7d0c42297288988e
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@df6801a185c32b224d5335ba077fab0a424ecf0f
     with:
       version: ${{ inputs.version }}
       target_sha: ${{ inputs.target_sha }}
       prerelease: ${{ inputs.prerelease }}
-      runner_json: ${{ inputs.runner == 'self-hosted' && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"' }}
+      runner_json: ${{ ((inputs.runner == 'self-hosted') || ((inputs.runner == 'policy') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted'))) && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"' }}
       required_workflows_json: '["CI","Security","CodeQL"]'
       python_enabled: true
       python_version: "3.13"
