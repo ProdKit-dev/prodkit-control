@@ -1,0 +1,63 @@
+name: Runner Canary
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hosted-ci:
+    name: hosted-ci
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci.yml@3ef994af5cfa92483785e899a38f86b6dfc008dd
+    with:
+      runner_json: '"ubuntu-latest"'
+      hygiene_enabled: false
+      python_enabled: false
+      node_enabled: false
+      postgres_enabled: false
+      container_enabled: false
+      custom_enabled: true
+      custom_script: .prodkit/workflows/runner-canary.sh
+
+  self-hosted-ci:
+    name: self-hosted-ci
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci.yml@3ef994af5cfa92483785e899a38f86b6dfc008dd
+    with:
+      runner_json: '["self-hosted","Linux","X64"]'
+      hygiene_enabled: false
+      python_enabled: false
+      node_enabled: false
+      postgres_enabled: false
+      container_enabled: false
+      custom_enabled: true
+      custom_script: .prodkit/workflows/runner-canary.sh
+
+  hosted-security:
+    name: hosted-security
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-security.yml@3ef994af5cfa92483785e899a38f86b6dfc008dd
+    with:
+      runner_json: '"ubuntu-latest"'
+      secret_scan_enabled: true
+      sbom_enabled: true
+      python_enabled: false
+      node_enabled: false
+      container_enabled: false
+      custom_enabled: false
+
+  self-hosted-security:
+    name: self-hosted-security
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-security.yml@3ef994af5cfa92483785e899a38f86b6dfc008dd
+    with:
+      runner_json: '["self-hosted","Linux","X64"]'
+      secret_scan_enabled: true
+      sbom_enabled: true
+      python_enabled: false
+      node_enabled: false
+      container_enabled: false
+      custom_enabled: false
