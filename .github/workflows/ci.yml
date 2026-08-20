@@ -27,7 +27,10 @@ jobs:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci.yml@df6801a185c32b224d5335ba077fab0a424ecf0f
     with:
-      runner_json: ${{ ((((github.event_name == 'workflow_dispatch') && ((inputs.runner == 'self-hosted') || ((inputs.runner == 'policy') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted')))) || ((github.event_name != 'workflow_dispatch') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted'))) && ((github.event_name != 'pull_request') || (github.event.pull_request.head.repo.full_name == github.repository))) && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"' }}
+      # Temporary canary: prove the private repository can execute the same
+      # shared CI contract on the trusted self-hosted runner when hosted jobs
+      # are unavailable. This is reverted to policy selection before merge.
+      runner_json: '["self-hosted","Linux","X64"]'
       hygiene_enabled: true
       hygiene_script: .prodkit/workflows/ci-hygiene.sh
       python_enabled: true
