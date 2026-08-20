@@ -1,0 +1,51 @@
+name: Central Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: SemVer without v prefix
+        required: true
+        type: string
+      target_sha:
+        description: Exact current main SHA with successful permanent gates
+        required: true
+        type: string
+      prerelease:
+        description: Mark GitHub Release as prerelease
+        required: true
+        default: false
+        type: boolean
+      runner:
+        description: Runner target
+        required: true
+        type: choice
+        default: github-hosted
+        options: [github-hosted, self-hosted]
+
+permissions:
+  contents: write
+  actions: read
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+jobs:
+  release:
+    name: release
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@3b8adbb377f02eea0ef7e41a7dfcdfb4b45dfe7f
+    with:
+      version: ${{ inputs.version }}
+      target_sha: ${{ inputs.target_sha }}
+      prerelease: ${{ inputs.prerelease }}
+      runner_json: ${{ inputs.runner == 'self-hosted' && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"' }}
+      required_workflows_json: '["Central CI","Central Security","CodeQL"]'
+      python_enabled: true
+      python_version: "3.13"
+      uv_version: "0.10.0"
+      node_enabled: true
+      node_version: "24"
+      pnpm_version: "10.15.0"
+      generate_sbom: true
+      attest: true
+      environment: release
