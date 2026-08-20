@@ -1,4 +1,4 @@
-name: CI
+name: Security
 
 on:
   pull_request:
@@ -13,29 +13,29 @@ on:
         type: choice
         default: github-hosted
         options: [github-hosted, self-hosted]
+  schedule:
+    - cron: "29 4 * * 1"
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: security-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  ci:
-    name: ci
+  security:
+    name: security
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci.yml@2decc8b2240a815de62ce2de7d0c42297288988e
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-security.yml@2decc8b2240a815de62ce2de7d0c42297288988e
     with:
       runner_json: ${{ (github.event_name == 'workflow_dispatch' && inputs.runner == 'self-hosted') && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"' }}
-      hygiene_enabled: true
-      hygiene_script: .prodkit/workflows/ci-hygiene.sh
+      secret_scan_enabled: true
+      gitleaks_config_path: .gitleaks.toml
+      sbom_enabled: true
       python_enabled: true
-      python_versions_json: '["3.12","3.13","3.14"]'
-      python_script: .prodkit/workflows/ci-python.sh
+      python_script: .prodkit/workflows/security-python.sh
       node_enabled: true
-      node_versions_json: '["22","24"]'
-      node_script: .prodkit/workflows/ci-node.sh
-      postgres_enabled: false
+      node_script: .prodkit/workflows/security-node.sh
       container_enabled: false
       custom_enabled: false

@@ -8,6 +8,13 @@ on:
   schedule:
     - cron: "17 3 * * 2"
   workflow_dispatch:
+    inputs:
+      runner:
+        description: Runner target for explicit failover
+        required: true
+        type: choice
+        default: github-hosted
+        options: [github-hosted, self-hosted]
 
 permissions:
   actions: read
@@ -22,7 +29,7 @@ jobs:
   analyze:
     name: CodeQL (${{ matrix.language }})
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.runner == 'self-hosted') && fromJSON('["self-hosted","Linux","X64"]') || 'ubuntu-latest' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -52,7 +59,7 @@ jobs:
 
       - name: Preserve SARIF evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: codeql-${{ matrix.language }}-${{ github.sha }}
           path: .artifacts/codeql/${{ matrix.language }}/*.sarif
