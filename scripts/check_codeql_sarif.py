@@ -50,11 +50,7 @@ def check(directory: Path) -> None:
                 rule_id = result.get("ruleId", "unknown-rule")
                 level = result.get("level", "warning")
                 message_raw = result.get("message")
-                message = (
-                    message_raw.get("text", "")
-                    if isinstance(message_raw, dict)
-                    else ""
-                )
+                message = message_raw.get("text", "") if isinstance(message_raw, dict) else ""
                 findings.append(
                     f"{path.name}: {rule_id} [{level}] at {_result_location(result)}: {message}"
                 )
