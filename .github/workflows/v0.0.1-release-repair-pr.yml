@@ -66,9 +66,11 @@ jobs:
             test -f "$package_dir/package.json" || continue
             pnpm --dir "$package_dir" pack --pack-destination "$PWD/.release/assets"
           done
+          rm -f .release/assets/.gitignore
           version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
           test "$version" = "0.0.1"
           uv run python scripts/inspect_release_artifacts.py .release/assets --version "$version"
+          test "$(find .release/assets -maxdepth 1 -type f | wc -l)" = "68"
           (
             cd .release/assets
             find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\0' \
@@ -76,6 +78,7 @@ jobs:
               | xargs -0 sha256sum
           ) > .release/assets/SHA256SUMS
           test -s .release/assets/SHA256SUMS
+          test "$(wc -l < .release/assets/SHA256SUMS)" = "68"
           (cd .release/assets && sha256sum -c SHA256SUMS)
 
       - name: Publish missing GitHub Release with organization naming
@@ -85,6 +88,7 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t assets < <(find release-source/.release/assets -maxdepth 1 -type f -print | sort)
+          test "${#assets[@]}" = "69"
           python3 scripts/publish_release.py \
             --tag v0.0.1 \
             --notes release-source/docs/releases/v0.0.1.md \
