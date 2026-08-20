@@ -10,11 +10,11 @@ on:
   workflow_dispatch:
     inputs:
       runner:
-        description: Runner target for explicit failover
+        description: Runner override; policy uses PRODKIT_RUNNER_MODE
         required: true
         type: choice
-        default: github-hosted
-        options: [github-hosted, self-hosted]
+        default: policy
+        options: [policy, github-hosted, self-hosted]
 
 permissions:
   actions: read
@@ -29,7 +29,7 @@ jobs:
   analyze:
     name: CodeQL (${{ matrix.language }})
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.runner == 'self-hosted') && fromJSON('["self-hosted","Linux","X64"]') || 'ubuntu-latest' }}
+    runs-on: ${{ ((((github.event_name == 'workflow_dispatch') && ((inputs.runner == 'self-hosted') || ((inputs.runner == 'policy') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted')))) || ((github.event_name != 'workflow_dispatch') && (vars.PRODKIT_RUNNER_MODE == 'self-hosted'))) && ((github.event_name != 'pull_request') || (github.event.pull_request.head.repo.full_name == github.repository))) && fromJSON('["self-hosted","Linux","X64"]') || 'ubuntu-latest' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
