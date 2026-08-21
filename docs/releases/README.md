@@ -60,7 +60,9 @@ A release candidate is valid only when all first-party release-bearing surfaces 
 - `docs/releases/vX.Y.Z.md`;
 - release commit subject `release: vX.Y.Z`.
 
-The permanent release workflow then proves the exact `main` commit, builds every distribution, inspects package contents, generates `SHA256SUMS`, creates or verifies the immutable tag, verifies GitHub SHA-256 asset metadata, and publishes the release.
+The permanent lifecycle first requires CI, Security, and CodeQL to succeed on the exact current `main` SHA. An explicitly dispatched **Trusted Release Proof** must then re-prove that same immutable source without mutating tracked files. Only after those gates succeed may the Release workflow consume the proof, build every distribution, inspect package contents, generate checksums/SBOM evidence and attestations, create or verify the immutable tag, verify published asset metadata, and publish the GitHub Release.
+
+Release Metadata is a separate repair/reconciliation workflow. It may normalize release titles and repository metadata after publication, but it is not a substitute for exact-source proof or publication gates.
 
 ## Release completion versus product maturity
 
