@@ -1,9 +1,8 @@
 name: Maintenance Remove v0.0.1
 
 on:
-  push:
-    branches:
-      - maintenance/remove-v0.0.1
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
@@ -16,6 +15,7 @@ concurrency:
 jobs:
   remove:
     name: remove obsolete v0.0.1 release and tag
+    if: ${{ github.head_ref == 'maintenance/remove-v0.0.1' && github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 10
     steps:
@@ -24,7 +24,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           API: ${{ github.api_url }}/repos/${{ github.repository }}
-          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
 
@@ -85,11 +85,10 @@ jobs:
           delete_expect_204 "${API}/git/refs/heads/maintenance/remove-v0.0.1" "$(mktemp)"
 
           status_payload="$(mktemp)"
-          python3 - "$status_payload" "$SOURCE_SHA" <<'PY'
+          python3 - "$status_payload" <<'PY'
           import json
           import sys
-          path, sha = sys.argv[1:]
-          with open(path, "w", encoding="utf-8") as handle:
+          with open(sys.argv[1], "w", encoding="utf-8") as handle:
               json.dump(
                   {
                       "state": "success",
@@ -99,8 +98,10 @@ jobs:
                   handle,
               )
           PY
-          status_code="$(curl --silent --show-error --location --request POST "${auth[@]}" -H 'Content-Type: application/json' --data-binary "@${status_payload}" --output "$(mktemp)" --write-out '%{http_code}' "${API}/statuses/${SOURCE_SHA}")"
+          status_response="$(mktemp)"
+          status_code="$(curl --silent --show-error --location --request POST "${auth[@]}" -H 'Content-Type: application/json' --data-binary "@${status_payload}" --output "$status_response" --write-out '%{http_code}' "${API}/statuses/${SOURCE_SHA}")"
           if [[ "$status_code" != "201" ]]; then
             echo "Status publication returned HTTP $status_code" >&2
+            cat "$status_response" >&2 || true
             exit 1
           fi
