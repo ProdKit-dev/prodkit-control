@@ -11,7 +11,7 @@ permissions:
 jobs:
   proof:
     name: proof
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-proof.yml@0ab9021d06a59ffeb0a712f75fc963781fd8d739
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-proof.yml@645f3c66557e4a673be38c461a762021536fda00
     with:
       source_sha: ${{ github.sha }}
       runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]' }}
