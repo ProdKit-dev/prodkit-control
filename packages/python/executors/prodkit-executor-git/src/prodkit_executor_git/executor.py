@@ -170,7 +170,11 @@ class ConstrainedGitExecutor:
         if action.operation == "commit":
             paths = args.get("paths")
             message = self._required_str(args, "message")
-            if not isinstance(paths, list) or not paths or not all(isinstance(path, str) for path in paths):
+            if (
+                not isinstance(paths, list)
+                or not paths
+                or not all(isinstance(path, str) for path in paths)
+            ):
                 raise ValueError("Git commit requires a non-empty string list arguments.paths")
             if any(path.startswith("-") or ".." in Path(path).parts for path in paths):
                 raise PermissionError("Git commit paths contain an unsafe path")
@@ -211,7 +215,10 @@ class ConstrainedGitExecutor:
             process.kill()
             await process.wait()
             raise TimeoutError("controlled Git command timed out") from None
-        if len(stdout) > self._config.max_output_bytes or len(stderr) > self._config.max_output_bytes:
+        if (
+            len(stdout) > self._config.max_output_bytes
+            or len(stderr) > self._config.max_output_bytes
+        ):
             raise ValueError("Git command output exceeded configured maximum")
         return process.returncode or 0, stdout, stderr
 
