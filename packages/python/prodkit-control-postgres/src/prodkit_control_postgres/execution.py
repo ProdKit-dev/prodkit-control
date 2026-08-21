@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import ClassVar
 from uuid import UUID
 
 from sqlalchemy import select
@@ -78,7 +79,9 @@ class PostgresIdempotencyStore:
 class PostgresExecutionAttemptStore:
     """Transactional execution-attempt journal with explicit legal state transitions."""
 
-    _TRANSITIONS: dict[ExecutionAttemptState, frozenset[ExecutionAttemptState]] = {
+    _TRANSITIONS: ClassVar[
+        dict[ExecutionAttemptState, frozenset[ExecutionAttemptState]]
+    ] = {
         ExecutionAttemptState.CLAIMED: frozenset({ExecutionAttemptState.STARTED}),
         ExecutionAttemptState.STARTED: frozenset(
             {
