@@ -33,7 +33,7 @@ permissions:
 jobs:
   runner:
     name: runner
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-runner-policy.yml@877aefdeaa2084b47f4867dc6c7b0dfe6525fb2c
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-runner-policy.yml@239a8efe4da989251889777814eafe94cbd9df97
     with:
       mode: ${{ inputs.runner }}
       fork_safe: false
@@ -41,13 +41,14 @@ jobs:
   release:
     name: release
     needs: runner
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-pipeline.yml@877aefdeaa2084b47f4867dc6c7b0dfe6525fb2c
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-pipeline.yml@239a8efe4da989251889777814eafe94cbd9df97
     with:
       version: ${{ inputs.version }}
       target_sha: ${{ inputs.target_sha }}
       prerelease: ${{ inputs.prerelease }}
       runner_json: ${{ needs.runner.outputs.runner_json }}
       proof_workflow: Trusted Release Proof
+      proof_workflow_file: trusted-release-proof.yml
       required_push_workflows_json: '["CI","Security","CodeQL"]'
       python_enabled: true
       python_version: "3.13"
