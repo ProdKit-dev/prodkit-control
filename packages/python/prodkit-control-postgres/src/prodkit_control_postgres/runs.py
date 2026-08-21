@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, Index, Integer, String, select, text
+from sqlalchemy import DateTime, Index, String, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
@@ -71,7 +71,7 @@ async def assert_schema_compatible(
 ) -> None:
     """Fail closed when the database schema is missing, ahead, or behind this runtime."""
 
-    async with self._sessions_for_check(session_factory) as session:
+    async with _sessions_for_check(session_factory) as session:
         version = await session.scalar(
             text("SELECT version FROM prodkit_schema_metadata WHERE singleton = TRUE")
         )
@@ -101,7 +101,3 @@ def _sessions_for_check(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> _SchemaSession:
     return _SchemaSession(session_factory)
-
-
-# Kept as an attribute for simple monkeypatching in startup tests.
-assert_schema_compatible._sessions_for_check = _sessions_for_check  # type: ignore[attr-defined]
