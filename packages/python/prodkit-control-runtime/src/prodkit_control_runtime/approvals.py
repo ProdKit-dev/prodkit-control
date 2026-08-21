@@ -77,7 +77,9 @@ class HTTPApprovalProvider:
             environment=action.target.environment,
             at=datetime.now(UTC),
         ):
-            raise IntegrityViolationError("approval provider returned a decision with stale bindings")
+            raise IntegrityViolationError(
+                "approval provider returned a decision with stale bindings"
+            )
         return approval
 
     async def record(self, decision: ApprovalDecision) -> None:
@@ -99,6 +101,10 @@ class HTTPApprovalProvider:
         if self._token is not None:
             headers["authorization"] = f"Bearer {self._token}"
         if self._client is not None:
-            return await self._client.request(method, f"{self._base_url}{path}", json=json, headers=headers)
+            return await self._client.request(
+                method, f"{self._base_url}{path}", json=json, headers=headers
+            )
         async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=False) as client:
-            return await client.request(method, f"{self._base_url}{path}", json=json, headers=headers)
+            return await client.request(
+                method, f"{self._base_url}{path}", json=json, headers=headers
+            )
