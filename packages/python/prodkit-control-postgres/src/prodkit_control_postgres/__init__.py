@@ -18,11 +18,11 @@ __all__ = (
     "IdempotencyRow",
     "LineageNodeRow",
     "LineageRelationRow",
-    "RunRow",
     "PostgresEventLedger",
     "PostgresExecutionAttemptStore",
     "PostgresIdempotencyStore",
     "PostgresLineageStore",
     "PostgresRunStore",
+    "RunRow",
     "assert_schema_compatible",
 )
