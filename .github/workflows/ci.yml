@@ -41,7 +41,7 @@ jobs:
     name: Finalize v0.1.0 closure
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'ops/final-v0.1.0-closure' }}
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 60
+    timeout-minutes: 10
     env:
       EXPECTED_MAIN_SHA: 89a7546ec06a2eecc59d2150c037d25c866a1538
       EXPECTED_TAG_SHA: 2145ab98ad310226d8cb422949af1f1e735032a2
@@ -56,7 +56,6 @@ jobs:
 
           import json
           import os
-          import time
           import urllib.error
           import urllib.parse
           import urllib.request
@@ -134,48 +133,50 @@ jobs:
               raise SystemExit("immutable v0.1.0 tag moved before closure")
 
           required = ("CI", "Security", "CodeQL", "Release Metadata")
-          deadline = time.time() + 3300
+          params = urllib.parse.urlencode(
+              {"head_sha": expected_main, "event": "push", "per_page": 100}
+          )
+          payload = request("GET", f"/actions/runs?{params}") or {}
+          runs = list(payload.get("workflow_runs", []))
           selected = {}
-          while time.time() < deadline:
-              params = urllib.parse.urlencode(
-                  {"head_sha": expected_main, "event": "push", "per_page": 100}
+          for name in required:
+              matches = [run for run in runs if run.get("name") == name]
+              if matches:
+                  selected[name] = max(matches, key=lambda run: int(run["id"]))
+          print(
+              "exact-main gate snapshot: "
+              + json.dumps(
+                  {
+                      name: {
+                          "id": run.get("id"),
+                          "status": run.get("status"),
+                          "conclusion": run.get("conclusion"),
+                      }
+                      for name, run in selected.items()
+                  },
+                  sort_keys=True,
               )
-              payload = request("GET", f"/actions/runs?{params}") or {}
-              runs = list(payload.get("workflow_runs", []))
-              selected = {}
-              for name in required:
-                  matches = [run for run in runs if run.get("name") == name]
-                  if matches:
-                      selected[name] = max(matches, key=lambda run: int(run["id"]))
-              print(
-                  "exact-main gate snapshot: "
-                  + json.dumps(
-                      {
-                          name: {
-                              "id": run.get("id"),
-                              "status": run.get("status"),
-                              "conclusion": run.get("conclusion"),
-                          }
-                          for name, run in selected.items()
-                      },
-                      sort_keys=True,
-                  )
+          )
+          failed = {
+              name: (run.get("id"), run.get("conclusion"))
+              for name, run in selected.items()
+              if run.get("status") == "completed" and run.get("conclusion") != "success"
+          }
+          if failed:
+              raise SystemExit(f"exact-main gate failure: {failed}")
+          incomplete = {
+              name: (
+                  None
+                  if name not in selected
+                  else (selected[name].get("id"), selected[name].get("status"), selected[name].get("conclusion"))
               )
-              failed = {
-                  name: (run.get("id"), run.get("conclusion"))
-                  for name, run in selected.items()
-                  if run.get("status") == "completed" and run.get("conclusion") != "success"
-              }
-              if failed:
-                  raise SystemExit(f"exact-main gate failure: {failed}")
-              if len(selected) == len(required) and all(
-                  run.get("status") == "completed" and run.get("conclusion") == "success"
-                  for run in selected.values()
-              ):
-                  break
-              time.sleep(15)
-          else:
-              raise SystemExit("timed out waiting for exact-main CI/Security/CodeQL/Release Metadata")
+              for name in required
+              if name not in selected
+              or selected[name].get("status") != "completed"
+              or selected[name].get("conclusion") != "success"
+          }
+          if incomplete:
+              raise SystemExit(f"exact-main gates incomplete; retry after runner drains: {incomplete}")
 
           if main_sha() != expected_main:
               raise SystemExit("main moved after exact-main gates")
