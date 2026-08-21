@@ -18,9 +18,7 @@ EXPECTED = {
     "release-metadata.yml": "reusable-release-metadata-current.yml",
 }
 
-CENTRAL_REF = re.compile(
-    rf"{re.escape(CENTRAL_REPOSITORY)}/\.github/workflows/([^@\s]+)@([^\s]+)"
-)
+CENTRAL_REF = re.compile(rf"{re.escape(CENTRAL_REPOSITORY)}/\.github/workflows/([^@\s]+)@([^\s]+)")
 
 FORBIDDEN = (
     "reusable-runner-policy.yml@",
@@ -52,9 +50,7 @@ def main() -> None:
         text = path.read_text(encoding="utf-8")
         texts[filename] = text
 
-        expected_ref = (
-            f"{CENTRAL_REPOSITORY}/.github/workflows/{target}@{CENTRAL_SHA}"
-        )
+        expected_ref = f"{CENTRAL_REPOSITORY}/.github/workflows/{target}@{CENTRAL_SHA}"
         require(text, expected_ref, workflow=filename)
 
         refs = CENTRAL_REF.findall(text)
@@ -94,7 +90,11 @@ def main() -> None:
     )
 
     proof = texts["trusted-release-proof.yml"]
-    require(proof, "run-name: Trusted Release Proof — ${{ github.sha }}", workflow="trusted-release-proof.yml")
+    require(
+        proof,
+        "run-name: Trusted Release Proof — ${{ github.sha }}",
+        workflow="trusted-release-proof.yml",
+    )
     require(proof, "source_sha: ${{ github.sha }}", workflow="trusted-release-proof.yml")
     reject(proof, "inputs.source_sha", workflow="trusted-release-proof.yml")
     require(proof, 'python_version: "3.13"', workflow="trusted-release-proof.yml")
@@ -102,12 +102,18 @@ def main() -> None:
     require(proof, 'pnpm_version: "10.15.0"', workflow="trusted-release-proof.yml")
 
     release = texts["release.yml"]
-    require(release, "PROOF_WORKFLOW_FILE: .github/workflows/trusted-release-proof.yml", workflow="release.yml")
+    require(
+        release,
+        "PROOF_WORKFLOW_FILE: .github/workflows/trusted-release-proof.yml",
+        workflow="release.yml",
+    )
     require(release, 'run.get("path") == workflow_file', workflow="release.yml")
     require(release, "target_sha: ${{ github.sha }}", workflow="release.yml")
     reject(release, "inputs.target_sha", workflow="release.yml")
     reject(release, "description: Exact current main SHA", workflow="release.yml")
-    require(release, "required_workflows_json: '[\"CI\",\"Security\",\"CodeQL\"]'", workflow="release.yml")
+    require(
+        release, 'required_workflows_json: \'["CI","Security","CodeQL"]\'', workflow="release.yml"
+    )
     require(release, "attest: false", workflow="release.yml")
     require(release, 'python_version: "3.13"', workflow="release.yml")
     require(release, 'node_version: "24"', workflow="release.yml")
