@@ -17,9 +17,7 @@ SCHEMA_VERSION = 3
 
 class RunRow(Base):
     __tablename__ = "control_runs"
-    __table_args__ = (
-        Index("ix_control_runs_tenant_status", "tenant_id", "status", "started_at"),
-    )
+    __table_args__ = (Index("ix_control_runs_tenant_status", "tenant_id", "status", "started_at"),)
 
     run_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String(255), nullable=False)
