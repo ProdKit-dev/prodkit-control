@@ -131,7 +131,9 @@ class ConstrainedHTTPExecutor:
             raise ValueError("HTTP response exceeds configured maximum")
         completed = datetime.now(UTC)
         succeeded = 200 <= response.status_code < 300
-        provider_operation_id = response.headers.get("x-request-id") or response.headers.get("request-id")
+        provider_operation_id = response.headers.get("x-request-id") or response.headers.get(
+            "request-id"
+        )
         return ExecutionResult(
             action_id=action.action_id,
             execution_attempt_id=attempt_id,
@@ -157,7 +159,9 @@ class ConstrainedHTTPExecutor:
         observe_url = action.arguments.get("observe_url")
         if isinstance(observe_url, str) and observe_url:
             self._validate_url(observe_url)
-            response = await self._request("GET", observe_url, headers={"accept": "application/json"})
+            response = await self._request(
+                "GET", observe_url, headers={"accept": "application/json"}
+            )
             if len(response.content) > self._config.max_response_bytes:
                 raise ValueError("HTTP observation response exceeds configured maximum")
             state: dict[str, object] = {
@@ -186,7 +190,10 @@ class ConstrainedHTTPExecutor:
     def _validate_url(self, url: str) -> None:
         parsed = urlparse(url)
         allowed_schemes = {"https"} if self._config.require_https else {"http", "https"}
-        if parsed.scheme not in allowed_schemes or parsed.hostname not in self._config.allowed_hosts:
+        if (
+            parsed.scheme not in allowed_schemes
+            or parsed.hostname not in self._config.allowed_hosts
+        ):
             raise PermissionError("HTTP URL is outside the configured scheme/host allowlist")
         if parsed.username or parsed.password or parsed.fragment:
             raise PermissionError("HTTP URL credentials/fragments are forbidden")
