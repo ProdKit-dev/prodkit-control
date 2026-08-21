@@ -101,7 +101,7 @@ class ConstrainedFilesystemExecutor:
             result={"path": str(path.relative_to(self._root)), "state": state},
         )
 
-    async def observe(self, action: ActionSpec, result: ExecutionResult) -> StateObservation:
+    async def observe(self, action: ActionSpec, _result: ExecutionResult) -> StateObservation:
         path = self._path(action)
         state = await asyncio.to_thread(self._state, path)
         return StateObservation(
@@ -158,7 +158,7 @@ class ConstrainedFilesystemExecutor:
                 handle.write(content)
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(temporary, path)
+            temporary.replace(path)
         finally:
             temporary.unlink(missing_ok=True)
 
