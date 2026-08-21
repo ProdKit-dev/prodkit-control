@@ -1,3 +1,11 @@
-"""Kubernetes audit reconciliation adapter."""
+from prodkit_control_core.reconciliation.adapters import MappingReconciler
 
-__version__ = "0.1.0"
+
+class KubernetesReconciler(MappingReconciler):
+    """Normalize kubernetes provider evidence for ProdKit reconciliation."""
+
+    def __init__(self) -> None:
+        super().__init__("kubernetes")
+
+
+__all__ = ("KubernetesReconciler",)

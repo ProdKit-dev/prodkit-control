@@ -21,6 +21,7 @@ class ReconciliationOutcome(StrEnum):
     MISSING_EXTERNAL_EVIDENCE = "missing_external_evidence"
     UNEXPECTED_EXTERNAL_ACTION = "unexpected_external_action"
     STATE_MISMATCH = "state_mismatch"
+    CONFLICTING_EVIDENCE = "conflicting_evidence"
     UNVERIFIABLE = "unverifiable"
 
 

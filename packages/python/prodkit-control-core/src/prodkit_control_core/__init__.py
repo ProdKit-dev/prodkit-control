@@ -5,5 +5,6 @@ from .canonical import sha256_hex as sha256_hex
 from .contracts import *
 from .exceptions import *
 from .ports import *
+from .reconciliation import *
 
 __version__ = "0.1.0"
