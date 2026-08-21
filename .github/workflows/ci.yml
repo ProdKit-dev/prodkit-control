@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+    branches: [feat/v0.2.0-delivery-chain-reconciliation]
   pull_request:
     branches: [main]
 
@@ -10,7 +12,7 @@ permissions:
 jobs:
   bootstrap-v020:
     name: Bootstrap v0.2.0 candidate
-    if: ${{ github.event.pull_request.head.ref == 'feat/v0.2.0-delivery-chain-reconciliation' }}
+    if: ${{ github.event_name == 'push' || github.event.pull_request.head.ref == 'feat/v0.2.0-delivery-chain-reconciliation' }}
     runs-on: ${{ fromJSON(vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
     timeout-minutes: 60
     steps:
