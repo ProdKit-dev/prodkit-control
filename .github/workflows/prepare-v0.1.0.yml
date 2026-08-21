@@ -1,0 +1,56 @@
+name: Prepare v0.1.0 Metadata
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prepare-v0.1.0-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    if: ${{ github.head_ref == 'release/v0.1.0' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Check out release branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.10.0"
+          enable-cache: true
+
+      - name: Normalize v0.1.0 release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/set_release_version.py 0.1.0
+          uv lock
+          python3 scripts/release_check.py --version 0.1.0
+          git diff --check
+
+      - name: Commit normalized metadata
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "release metadata is already normalized"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "release: normalize v0.1.0 metadata"
+          git push origin "HEAD:${HEAD_REF}"
