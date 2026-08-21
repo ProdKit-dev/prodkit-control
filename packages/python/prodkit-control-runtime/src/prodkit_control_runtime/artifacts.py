@@ -90,7 +90,9 @@ class EncryptedFilesystemArtifactStore:
 
     async def get(self, artifact: ArtifactRef) -> bytes:
         if not artifact.encrypted:
-            raise IntegrityViolationError("encrypted store refuses an unencrypted artifact reference")
+            raise IntegrityViolationError(
+                "encrypted store refuses an unencrypted artifact reference"
+            )
         if artifact.location is None or not artifact.location.startswith("pkc+file://"):
             raise KeyError("artifact does not contain an encrypted filesystem location")
         relative = Path(artifact.location.removeprefix("pkc+file://"))
