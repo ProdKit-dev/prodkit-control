@@ -84,7 +84,7 @@ jobs:
   release:
     name: release
     needs: proof-gate
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@0ab9021d06a59ffeb0a712f75fc963781fd8d739
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@645f3c66557e4a673be38c461a762021536fda00
     with:
       version: ${{ inputs.version }}
       target_sha: ${{ github.sha }}
