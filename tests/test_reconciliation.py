@@ -299,12 +299,12 @@ def test_sanitized_provider_contract_fixtures_cover_required_sources(tenant_id):
         "database": DatabaseReconciler(),
     }
     assert set(payload) == set(adapters)
-    now = datetime.now(UTC)
+    collected_at = datetime(2026, 8, 22, 0, 5, tzinfo=UTC)
     for source, adapter in adapters.items():
         batch = adapter.normalize(
             tenant_id=tenant_id,
             records=payload[source],
-            collected_at=now,
+            collected_at=collected_at,
         )
         assert batch.source_system == source
         assert batch.observations or batch.audit_events
