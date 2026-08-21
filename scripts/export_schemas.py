@@ -11,10 +11,17 @@ from prodkit_control_core import (
     CanonicalModelResponse,
     ControlEvent,
     ExecutionResult,
+    ExternalAuditEvent,
+    ExternalStateObservation,
     LineageGraph,
     PolicyDecision,
+    ProductionCompletenessAssessment,
+    ProductionCompletenessProfile,
     ProductionLineageAssessment,
+    ReconciliationBatch,
+    ReconciliationCursor,
     ReconciliationFinding,
+    ReconciliationRunResult,
     RunRecord,
     StateObservation,
     VerificationResult,
@@ -27,8 +34,15 @@ MODELS = {
     "canonical-model-response.schema.json": CanonicalModelResponse,
     "control-event.schema.json": ControlEvent,
     "execution-result.schema.json": ExecutionResult,
+    "external-audit-event.schema.json": ExternalAuditEvent,
+    "external-state-observation.schema.json": ExternalStateObservation,
     "policy-decision.schema.json": PolicyDecision,
+    "production-completeness-assessment.schema.json": ProductionCompletenessAssessment,
+    "production-completeness-profile.schema.json": ProductionCompletenessProfile,
+    "reconciliation-batch.schema.json": ReconciliationBatch,
+    "reconciliation-cursor.schema.json": ReconciliationCursor,
     "reconciliation-finding.schema.json": ReconciliationFinding,
+    "reconciliation-run-result.schema.json": ReconciliationRunResult,
     "control-run.schema.json": RunRecord,
     "lineage-graph.schema.json": LineageGraph,
     "production-lineage-assessment.schema.json": ProductionLineageAssessment,
@@ -38,9 +52,7 @@ MODELS = {
 
 
 def render(model: type) -> str:
-    return (
-        json.dumps(model.model_json_schema(), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    )
+    return json.dumps(model.model_json_schema(), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
 
 def main() -> int:
