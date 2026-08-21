@@ -20,6 +20,12 @@ _SUSPICIOUS_PARTS = {
 }
 _SUSPICIOUS_SUFFIXES = {".key", ".pem", ".pyc", ".pyo"}
 _IGNORED_BUILD_MARKERS = {".gitignore"}
+_POSTGRES_MIGRATION_MEMBERS = {
+    "prodkit_control_postgres/migrations/__init__.py",
+    "prodkit_control_postgres/migrations/0001_initial.sql",
+    "prodkit_control_postgres/migrations/0002_hardened_execution.sql",
+    "prodkit_control_postgres/migrations/0003_run_store_and_schema_metadata.sql",
+}
 
 
 def _canonical_name(name: str) -> str:
@@ -58,7 +64,14 @@ def _wheel_identity(path: Path) -> tuple[str, str]:
         for suffix in required_suffixes:
             if not any(name.endswith(suffix) for name in names):
                 raise ValueError(f"{path.name}: wheel is missing {suffix.rsplit('/', 1)[-1]}")
-        return _metadata_identity(archive.read(metadata[0]))
+        identity = _metadata_identity(archive.read(metadata[0]))
+        if _canonical_name(identity[0]) == "prodkit-control-postgres":
+            missing = sorted(_POSTGRES_MIGRATION_MEMBERS.difference(names))
+            if missing:
+                raise ValueError(
+                    f"{path.name}: PostgreSQL wheel is missing packaged migrations {missing}"
+                )
+        return identity
 
 
 def _sdist_identity(path: Path) -> tuple[str, str]:

@@ -27,6 +27,10 @@ from prodkit_control_postgres import (
 )
 from prodkit_control_runtime import RunCoordinator
 
+MIGRATIONS = Path(
+    "packages/python/prodkit-control-postgres/src/prodkit_control_postgres/migrations"
+)
+
 
 def _connection_values() -> tuple[str, int, str, str, str]:
     return (
@@ -48,9 +52,14 @@ async def _apply_migrations() -> None:
         password=password,
     )
     try:
-        for migration in sorted(
-            Path("packages/python/prodkit-control-postgres/migrations").glob("*.sql")
-        ):
+        migrations = sorted(MIGRATIONS.glob("*.sql"))
+        if [migration.name for migration in migrations] != [
+            "0001_initial.sql",
+            "0002_hardened_execution.sql",
+            "0003_run_store_and_schema_metadata.sql",
+        ]:
+            raise AssertionError("unexpected PostgreSQL migration set")
+        for migration in migrations:
             await connection.execute(migration.read_text(encoding="utf-8"))
         version = await connection.fetchval(
             "SELECT version FROM prodkit_schema_metadata WHERE singleton = TRUE"
