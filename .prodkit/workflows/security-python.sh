@@ -18,7 +18,6 @@ trap 'docker rm -f "$POSTGRES_CONTAINER" >/dev/null 2>&1 || true' EXIT
 git fetch origin main "$BRANCH" --tags --force
 test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
 
-# Candidate must contain no operational workflow/probe content.
 git checkout origin/main -- \
   .github/workflows/security.yml \
   .prodkit/workflows/security-python.sh
@@ -99,12 +98,12 @@ uv run --python 3.13 --no-sync ruff format .
 uv run --python 3.13 --no-sync python scripts/export_schemas.py
 
 bash .prodkit/workflows/ci-hygiene.sh
-PRODKIT_PYTHON_VERSION=3.13 .prodkit/workflows/ci-python.sh
+PRODKIT_PYTHON_VERSION=3.13 bash .prodkit/workflows/ci-python.sh
 
 corepack enable
 corepack prepare pnpm@10.15.0 --activate
 test "$(pnpm --version)" = "10.15.0"
-PRODKIT_NODE_VERSION=24 .prodkit/workflows/ci-node.sh
+PRODKIT_NODE_VERSION=24 bash .prodkit/workflows/ci-node.sh
 
 docker rm -f "$POSTGRES_CONTAINER" >/dev/null 2>&1 || true
 docker run -d --name "$POSTGRES_CONTAINER" \
@@ -121,7 +120,7 @@ PRODKIT_POSTGRES_PORT="$PGPORT" \
 PRODKIT_POSTGRES_DATABASE=prodkit_ci \
 PRODKIT_POSTGRES_USER=prodkit \
 PRODKIT_POSTGRES_PASSWORD=prodkit \
-.prodkit/workflows/ci-postgres.sh
+bash .prodkit/workflows/ci-postgres.sh
 
 uv run --python 3.13 --no-sync python scripts/release_check.py --version 0.2.0
 uv run --python 3.13 --no-sync python scripts/test_workflow_alignment.py
