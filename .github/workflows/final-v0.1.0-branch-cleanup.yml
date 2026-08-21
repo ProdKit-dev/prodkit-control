@@ -5,20 +5,21 @@ on:
     branches: [ops/final-v0.1.0-cleanup]
 
 permissions:
+  actions: read
   contents: write
 
 concurrency:
   group: final-v0.1.0-branch-cleanup
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   cleanup:
-    name: delete verified stale branches
+    name: verify exact-main gates and delete stale branches
     if: ${{ github.ref == 'refs/heads/ops/final-v0.1.0-cleanup' }}
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 10
     steps:
-      - name: Delete stale refs and self-clean
+      - name: Verify exact-main gates, delete stale refs, and self-clean
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -50,6 +51,55 @@ jobs:
               echo "refusing cleanup: main moved from ${EXPECTED_MAIN_SHA} to ${sha}" >&2
               exit 1
             fi
+          }
+
+          verify_exact_main_gates() {
+            local body code
+            body="$(mktemp)"
+            code="$(get_code "${API}/actions/runs?head_sha=${EXPECTED_MAIN_SHA}&event=push&per_page=100" "$body")"
+            if [[ "$code" != "200" ]]; then
+              echo "workflow-run lookup returned HTTP $code" >&2
+              cat "$body" >&2 || true
+              exit 1
+            fi
+
+            python3 - "$body" "$EXPECTED_MAIN_SHA" <<'PY'
+          import json
+          import sys
+
+          path, expected_sha = sys.argv[1:]
+          with open(path, encoding="utf-8") as handle:
+              runs = json.load(handle).get("workflow_runs", [])
+
+          required = ("CI", "Security", "CodeQL")
+          for name in required:
+              candidates = [
+                  run
+                  for run in runs
+                  if run.get("name") == name
+                  and run.get("head_sha") == expected_sha
+                  and run.get("event") == "push"
+              ]
+              if not candidates:
+                  raise SystemExit(f"missing exact-main push run for {name} at {expected_sha}")
+              latest = max(
+                  candidates,
+                  key=lambda run: (
+                      int(run.get("run_number") or 0),
+                      int(run.get("run_attempt") or 0),
+                      run.get("created_at") or "",
+                  ),
+              )
+              status = latest.get("status")
+              conclusion = latest.get("conclusion")
+              url = latest.get("html_url")
+              print(f"{name}: status={status} conclusion={conclusion} url={url}")
+              if status != "completed" or conclusion != "success":
+                  raise SystemExit(
+                      f"latest exact-main push run for {name} is not green: "
+                      f"status={status} conclusion={conclusion}"
+                  )
+          PY
           }
 
           delete_branch() {
@@ -86,6 +136,7 @@ jobs:
           }
 
           verify_main
+          verify_exact_main_gates
 
           stale_branches=(
             "chore/adopt-runner-failover"
