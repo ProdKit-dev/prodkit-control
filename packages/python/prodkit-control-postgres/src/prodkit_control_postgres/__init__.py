@@ -9,6 +9,7 @@ from .models import (
     LineageNodeRow,
     LineageRelationRow,
 )
+from .runs import RunRow, PostgresRunStore, assert_schema_compatible
 
 __all__ = (
     "Base",
@@ -17,8 +18,11 @@ __all__ = (
     "IdempotencyRow",
     "LineageNodeRow",
     "LineageRelationRow",
+    "RunRow",
     "PostgresEventLedger",
     "PostgresExecutionAttemptStore",
     "PostgresIdempotencyStore",
     "PostgresLineageStore",
+    "PostgresRunStore",
+    "assert_schema_compatible",
 )
