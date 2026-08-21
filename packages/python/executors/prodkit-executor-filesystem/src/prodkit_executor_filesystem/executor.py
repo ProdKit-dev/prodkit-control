@@ -169,7 +169,12 @@ class ConstrainedFilesystemExecutor:
         if path.is_dir():
             return {"exists": True, "kind": "directory"}
         content = path.read_bytes()
-        return {"exists": True, "kind": "file", "size_bytes": len(content), "sha256": sha256_hex(content)}
+        return {
+            "exists": True,
+            "kind": "file",
+            "size_bytes": len(content),
+            "sha256": sha256_hex(content),
+        }
 
     def _validate_lease(self, action: ActionSpec, lease: CredentialLease) -> None:
         if (
