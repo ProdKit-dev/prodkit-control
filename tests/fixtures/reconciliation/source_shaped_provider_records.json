@@ -1,0 +1,91 @@
+{
+  "git": [
+    {
+      "ref": "refs/heads/main",
+      "commit_sha": "4f4b2749d9f9275eb8f749a61bdc31be34b59f1c",
+      "committed_at": "2026-08-21T21:00:00+00:00",
+      "actor": "release-bot"
+    }
+  ],
+  "github": [
+    {
+      "kind": "workflow_run",
+      "id": 32529121544,
+      "workflow": "CI",
+      "head_sha": "89a7546ec06a2eecc59d2150c037d25c866a1538",
+      "status": "completed",
+      "conclusion": "success",
+      "updated_at": "2026-08-21T21:00:00+00:00",
+      "html_url": "https://github.example.invalid/actions/runs/32529121544"
+    },
+    {
+      "kind": "audit",
+      "id": 6028000001,
+      "event_type": "deployment.created",
+      "updated_at": "2026-08-21T21:00:00+00:00",
+      "actor": "release-bot",
+      "resource": "production",
+      "html_url": "https://github.example.invalid/deployments/6028000001"
+    }
+  ],
+  "ci": [
+    {
+      "build_id": "build-8842",
+      "revision": "89a7546ec06a2eecc59d2150c037d25c866a1538",
+      "status": "passed",
+      "artifact_digest": "sha256:4b1f0d6d24b946f993173e4e6ad902eaa7f45e9a58c5f7becafcfb03fc1f8123",
+      "finished_at": "2026-08-21T21:00:00+00:00",
+      "url": "https://ci.example.invalid/builds/8842"
+    }
+  ],
+  "registry": [
+    {
+      "repository": "ghcr.io/prodkit-dev/prodkit-control",
+      "tag": "v0.2.0",
+      "digest": "sha256:8aac4163f30271c99335fa783e6f77a400e2c44fd69eece0ac92ab587b89d15a",
+      "immutable": true,
+      "pushed_at": "2026-08-21T21:00:00+00:00",
+      "url": "https://registry.example.invalid/prodkit-control/manifests/v0.2.0"
+    }
+  ],
+  "deployment": [
+    {
+      "deployment_id": "deploy-177",
+      "environment": "production",
+      "revision": "89a7546ec06a2eecc59d2150c037d25c866a1538",
+      "status": "succeeded",
+      "deployed_at": "2026-08-21T21:00:00+00:00",
+      "url": "https://deploy.example.invalid/deployments/177"
+    }
+  ],
+  "kubernetes": [
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "uid": "8f3c57dd-a213-4caa-b50f-d0eeaf5b7e75",
+        "name": "prodkit-control",
+        "namespace": "prod",
+        "generation": 12
+      },
+      "status": {
+        "observedGeneration": 12,
+        "replicas": 3,
+        "readyReplicas": 3,
+        "updatedReplicas": 3
+      },
+      "observed_at": "2026-08-21T21:00:00+00:00",
+      "url": "https://kubernetes.example.invalid/apis/apps/v1/namespaces/prod/deployments/prodkit-control"
+    }
+  ],
+  "database": [
+    {
+      "migration_id": "0004_delivery_chain_reconciliation",
+      "schema_version": 4,
+      "database": "prodkit-control",
+      "status": "applied",
+      "applied_at": "2026-08-21T21:00:00+00:00",
+      "external_reference": "postgres://prodkit-control/schema/4"
+    }
+  ]
+}
