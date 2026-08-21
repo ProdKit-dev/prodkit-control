@@ -69,10 +69,12 @@ class ConstrainedGitHubExecutor:
             raise ValueError("GitHub target resource_id must equal arguments.repository")
         self._request_spec(action)
 
-    async def execute(self, action: ActionSpec) -> ExecutionResult:
+    async def execute(self, _action: ActionSpec) -> ExecutionResult:
         raise PermissionError("GitHub mutations require a short-lived credential lease")
 
-    async def execute_attempt(self, action: ActionSpec, *, attempt_id: UUID) -> ExecutionResult:
+    async def execute_attempt(
+        self, _action: ActionSpec, *, _attempt_id: UUID
+    ) -> ExecutionResult:
         raise PermissionError("GitHub mutations require a short-lived credential lease")
 
     async def execute_attempt_with_lease(
