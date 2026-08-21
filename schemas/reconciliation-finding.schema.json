@@ -108,6 +108,7 @@
         "missing_external_evidence",
         "unexpected_external_action",
         "state_mismatch",
+        "conflicting_evidence",
         "unverifiable"
       ],
       "title": "ReconciliationOutcome",

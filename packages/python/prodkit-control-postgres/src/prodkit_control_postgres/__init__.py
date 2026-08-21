@@ -9,6 +9,7 @@ from .models import (
     LineageNodeRow,
     LineageRelationRow,
 )
+from .reconciliation import PostgresReconciliationStore
 from .runs import RunRow, PostgresRunStore, assert_schema_compatible
 
 __all__ = (
@@ -22,6 +23,7 @@ __all__ = (
     "PostgresExecutionAttemptStore",
     "PostgresIdempotencyStore",
     "PostgresLineageStore",
+    "PostgresReconciliationStore",
     "PostgresRunStore",
     "RunRow",
     "assert_schema_compatible",

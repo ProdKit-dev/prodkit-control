@@ -16,12 +16,20 @@ from prodkit_control_core import (
     ExecutionAttemptRecord,
     ExecutionAttemptState,
     ExecutionResult,
+    ExternalAuditEvent,
+    ProductionCompletenessProfile,
+    ReconciliationCursor,
+    ReconciliationFinding,
+    ReconciliationOutcome,
+    ReconciliationRunResult,
+    ReconciliationSourceHealth,
     RunStatus,
 )
 from prodkit_control_postgres import (
     PostgresEventLedger,
     PostgresExecutionAttemptStore,
     PostgresIdempotencyStore,
+    PostgresReconciliationStore,
     PostgresRunStore,
     assert_schema_compatible,
 )
@@ -57,6 +65,7 @@ async def _apply_migrations() -> None:
             "0001_initial.sql",
             "0002_hardened_execution.sql",
             "0003_run_store_and_schema_metadata.sql",
+            "0004_delivery_chain_reconciliation.sql",
         ]:
             raise AssertionError("unexpected PostgreSQL migration set")
         for migration in migrations:
@@ -64,8 +73,8 @@ async def _apply_migrations() -> None:
         version = await connection.fetchval(
             "SELECT version FROM prodkit_schema_metadata WHERE singleton = TRUE"
         )
-        if version != 3:
-            raise AssertionError(f"expected schema version 3, got {version!r}")
+        if version != 4:
+            raise AssertionError(f"expected schema version 4, got {version!r}")
     finally:
         await connection.close()
 
@@ -198,6 +207,65 @@ async def _exercise_durable_stores() -> None:
             key=idempotency_key,
             action_digest=action_digest,
         )
+
+        reconciliation = PostgresReconciliationStore(sessions)
+        cursor = ReconciliationCursor(
+            tenant_id=tenant_id,
+            source_system="github",
+            cursor="page-2",
+            high_watermark=now,
+            health=ReconciliationSourceHealth.HEALTHY,
+            updated_at=now,
+        )
+        await reconciliation.save_cursor(cursor)
+        assert await reconciliation.get_cursor(tenant_id, "github") == cursor
+
+        audit_event = ExternalAuditEvent(
+            event_id="ci-audit-1",
+            tenant_id=tenant_id,
+            source_system="github",
+            event_type="deployment.created",
+            occurred_at=now,
+            payload_digest="d" * 64,
+            payload={"environment": "production"},
+        )
+        assert await reconciliation.ingest_audit_event(audit_event)
+        assert not await reconciliation.ingest_audit_event(audit_event)
+
+        profile = ProductionCompletenessProfile(
+            profile_id="production",
+            tenant_id=tenant_id,
+            required_sources=("github",),
+        )
+        await reconciliation.save_profile(profile)
+        assert await reconciliation.get_profile(tenant_id, "production") == profile
+
+        finding = ReconciliationFinding(
+            finding_id=uuid4(),
+            run_id=run.run_id,
+            action_id=action_id,
+            reconciler="prodkit:github",
+            source_system="github",
+            observed_at=now,
+            outcome=ReconciliationOutcome.MATCHED,
+            severity="info",
+            summary="durable reconciliation proof",
+        )
+        reconciliation_result = ReconciliationRunResult(
+            reconciliation_id=uuid4(),
+            run_id=run.run_id,
+            tenant_id=tenant_id,
+            source_system="github",
+            started_at=now,
+            completed_at=now,
+            health=ReconciliationSourceHealth.HEALTHY,
+            cursor="page-2",
+            high_watermark=now,
+            findings=(finding,),
+        )
+        await reconciliation.save_result(reconciliation_result)
+        await reconciliation.save_result(reconciliation_result)
+        assert finding in await reconciliation.list_findings(tenant_id)
     finally:
         await engine.dispose()
 

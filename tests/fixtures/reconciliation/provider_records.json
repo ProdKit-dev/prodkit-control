@@ -1,0 +1,39 @@
+{
+  "git": [
+    {
+      "record_type": "state",
+      "observation_id": "git-commit",
+      "observed_at": "2026-08-22T00:00:00+00:00",
+      "state": {"revision": "abc123"}
+    },
+    {
+      "record_type": "audit",
+      "event_id": "git-ref-update",
+      "occurred_at": "2026-08-22T00:00:00+00:00",
+      "event_type": "ref.update",
+      "actor": "ci",
+      "payload": {"ref": "refs/heads/main"}
+    }
+  ],
+  "github": [
+    {
+      "record_type": "state",
+      "observation_id": "workflow-run",
+      "observed_at": "2026-08-22T00:00:00+00:00",
+      "state": {"conclusion": "success"},
+      "external_reference": "actions/runs/1"
+    },
+    {
+      "record_type": "audit",
+      "event_id": "deployment-1",
+      "occurred_at": "2026-08-22T00:00:00+00:00",
+      "event_type": "deployment.created",
+      "payload": {"environment": "production"}
+    }
+  ],
+  "ci": [{"record_type": "state", "observation_id": "build-1", "observed_at": "2026-08-22T00:00:00+00:00", "state": {"status": "passed", "artifact": "sha256:demo"}}],
+  "registry": [{"record_type": "state", "observation_id": "image-1", "observed_at": "2026-08-22T00:00:00+00:00", "state": {"digest": "sha256:demo", "immutable": true}}],
+  "deployment": [{"record_type": "state", "observation_id": "deploy-1", "observed_at": "2026-08-22T00:00:00+00:00", "state": {"environment": "production", "revision": "abc123"}}],
+  "kubernetes": [{"record_type": "state", "observation_id": "rs-1", "observed_at": "2026-08-22T00:00:00+00:00", "state": {"namespace": "prod", "readyReplicas": 3}}],
+  "database": [{"record_type": "state", "observation_id": "migration-1", "observed_at": "2026-08-22T00:00:00+00:00", "state": {"schema_version": 4}}]
+}

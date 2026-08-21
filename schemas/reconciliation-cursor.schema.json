@@ -1,0 +1,88 @@
+{
+  "$defs": {
+    "ReconciliationSourceHealth": {
+      "enum": [
+        "healthy",
+        "stale",
+        "unavailable",
+        "conflicting"
+      ],
+      "title": "ReconciliationSourceHealth",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "consecutive_failures": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Consecutive Failures",
+      "type": "integer"
+    },
+    "cursor": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cursor"
+    },
+    "health": {
+      "$ref": "#/$defs/ReconciliationSourceHealth",
+      "default": "healthy"
+    },
+    "high_watermark": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "High Watermark"
+    },
+    "next_attempt_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Next Attempt At"
+    },
+    "source_system": {
+      "minLength": 1,
+      "title": "Source System",
+      "type": "string"
+    },
+    "tenant_id": {
+      "minLength": 1,
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "tenant_id",
+    "source_system",
+    "updated_at"
+  ],
+  "title": "ReconciliationCursor",
+  "type": "object"
+}

@@ -6,6 +6,30 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-22
+
+### Added
+
+- Delivery-chain reconciliation across Git, GitHub, CI/build, registries, deployments, Kubernetes, and database/control-plane evidence.
+- Canonical external state/audit contracts, deterministic findings, durable cursors, audit-event deduplication, and organization/tenant production-completeness profiles.
+- PostgreSQL schema version 4 with PostgreSQL 18 durability coverage for reconciliation state.
+- Configurable polling, freshness, capped exponential backoff, provider-shaped fixtures, and documented reconciliation SLO/escalation policy.
+
+### Changed
+
+- Reconciliation is fail-closed for stale, unavailable, conflicting, missing, and unexpected external evidence.
+- Production completeness can require fresh healthy matched evidence from an explicit organization/tenant source set.
+
+### Security
+
+- Delivery-chain activity without a controlled action produces a high-severity `unexpected_external_action` finding.
+- Conflicting evidence is explicit `conflicting_evidence`; one observation is never silently selected.
+
+### Release scope
+
+`v0.2.0` is the delivery-chain reconciliation milestone. Signed/interoperable provenance and key management remain `v0.3.0`.
+
+
 ## [0.1.0] - 2026-08-21
 
 ### Added
