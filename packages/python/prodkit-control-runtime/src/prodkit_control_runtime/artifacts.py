@@ -149,6 +149,6 @@ class EncryptedFilesystemArtifactStore:
                 handle.write(payload)
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(temporary, path)
+            temporary.replace(path)
         finally:
             temporary.unlink(missing_ok=True)
