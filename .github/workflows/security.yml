@@ -3,6 +3,11 @@ name: Security
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "29 4 * * 1"
 
 permissions:
   contents: read
@@ -12,10 +17,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  normalize-v020:
-    name: normalize-v0.2.0
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-control-v020-normalizer.yml@cebfbceac578e7d088c9106880ef3e3691725f32
+  security:
+    name: security
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-security-compact.yml@645f3c66557e4a673be38c461a762021536fda00
     with:
-      runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]' }}
-      head_sha: ${{ github.event.pull_request.head.sha }}
-      main_sha: 89a7546ec06a2eecc59d2150c037d25c866a1538
+      runner_json: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '"ubuntu-latest"' || (vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
+      secret_scan_enabled: true
+      gitleaks_config_path: .gitleaks.toml
+      sbom_enabled: true
+      python_enabled: true
+      python_script: .prodkit/workflows/security-python.sh
+      node_enabled: true
+      node_script: .prodkit/workflows/security-node.sh
+      container_enabled: false
+      custom_enabled: false
