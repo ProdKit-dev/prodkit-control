@@ -22,7 +22,13 @@ class GitHubExecutorConfig:
     allowed_repositories: frozenset[str]
     api_base_url: str = "https://api.github.com"
     allowed_operations: frozenset[str] = frozenset(
-        {"create_pull_request", "merge_pull_request", "create_ref", "dispatch_workflow", "create_release"}
+        {
+            "create_pull_request",
+            "merge_pull_request",
+            "create_ref",
+            "dispatch_workflow",
+            "create_release",
+        }
     )
     allowed_merge_methods: frozenset[str] = frozenset({"squash", "merge", "rebase"})
     timeout_seconds: float = 10.0
@@ -105,7 +111,9 @@ class ConstrainedGitHubExecutor:
                 if identifier is not None:
                     provider_operation_id = str(identifier)
                 resource_url = body.get("url")
-                if isinstance(resource_url, str) and resource_url.startswith(self._config.api_base_url):
+                if isinstance(resource_url, str) and resource_url.startswith(
+                    self._config.api_base_url
+                ):
                     resource_path = resource_url.removeprefix(self._config.api_base_url)
                     result_payload["resource_path"] = resource_path
                 sha = body.get("sha")
@@ -130,7 +138,10 @@ class ConstrainedGitHubExecutor:
     async def observe(self, action: ActionSpec, result: ExecutionResult) -> StateObservation:
         resource_path = result.result.get("resource_path")
         if isinstance(resource_path, str):
-            state: dict[str, object] = {"resource_path": resource_path, "provider_operation_id": result.provider_operation_id}
+            state: dict[str, object] = {
+                "resource_path": resource_path,
+                "provider_operation_id": result.provider_operation_id,
+            }
         else:
             state = {"operation": action.operation, "result": result.result}
         return StateObservation(
@@ -161,7 +172,11 @@ class ConstrainedGitHubExecutor:
             method = str(arguments.get("merge_method", "squash"))
             if method not in self._config.allowed_merge_methods:
                 raise PermissionError(f"GitHub merge method {method!r} is not allowed")
-            return "PUT", f"{prefix}/pulls/{number}/merge", {"sha": expected_sha, "merge_method": method}
+            return (
+                "PUT",
+                f"{prefix}/pulls/{number}/merge",
+                {"sha": expected_sha, "merge_method": method},
+            )
         if action.operation == "create_ref":
             ref = self._required_str(arguments, "ref")
             if not ref.startswith("refs/") or ".." in ref:
@@ -174,7 +189,11 @@ class ConstrainedGitHubExecutor:
             raw_inputs = arguments.get("inputs", {})
             if not isinstance(raw_inputs, dict):
                 raise ValueError("GitHub workflow inputs must be an object")
-            return "POST", f"{prefix}/actions/workflows/{workflow}/dispatches", {"ref": ref, "inputs": raw_inputs}
+            return (
+                "POST",
+                f"{prefix}/actions/workflows/{workflow}/dispatches",
+                {"ref": ref, "inputs": raw_inputs},
+            )
         if action.operation == "create_release":
             tag = self._required_str(arguments, "tag_name")
             name = self._required_str(arguments, "name")
@@ -204,7 +223,9 @@ class ConstrainedGitHubExecutor:
         url = f"{self._config.api_base_url.rstrip('/')}{path}"
         if self._client is not None:
             return await self._client.request(method, url, headers=headers, json=json)
-        async with httpx.AsyncClient(timeout=self._config.timeout_seconds, follow_redirects=False) as client:
+        async with httpx.AsyncClient(
+            timeout=self._config.timeout_seconds, follow_redirects=False
+        ) as client:
             return await client.request(method, url, headers=headers, json=json)
 
     @staticmethod
