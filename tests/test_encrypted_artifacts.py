@@ -10,7 +10,11 @@ from prodkit_control_runtime import EncryptedFilesystemArtifactStore
 
 @pytest.mark.asyncio
 async def test_encrypted_artifact_round_trip_and_redaction(tmp_path) -> None:
-    store = EncryptedFilesystemArtifactStore(root=tmp_path, key=b"k" * 32, retention_days=7)
+    store = EncryptedFilesystemArtifactStore(
+        root=tmp_path,
+        key=b"k" * 32,
+        retention_days=7,
+    )
 
     artifact = await store.put(
         tenant_id="tenant-a",
@@ -59,4 +63,8 @@ def test_encrypted_artifact_store_validates_key_and_retention(tmp_path) -> None:
     with pytest.raises(ValueError, match="32-byte AES-256 key"):
         EncryptedFilesystemArtifactStore(root=tmp_path, key=b"short")
     with pytest.raises(ValueError, match="retention_days must be positive"):
-        EncryptedFilesystemArtifactStore(root=tmp_path, key=b"k" * 32, retention_days=0)
+        EncryptedFilesystemArtifactStore(
+            root=tmp_path,
+            key=b"k" * 32,
+            retention_days=0,
+        )
