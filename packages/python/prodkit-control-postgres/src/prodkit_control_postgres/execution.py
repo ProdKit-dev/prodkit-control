@@ -79,9 +79,7 @@ class PostgresIdempotencyStore:
 class PostgresExecutionAttemptStore:
     """Transactional execution-attempt journal with explicit legal state transitions."""
 
-    _TRANSITIONS: ClassVar[
-        dict[ExecutionAttemptState, frozenset[ExecutionAttemptState]]
-    ] = {
+    _TRANSITIONS: ClassVar[dict[ExecutionAttemptState, frozenset[ExecutionAttemptState]]] = {
         ExecutionAttemptState.CLAIMED: frozenset({ExecutionAttemptState.STARTED}),
         ExecutionAttemptState.STARTED: frozenset(
             {
