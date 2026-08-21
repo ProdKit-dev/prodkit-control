@@ -68,7 +68,9 @@ class HTTPCredentialLeaseProvider:
         if lease.executor_identity != executor_identity:
             raise IntegrityViolationError("credential lease is not bound to the selected workload")
         if lease.audience != self._audience or tuple(lease.scopes) != self._scopes:
-            raise IntegrityViolationError("credential lease audience/scopes differ from requested scope")
+            raise IntegrityViolationError(
+                "credential lease audience/scopes differ from requested scope"
+            )
         if lease.issued_at > now + timedelta(seconds=30) or lease.expires_at <= now:
             raise IntegrityViolationError("credential lease is not currently valid")
         if lease.expires_at - lease.issued_at > timedelta(seconds=self._ttl):
@@ -95,6 +97,10 @@ class HTTPCredentialLeaseProvider:
         if self._token is not None:
             headers["authorization"] = f"Bearer {self._token}"
         if self._client is not None:
-            return await self._client.request(method, f"{self._base_url}{path}", json=json, headers=headers)
+            return await self._client.request(
+                method, f"{self._base_url}{path}", json=json, headers=headers
+            )
         async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=False) as client:
-            return await client.request(method, f"{self._base_url}{path}", json=json, headers=headers)
+            return await client.request(
+                method, f"{self._base_url}{path}", json=json, headers=headers
+            )
