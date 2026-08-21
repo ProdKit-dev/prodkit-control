@@ -1,3 +1,6 @@
 """Controlled filesystem executor boundary."""
 
-__version__ = "0.0.0"
+from .executor import ConstrainedFilesystemExecutor, FilesystemExecutorConfig
+
+__all__ = ("ConstrainedFilesystemExecutor", "FilesystemExecutorConfig")
+__version__ = "0.1.0"

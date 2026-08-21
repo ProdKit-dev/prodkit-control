@@ -1,0 +1,37 @@
+name: Trusted Release Proof
+
+run-name: Trusted Release Proof — ${{ inputs.source_sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact current main SHA to certify as the release candidate
+        required: true
+        type: string
+      runner:
+        description: Release-proof runner override
+        required: true
+        type: choice
+        default: self-hosted
+        options: [self-hosted, github-hosted, auto, policy]
+
+permissions:
+  contents: read
+
+jobs:
+  runner:
+    name: runner
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-runner-policy.yml@877aefdeaa2084b47f4867dc6c7b0dfe6525fb2c
+    with:
+      mode: ${{ inputs.runner }}
+      fork_safe: false
+
+  proof:
+    name: proof
+    needs: runner
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-proof.yml@877aefdeaa2084b47f4867dc6c7b0dfe6525fb2c
+    with:
+      source_sha: ${{ inputs.source_sha }}
+      runner_json: ${{ needs.runner.outputs.runner_json }}
+      proof_script: .prodkit/workflows/release-proof.sh

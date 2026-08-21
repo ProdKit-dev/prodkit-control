@@ -125,7 +125,7 @@ async def _demo(output: Path) -> Path:
     specification = next(
         node for node in lineage.nodes if isinstance(node, SpecificationRevisionNode)
     )
-    coordinator.bind_lineage(
+    await coordinator.bind_lineage(
         run.run_id,
         lineage_graph_digest=sha256_hex(lineage),
         specification_revision=specification.ref,

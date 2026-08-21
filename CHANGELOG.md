@@ -6,6 +6,38 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-21
+
+### Added
+
+- Durable PostgreSQL run state, tenant-scoped idempotency ownership, execution-attempt journaling, and schema compatibility metadata through schema version 3.
+- Broker-owned execution-attempt identifiers and explicit `claimed`, `started`, `succeeded`, `failed`, and `uncertain` lifecycle evidence.
+- OIDC/JWT principal resolution with issuer, audience, signature, expiry, tenant, actor-kind, and role validation.
+- HTTPS approval and credential-lease providers with digest/policy/tenant bindings and short-lived workload credential references.
+- AES-256-GCM encrypted filesystem artifact storage with authenticated ciphertext, tenant partitioning, redaction envelopes, atomic persistence, and retention metadata.
+- Hardened filesystem, Git, GitHub, and HTTP executor implementations for the supported v0.1 production allowlist.
+- Real PostgreSQL 18 durability CI and exact-source Trusted Release Proof coverage.
+- Centralized lifecycle callers for runner policy, CI, Security, CodeQL, Trusted Release Proof, Release, and Release Metadata through `prodkit-workflows`.
+
+### Changed
+
+- Action execution now refuses automatic retries after ambiguous external execution and preserves the idempotency claim for operator reconciliation.
+- Durable profiles require attempt-aware executors; credential-enabled profiles additionally require credential-lease-aware executors.
+- Run coordination can use the durable PostgreSQL run store and append-only event ledger instead of process-local state.
+- Release publication now requires successful CI, Security, and CodeQL on the exact current `main` SHA plus an exact-source Trusted Release Proof.
+- Runner routing is delegated to the centralized organization workflow policy with trusted self-hosted fallback.
+
+### Security
+
+- Production API identity is fail-closed unless a principal resolver is configured; insecure header identity remains an explicit development-only opt-in.
+- Approval decisions are checked against action/target digests, policy decision and revision, tenant, environment, role, and expiry.
+- Privileged credentials remain behind the workload credential boundary; the control plane carries only non-secret lease references.
+- Credential revocation failure after execution is treated as uncertain execution rather than successful completion.
+
+### Release scope
+
+`v0.1.0` is the hardened-execution milestone. Placeholder database, Kubernetes, and deployment executor packages are not part of the supported production executor allowlist for this release. Delivery-chain reconciliation remains `v0.2.0`, and signed/interoperable provenance remains `v0.3.0`.
+
 ## [0.0.0] - 2026-08-20
 
 ### Added

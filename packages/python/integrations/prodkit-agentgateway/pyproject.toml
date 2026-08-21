@@ -1,6 +1,6 @@
 [project]
 name = "prodkit-agentgateway"
-version = "0.0.0"
+version = "0.1.0"
 description = "agentgateway integration boundary."
 requires-python = ">=3.12,<3.15"
 license = { text = "Apache-2.0" }

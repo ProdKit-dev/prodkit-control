@@ -8,11 +8,11 @@ on:
   workflow_dispatch:
     inputs:
       runner:
-        description: Runner target for explicit failover
+        description: Runner override; policy uses PRODKIT_RUNNER_MODE
         required: true
         type: choice
-        default: github-hosted
-        options: [github-hosted, self-hosted]
+        default: policy
+        options: [policy, auto, github-hosted, self-hosted]
   schedule:
     - cron: "29 4 * * 1"
 
@@ -24,12 +24,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  runner:
+    name: runner
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-runner-policy.yml@877aefdeaa2084b47f4867dc6c7b0dfe6525fb2c
+    with:
+      mode: ${{ github.event_name == 'workflow_dispatch' && inputs.runner || 'policy' }}
+      fork_safe: true
+
   security:
     name: security
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-security.yml@2decc8b2240a815de62ce2de7d0c42297288988e
+    needs: runner
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-security.yml@877aefdeaa2084b47f4867dc6c7b0dfe6525fb2c
     with:
-      runner_json: ${{ (github.event_name == 'workflow_dispatch' && inputs.runner == 'self-hosted') && '["self-hosted","Linux","X64"]' || '"ubuntu-latest"' }}
+      runner_json: ${{ needs.runner.outputs.runner_json }}
       secret_scan_enabled: true
       gitleaks_config_path: .gitleaks.toml
       sbom_enabled: true

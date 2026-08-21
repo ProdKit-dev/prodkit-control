@@ -1,3 +1,6 @@
 """Controlled Git executor boundary."""
 
-__version__ = "0.0.0"
+from .executor import ConstrainedGitExecutor, GitExecutorConfig
+
+__all__ = ("ConstrainedGitExecutor", "GitExecutorConfig")
+__version__ = "0.1.0"

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -12,6 +12,7 @@ from prodkit_control_core import (
     DuplicateActionError,
     EffectClass,
     EventType,
+    ExecutionAttemptState,
     RiskClass,
     VerificationOutcome,
     sha256_hex,
@@ -24,6 +25,7 @@ from prodkit_control_runtime import (
     ExecutorRegistry,
     InMemoryApprovalStore,
     InMemoryEventLedger,
+    InMemoryExecutionAttemptStore,
     InMemoryIdempotencyStore,
     RunCoordinator,
 )
@@ -42,7 +44,23 @@ class FailingExecutor:
         raise AssertionError("observe must not run")
 
 
-async def make_runtime(human, *, extra_executor=None):
+class AttemptFailingExecutor:
+    name = "attempt-failing"
+    version = "1.0.0"
+    identity = "spiffe://prodkit.test/executor/attempt-failing"
+
+    async def execute(self, action):  # pragma: no cover - broker must use execute_attempt
+        raise AssertionError("durable broker must use execute_attempt")
+
+    async def execute_attempt(self, action, *, attempt_id: UUID):
+        assert attempt_id
+        raise RuntimeError("simulated crash after durable attempt start")
+
+    async def observe(self, action, result):  # pragma: no cover - execution cannot reach this
+        raise AssertionError("observe must not run")
+
+
+async def make_runtime(human, *, extra_executor=None, execution_attempts=None):
     ledger = InMemoryEventLedger()
     approvals = InMemoryApprovalStore()
     executors = ExecutorRegistry()
@@ -57,6 +75,7 @@ async def make_runtime(human, *, extra_executor=None):
         idempotency=InMemoryIdempotencyStore(),
         executors=executors,
         verifier=DigestEffectVerifier(),
+        execution_attempts=execution_attempts,
     )
     coordinator = RunCoordinator(ledger)
     run = await coordinator.start_run(
@@ -101,6 +120,42 @@ async def test_executor_exception_records_uncertainty_and_retains_idempotency(hu
 
     with pytest.raises(DuplicateActionError, match="already in progress"):
         await broker.execute(action, actor=agent, trace_id=run.trace_id)
+
+
+@pytest.mark.asyncio
+async def test_durable_attempt_is_uncertain_after_ambiguous_executor_failure(human, agent) -> None:
+    attempts = InMemoryExecutionAttemptStore()
+    ledger, _, _, broker, run = await make_runtime(
+        human,
+        extra_executor=AttemptFailingExecutor(),
+        execution_attempts=attempts,
+    )
+    action = make_action(
+        run_id=run.run_id,
+        tenant_id=human.tenant_id,
+        idempotency_key="durable-uncertain",
+    ).model_copy(update={"executor": "attempt-failing"})
+
+    with pytest.raises(RuntimeError, match="simulated crash after durable attempt start"):
+        await broker.execute(action, actor=agent, trace_id=run.trace_id)
+
+    attempt = await attempts.latest_for_action(action.action_id)
+    assert attempt is not None
+    assert attempt.state is ExecutionAttemptState.UNCERTAIN
+    assert attempt.started_at is not None
+    assert attempt.finished_at is not None
+    assert attempt.uncertainty_reason == "executor raised after execution was marked started"
+    assert attempt.error_type == "RuntimeError"
+
+    events = await ledger.list_run_events(run.run_id)
+    uncertain = [event for event in events if event.event_type is EventType.EXECUTION_UNCERTAIN]
+    assert len(uncertain) == 1
+    assert uncertain[0].payload["execution_attempt_id"] == str(attempt.attempt_id)
+    assert uncertain[0].payload["automatic_retry_permitted"] is False
+
+    with pytest.raises(DuplicateActionError, match="already in progress or uncertain"):
+        await broker.execute(action, actor=agent, trace_id=run.trace_id)
+    assert (await attempts.latest_for_action(action.action_id)) == attempt
 
 
 @pytest.mark.asyncio

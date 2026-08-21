@@ -10,18 +10,21 @@ from .contracts import (
     ActionSpec,
     ApprovalDecision,
     ArtifactRef,
-    ControlEvent,
-    ControlEventDraft,
-    ExecutionResult,
-    PolicyDecision,
-    ReconciliationFinding,
-    StateObservation,
-    VerificationResult,
     CanonicalModelRequest,
     CanonicalModelResponse,
+    ControlEvent,
+    ControlEventDraft,
+    CredentialLease,
+    ExecutionAttemptRecord,
+    ExecutionResult,
     LineageGraph,
     LineageNode,
     LineageRelation,
+    PolicyDecision,
+    ReconciliationFinding,
+    RunRecord,
+    StateObservation,
+    VerificationResult,
 )
 
 
@@ -31,6 +34,13 @@ class EventLedger(Protocol):
     async def list_run_events(self, run_id: UUID) -> list[ControlEvent]: ...
     def stream_run_events(self, run_id: UUID) -> AsyncIterator[ControlEvent]: ...
     async def verify_run(self, run_id: UUID) -> None: ...
+
+
+@runtime_checkable
+class RunStore(Protocol):
+    async def create(self, run: RunRecord) -> None: ...
+    async def replace(self, run: RunRecord) -> None: ...
+    async def get(self, run_id: UUID) -> RunRecord | None: ...
 
 
 @runtime_checkable
@@ -71,12 +81,53 @@ class ApprovalProvider(Protocol):
 
 
 @runtime_checkable
+class ApprovalRecorder(Protocol):
+    async def record(self, decision: ApprovalDecision) -> None: ...
+
+
+@runtime_checkable
 class ControlledExecutor(Protocol):
     name: str
     version: str
 
     async def execute(self, action: ActionSpec) -> ExecutionResult: ...
     async def observe(self, action: ActionSpec, result: ExecutionResult) -> StateObservation: ...
+
+
+@runtime_checkable
+class PreflightExecutor(ControlledExecutor, Protocol):
+    """Executor that can reject unsafe/invalid actions before idempotency ownership starts."""
+
+    async def validate(self, action: ActionSpec) -> None: ...
+
+
+@runtime_checkable
+class AttemptAwareExecutor(ControlledExecutor, Protocol):
+    """Executor capable of using a broker-owned durable attempt identifier."""
+
+    identity: str
+
+    async def execute_attempt(self, action: ActionSpec, *, attempt_id: UUID) -> ExecutionResult: ...
+
+
+@runtime_checkable
+class CredentialLeaseAwareExecutor(AttemptAwareExecutor, Protocol):
+    """Isolated executor that consumes only a short-lived credential lease reference."""
+
+    async def execute_attempt_with_lease(
+        self,
+        action: ActionSpec,
+        *,
+        attempt_id: UUID,
+        credential_lease: CredentialLease,
+    ) -> ExecutionResult: ...
+
+
+@runtime_checkable
+class CredentialMaterialResolver(Protocol):
+    """Worker-local resolver; credential material never crosses the control-plane API boundary."""
+
+    async def resolve(self, lease: CredentialLease) -> Mapping[str, str]: ...
 
 
 @runtime_checkable
@@ -108,6 +159,20 @@ class IdempotencyStore(Protocol):
     async def claim(self, *, tenant_id: str, key: str, action_digest: str) -> bool: ...
     async def complete(self, *, tenant_id: str, key: str, result: ExecutionResult) -> None: ...
     async def result(self, *, tenant_id: str, key: str) -> ExecutionResult | None: ...
+
+
+@runtime_checkable
+class ExecutionAttemptStore(Protocol):
+    async def create(self, attempt: ExecutionAttemptRecord) -> None: ...
+    async def replace(self, attempt: ExecutionAttemptRecord) -> None: ...
+    async def get(self, attempt_id: UUID) -> ExecutionAttemptRecord | None: ...
+    async def latest_for_action(self, action_id: UUID) -> ExecutionAttemptRecord | None: ...
+
+
+@runtime_checkable
+class CredentialLeaseProvider(Protocol):
+    async def issue(self, *, action: ActionSpec, executor_identity: str) -> CredentialLease: ...
+    async def revoke(self, lease_id: UUID) -> None: ...
 
 
 @runtime_checkable

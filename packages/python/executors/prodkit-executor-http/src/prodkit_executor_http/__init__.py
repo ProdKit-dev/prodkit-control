@@ -1,3 +1,6 @@
 """Controlled HTTP executor boundary."""
 
-__version__ = "0.0.0"
+from .executor import ConstrainedHTTPExecutor, HTTPExecutorConfig
+
+__all__ = ("ConstrainedHTTPExecutor", "HTTPExecutorConfig")
+__version__ = "0.1.0"

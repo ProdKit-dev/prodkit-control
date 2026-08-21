@@ -21,7 +21,8 @@ async def test_completion_rejects_cross_tenant_actor_before_state_mutation(human
     with pytest.raises(AuthorizationDeniedError):
         await coordinator.complete_run(run.run_id, actor=foreign_actor)
 
-    assert coordinator.get_run(run.run_id).status is RunStatus.RUNNING
+    current = await coordinator.require_run(run.run_id)
+    assert current.status is RunStatus.RUNNING
     assert len(await ledger.list_run_events(run.run_id)) == 1
 
 
@@ -42,7 +43,8 @@ async def test_completion_requires_terminal_status_and_is_single_use(human) -> N
             actor=human,
             status=RunStatus.WAITING_FOR_APPROVAL,
         )
-    assert coordinator.get_run(run.run_id).status is RunStatus.RUNNING
+    current = await coordinator.require_run(run.run_id)
+    assert current.status is RunStatus.RUNNING
 
     completed = await coordinator.complete_run(
         run.run_id,
