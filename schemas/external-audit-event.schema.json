@@ -101,18 +101,6 @@
       ],
       "title": "ContentStorageMode",
       "type": "string"
-    },
-    "ReconciliationOutcome": {
-      "enum": [
-        "matched",
-        "missing_external_evidence",
-        "unexpected_external_action",
-        "state_mismatch",
-        "conflicting_evidence",
-        "unverifiable"
-      ],
-      "title": "ReconciliationOutcome",
-      "type": "string"
     }
   },
   "additionalProperties": false,
@@ -130,10 +118,28 @@
       "default": null,
       "title": "Action Id"
     },
-    "details": {
-      "additionalProperties": true,
-      "title": "Details",
-      "type": "object"
+    "actor": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Actor"
+    },
+    "event_id": {
+      "minLength": 1,
+      "title": "Event Id",
+      "type": "string"
+    },
+    "event_type": {
+      "minLength": 1,
+      "title": "Event Type",
+      "type": "string"
     },
     "evidence": {
       "default": [],
@@ -156,55 +162,66 @@
       "default": null,
       "title": "External Reference"
     },
-    "finding_id": {
-      "format": "uuid",
-      "title": "Finding Id",
-      "type": "string"
-    },
-    "observed_at": {
+    "occurred_at": {
       "format": "date-time",
-      "title": "Observed At",
+      "title": "Occurred At",
       "type": "string"
     },
-    "outcome": {
-      "$ref": "#/$defs/ReconciliationOutcome"
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
     },
-    "reconciler": {
-      "minLength": 1,
-      "title": "Reconciler",
+    "payload_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Payload Digest",
       "type": "string"
+    },
+    "resource": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Resource"
     },
     "run_id": {
-      "format": "uuid",
-      "title": "Run Id",
-      "type": "string"
-    },
-    "severity": {
-      "minLength": 1,
-      "title": "Severity",
-      "type": "string"
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Run Id"
     },
     "source_system": {
       "minLength": 1,
       "title": "Source System",
       "type": "string"
     },
-    "summary": {
+    "tenant_id": {
       "minLength": 1,
-      "title": "Summary",
+      "title": "Tenant Id",
       "type": "string"
     }
   },
   "required": [
-    "finding_id",
-    "run_id",
-    "reconciler",
+    "event_id",
+    "tenant_id",
     "source_system",
-    "observed_at",
-    "outcome",
-    "severity",
-    "summary"
+    "event_type",
+    "occurred_at",
+    "payload_digest"
   ],
-  "title": "ReconciliationFinding",
+  "title": "ExternalAuditEvent",
   "type": "object"
 }

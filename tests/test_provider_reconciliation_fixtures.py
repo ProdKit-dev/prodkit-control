@@ -16,8 +16,7 @@ from prodkit_reconcile_registry import RegistryReconciler
 
 def test_source_shaped_provider_fixtures_normalize_without_losing_source_identity(tenant_id):
     fixture_path = (
-        Path(__file__).parent
-        / "fixtures/reconciliation/source_shaped_provider_records.json"
+        Path(__file__).parent / "fixtures/reconciliation/source_shaped_provider_records.json"
     )
     payload = json.loads(fixture_path.read_text(encoding="utf-8"))
     adapters = {

@@ -33,7 +33,9 @@ class ReconciliationSource(Protocol):
 
 
 class ReconciliationStore(Protocol):
-    async def get_cursor(self, tenant_id: str, source_system: str) -> ReconciliationCursor | None: ...
+    async def get_cursor(
+        self, tenant_id: str, source_system: str
+    ) -> ReconciliationCursor | None: ...
 
     async def save_cursor(self, cursor: ReconciliationCursor) -> None: ...
 
@@ -80,7 +82,11 @@ class InMemoryReconciliationStore:
     async def list_findings(self, tenant_id: str) -> tuple[ReconciliationFinding, ...]:
         return tuple(
             sorted(
-                (item for key, item in self._findings.items() if self._finding_tenants[key] == tenant_id),
+                (
+                    item
+                    for key, item in self._findings.items()
+                    if self._finding_tenants[key] == tenant_id
+                ),
                 key=lambda item: (item.observed_at, str(item.finding_id)),
             )
         )
@@ -115,7 +121,11 @@ class ReconciliationCoordinator:
             raise ValueError("source implementation and configuration names differ")
 
         cursor = await self._store.get_cursor(tenant_id, source.source_system)
-        if cursor is not None and cursor.next_attempt_at is not None and cursor.next_attempt_at > current_time:
+        if (
+            cursor is not None
+            and cursor.next_attempt_at is not None
+            and cursor.next_attempt_at > current_time
+        ):
             return None
 
         started_at = current_time

@@ -88,7 +88,9 @@ def test_reconciliation_detects_match_missing_mismatch_and_bypass(tenant_id, run
     assert ReconciliationOutcome.STATE_MISMATCH in outcomes
     assert ReconciliationOutcome.UNEXPECTED_EXTERNAL_ACTION in outcomes
     bypass_finding = next(
-        item for item in findings if item.outcome is ReconciliationOutcome.UNEXPECTED_EXTERNAL_ACTION
+        item
+        for item in findings
+        if item.outcome is ReconciliationOutcome.UNEXPECTED_EXTERNAL_ACTION
     )
     assert bypass_finding.severity == "high"
 

@@ -23,17 +23,21 @@ class PostgresReconciliationStore:
     async def get_cursor(self, tenant_id: str, source_system: str) -> ReconciliationCursor | None:
         async with self._sessions() as session:
             row = (
-                await session.execute(
-                    text(
-                        """
+                (
+                    await session.execute(
+                        text(
+                            """
                         SELECT document
                         FROM reconciliation_cursors
                         WHERE tenant_id = :tenant_id AND source_system = :source_system
                         """
-                    ),
-                    {"tenant_id": tenant_id, "source_system": source_system},
+                        ),
+                        {"tenant_id": tenant_id, "source_system": source_system},
+                    )
                 )
-            ).mappings().first()
+                .mappings()
+                .first()
+            )
             return ReconciliationCursor.model_validate(row["document"]) if row is not None else None
 
     async def save_cursor(self, cursor: ReconciliationCursor) -> None:
@@ -100,16 +104,20 @@ class PostgresReconciliationStore:
             )
             if inserted.scalar_one_or_none() is None:
                 existing = (
-                    await session.execute(
-                        text(
-                            """
+                    (
+                        await session.execute(
+                            text(
+                                """
                             SELECT document FROM reconciliation_results
                             WHERE reconciliation_id = :reconciliation_id
                             """
-                        ),
-                        {"reconciliation_id": result.reconciliation_id},
+                            ),
+                            {"reconciliation_id": result.reconciliation_id},
+                        )
                     )
-                ).mappings().one()
+                    .mappings()
+                    .one()
+                )
                 if ReconciliationRunResult.model_validate(existing["document"]) != result:
                     raise ValueError("reconciliation result identity cannot be rewritten")
                 return
@@ -171,18 +179,22 @@ class PostgresReconciliationStore:
     async def list_findings(self, tenant_id: str) -> tuple[ReconciliationFinding, ...]:
         async with self._sessions() as session:
             rows = (
-                await session.execute(
-                    text(
-                        """
+                (
+                    await session.execute(
+                        text(
+                            """
                         SELECT document
                         FROM reconciliation_findings
                         WHERE tenant_id = :tenant_id
                         ORDER BY observed_at, finding_id
                         """
-                    ),
-                    {"tenant_id": tenant_id},
+                        ),
+                        {"tenant_id": tenant_id},
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
         return tuple(ReconciliationFinding.model_validate(row["document"]) for row in rows)
 
     async def save_profile(self, profile: ProductionCompletenessProfile) -> None:
@@ -214,15 +226,23 @@ class PostgresReconciliationStore:
     ) -> ProductionCompletenessProfile | None:
         async with self._sessions() as session:
             row = (
-                await session.execute(
-                    text(
-                        """
+                (
+                    await session.execute(
+                        text(
+                            """
                         SELECT document
                         FROM production_completeness_profiles
                         WHERE tenant_id = :tenant_id AND profile_id = :profile_id
                         """
-                    ),
-                    {"tenant_id": tenant_id, "profile_id": profile_id},
+                        ),
+                        {"tenant_id": tenant_id, "profile_id": profile_id},
+                    )
                 )
-            ).mappings().first()
-        return ProductionCompletenessProfile.model_validate(row["document"]) if row is not None else None
+                .mappings()
+                .first()
+            )
+        return (
+            ProductionCompletenessProfile.model_validate(row["document"])
+            if row is not None
+            else None
+        )

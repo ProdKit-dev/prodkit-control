@@ -102,6 +102,100 @@
       "title": "ContentStorageMode",
       "type": "string"
     },
+    "ReconciliationFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action Id"
+        },
+        "details": {
+          "additionalProperties": true,
+          "title": "Details",
+          "type": "object"
+        },
+        "evidence": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "external_reference": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "External Reference"
+        },
+        "finding_id": {
+          "format": "uuid",
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/ReconciliationOutcome"
+        },
+        "reconciler": {
+          "minLength": 1,
+          "title": "Reconciler",
+          "type": "string"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "severity": {
+          "minLength": 1,
+          "title": "Severity",
+          "type": "string"
+        },
+        "source_system": {
+          "minLength": 1,
+          "title": "Source System",
+          "type": "string"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "finding_id",
+        "run_id",
+        "reconciler",
+        "source_system",
+        "observed_at",
+        "outcome",
+        "severity",
+        "summary"
+      ],
+      "title": "ReconciliationFinding",
+      "type": "object"
+    },
     "ReconciliationOutcome": {
       "enum": [
         "matched",
@@ -113,37 +207,26 @@
       ],
       "title": "ReconciliationOutcome",
       "type": "string"
+    },
+    "ReconciliationSourceHealth": {
+      "enum": [
+        "healthy",
+        "stale",
+        "unavailable",
+        "conflicting"
+      ],
+      "title": "ReconciliationSourceHealth",
+      "type": "string"
     }
   },
   "additionalProperties": false,
   "properties": {
-    "action_id": {
-      "anyOf": [
-        {
-          "format": "uuid",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Action Id"
+    "completed_at": {
+      "format": "date-time",
+      "title": "Completed At",
+      "type": "string"
     },
-    "details": {
-      "additionalProperties": true,
-      "title": "Details",
-      "type": "object"
-    },
-    "evidence": {
-      "default": [],
-      "items": {
-        "$ref": "#/$defs/ArtifactRef"
-      },
-      "title": "Evidence",
-      "type": "array"
-    },
-    "external_reference": {
+    "cursor": {
       "anyOf": [
         {
           "minLength": 1,
@@ -154,24 +237,35 @@
         }
       ],
       "default": null,
-      "title": "External Reference"
+      "title": "Cursor"
     },
-    "finding_id": {
+    "findings": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ReconciliationFinding"
+      },
+      "title": "Findings",
+      "type": "array"
+    },
+    "health": {
+      "$ref": "#/$defs/ReconciliationSourceHealth"
+    },
+    "high_watermark": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "High Watermark"
+    },
+    "reconciliation_id": {
       "format": "uuid",
-      "title": "Finding Id",
-      "type": "string"
-    },
-    "observed_at": {
-      "format": "date-time",
-      "title": "Observed At",
-      "type": "string"
-    },
-    "outcome": {
-      "$ref": "#/$defs/ReconciliationOutcome"
-    },
-    "reconciler": {
-      "minLength": 1,
-      "title": "Reconciler",
+      "title": "Reconciliation Id",
       "type": "string"
     },
     "run_id": {
@@ -179,32 +273,31 @@
       "title": "Run Id",
       "type": "string"
     },
-    "severity": {
-      "minLength": 1,
-      "title": "Severity",
-      "type": "string"
-    },
     "source_system": {
       "minLength": 1,
       "title": "Source System",
       "type": "string"
     },
-    "summary": {
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "tenant_id": {
       "minLength": 1,
-      "title": "Summary",
+      "title": "Tenant Id",
       "type": "string"
     }
   },
   "required": [
-    "finding_id",
+    "reconciliation_id",
     "run_id",
-    "reconciler",
+    "tenant_id",
     "source_system",
-    "observed_at",
-    "outcome",
-    "severity",
-    "summary"
+    "started_at",
+    "completed_at",
+    "health"
   ],
-  "title": "ReconciliationFinding",
+  "title": "ReconciliationRunResult",
   "type": "object"
 }

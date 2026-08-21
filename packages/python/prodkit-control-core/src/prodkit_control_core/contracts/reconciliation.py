@@ -130,7 +130,10 @@ class ReconciliationBatch(ContractModel):
     @model_validator(mode="after")
     def validate_scope(self) -> ReconciliationBatch:
         for observation in self.observations:
-            if observation.tenant_id != self.tenant_id or observation.source_system != self.source_system:
+            if (
+                observation.tenant_id != self.tenant_id
+                or observation.source_system != self.source_system
+            ):
                 raise ValueError("observation scope must match reconciliation batch")
         for event in self.audit_events:
             if event.tenant_id != self.tenant_id or event.source_system != self.source_system:

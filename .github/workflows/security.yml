@@ -3,36 +3,31 @@ name: Security
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "29 4 * * 1"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: security-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  candidate:
-    name: Build exact v0.2.0 candidate
-    if: ${{ github.event.pull_request.head.ref == 'feat/v0.2.0-delivery-chain-reconciliation' }}
-    runs-on: ${{ fromJSON(vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: feat/v0.2.0-delivery-chain-reconciliation
-          fetch-depth: 0
-          persist-credentials: true
-
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-        with:
-          version: "0.10.0"
-          enable-cache: true
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-
-      - name: Normalize, validate and commit candidate
-        shell: bash
-        run: bash .prodkit/workflows/security-python.sh
+  security:
+    name: security
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-security-compact.yml@7f3d25ab467cfef1c1e2bcb397da461964f39204
+    with:
+      runner_json: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '"ubuntu-latest"' || (vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
+      secret_scan_enabled: true
+      gitleaks_config_path: .gitleaks.toml
+      sbom_enabled: true
+      python_enabled: true
+      python_script: .prodkit/workflows/security-python.sh
+      node_enabled: true
+      node_script: .prodkit/workflows/security-node.sh
+      container_enabled: false
+      custom_enabled: false

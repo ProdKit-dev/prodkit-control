@@ -1,0 +1,54 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "max_source_age_seconds": {
+      "default": 900,
+      "exclusiveMinimum": 0,
+      "title": "Max Source Age Seconds",
+      "type": "integer"
+    },
+    "organization_id": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Organization Id"
+    },
+    "profile_id": {
+      "minLength": 1,
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "require_matched_reconciliation": {
+      "default": true,
+      "title": "Require Matched Reconciliation",
+      "type": "boolean"
+    },
+    "required_sources": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Required Sources",
+      "type": "array"
+    },
+    "tenant_id": {
+      "minLength": 1,
+      "title": "Tenant Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "profile_id",
+    "tenant_id",
+    "required_sources"
+  ],
+  "title": "ProductionCompletenessProfile",
+  "type": "object"
+}

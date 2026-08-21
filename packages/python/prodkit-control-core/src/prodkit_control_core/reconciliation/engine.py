@@ -109,7 +109,8 @@ class ReconciliationEngine:
         if batch.health is not ReconciliationSourceHealth.HEALTHY:
             severity = (
                 ReconciliationSeverity.HIGH
-                if batch.health in {
+                if batch.health
+                in {
                     ReconciliationSourceHealth.UNAVAILABLE,
                     ReconciliationSourceHealth.CONFLICTING,
                 }
@@ -200,7 +201,10 @@ class ReconciliationEngine:
                 continue
 
             observed = max(action_observations, key=lambda item: item.observed_at)
-            if action.expected_state_digest is not None and observed.state_digest != action.expected_state_digest:
+            if (
+                action.expected_state_digest is not None
+                and observed.state_digest != action.expected_state_digest
+            ):
                 findings.append(
                     _finding(
                         run_id=run_id,
@@ -314,6 +318,7 @@ def assess_production_completeness(
     return ProductionCompletenessAssessment(
         profile_id=profile.profile_id,
         tenant_id=profile.tenant_id,
+        organization_id=profile.organization_id,
         assessed_at=assessed_at,
         complete=complete,
         healthy_sources=tuple(sorted(healthy)),

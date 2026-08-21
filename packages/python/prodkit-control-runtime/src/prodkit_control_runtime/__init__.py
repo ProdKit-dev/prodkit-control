@@ -29,4 +29,4 @@ from .reconciliation import ReconciliationCoordinator as ReconciliationCoordinat
 from .reconciliation import ReconciliationSource as ReconciliationSource
 from .reconciliation import ReconciliationStore as ReconciliationStore
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
