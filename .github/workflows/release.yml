@@ -33,7 +33,7 @@ permissions:
 jobs:
   runner:
     name: runner
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-runner-policy.yml@239a8efe4da989251889777814eafe94cbd9df97
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-runner-policy.yml@6406854b0a348caefeaec4f2d4eeee16f9027e3a
     with:
       mode: ${{ inputs.runner }}
       fork_safe: false
@@ -41,7 +41,7 @@ jobs:
   release:
     name: release
     needs: runner
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-pipeline.yml@239a8efe4da989251889777814eafe94cbd9df97
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-pipeline.yml@6406854b0a348caefeaec4f2d4eeee16f9027e3a
     with:
       version: ${{ inputs.version }}
       target_sha: ${{ inputs.target_sha }}
