@@ -10,16 +10,22 @@ import asyncpg
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from prodkit_control_core import (
+    ActorKind,
+    ActorRef,
     DuplicateActionError,
     ExecutionAttemptRecord,
     ExecutionAttemptState,
     ExecutionResult,
+    RunStatus,
 )
 from prodkit_control_postgres import (
+    PostgresEventLedger,
     PostgresExecutionAttemptStore,
     PostgresIdempotencyStore,
+    PostgresRunStore,
     assert_schema_compatible,
 )
+from prodkit_control_runtime import RunCoordinator
 
 
 def _connection_values() -> tuple[str, int, str, str, str]:
@@ -66,10 +72,35 @@ async def _exercise_durable_stores() -> None:
         await assert_schema_compatible(sessions)
 
         tenant_id = "ci-tenant-a"
+        actor = ActorRef(
+            kind=ActorKind.SERVICE,
+            id="ci-service",
+            tenant_id=tenant_id,
+        )
+        ledger = PostgresEventLedger(sessions)
+        runs = PostgresRunStore(sessions)
+        coordinator = RunCoordinator(ledger, runs)
+        run = await coordinator.start_run(
+            tenant_id=tenant_id,
+            initiated_by=actor,
+            environment="ci",
+            purpose="prove durable PostgreSQL service wiring",
+        )
+        recovered_run = await runs.get(run.run_id)
+        assert recovered_run == run
+        await ledger.verify_run(run.run_id)
+        completed_run = await coordinator.complete_run(
+            run.run_id,
+            actor=actor,
+            status=RunStatus.SUCCEEDED,
+        )
+        assert (await runs.get(run.run_id)) == completed_run
+        assert len(await ledger.list_run_events(run.run_id)) == 2
+        await ledger.verify_run(run.run_id)
+
         idempotency_key = f"ci-{uuid4()}"
         action_digest = "a" * 64
         action_id = uuid4()
-        run_id = uuid4()
         attempt_id = uuid4()
         now = datetime.now(UTC)
 
@@ -106,7 +137,7 @@ async def _exercise_durable_stores() -> None:
         claimed = ExecutionAttemptRecord(
             attempt_id=attempt_id,
             action_id=action_id,
-            run_id=run_id,
+            run_id=run.run_id,
             tenant_id=tenant_id,
             idempotency_key=idempotency_key,
             action_digest=action_digest,
