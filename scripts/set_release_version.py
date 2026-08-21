@@ -65,7 +65,9 @@ def set_fastapi_metadata(version: str) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Set every first-party release version consistently")
+    parser = argparse.ArgumentParser(
+        description="Set every first-party release version consistently"
+    )
     parser.add_argument("version")
     args = parser.parse_args()
     version = args.version.strip()
