@@ -57,5 +57,8 @@ jobs:
       node_version: "24"
       pnpm_version: "10.15.0"
       generate_sbom: true
-      attest: true
+      # GitHub-native attestation persistence is unavailable for this private
+      # repository under the current organization plan. Exact-source proof,
+      # SHA256SUMS, release metadata, and SPDX SBOM remain mandatory.
+      attest: false
       environment: release
