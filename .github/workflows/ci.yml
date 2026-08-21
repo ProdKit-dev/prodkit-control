@@ -6,13 +6,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      runner:
-        description: Runner override; policy uses PRODKIT_RUNNER_MODE
-        required: true
-        type: choice
-        default: policy
-        options: [policy, auto, github-hosted, self-hosted]
 
 permissions:
   contents: read
@@ -22,19 +15,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  runner:
-    name: runner
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-runner-policy.yml@877aefdeaa2084b47f4867dc6c7b0dfe6525fb2c
-    with:
-      mode: ${{ github.event_name == 'workflow_dispatch' && inputs.runner || 'policy' }}
-      fork_safe: true
-
   ci:
     name: ci
-    needs: runner
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci.yml@877aefdeaa2084b47f4867dc6c7b0dfe6525fb2c
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci-compact.yml@0ab9021d06a59ffeb0a712f75fc963781fd8d739
     with:
-      runner_json: ${{ needs.runner.outputs.runner_json }}
+      runner_json: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '"ubuntu-latest"' || (vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
       hygiene_enabled: true
       hygiene_script: .prodkit/workflows/ci-hygiene.sh
       python_enabled: true
