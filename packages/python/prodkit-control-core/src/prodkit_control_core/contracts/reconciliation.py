@@ -103,6 +103,7 @@ class ReconciliationSourceConfig(ContractModel):
 class ProductionCompletenessProfile(ContractModel):
     profile_id: NonBlankStr
     tenant_id: NonBlankStr
+    organization_id: NonBlankStr | None = None
     required_sources: tuple[NonBlankStr, ...]
     max_source_age_seconds: PositiveInt = 900
     require_matched_reconciliation: bool = True
@@ -142,6 +143,7 @@ class ReconciliationBatch(ContractModel):
 class ProductionCompletenessAssessment(ContractModel):
     profile_id: NonBlankStr
     tenant_id: NonBlankStr
+    organization_id: NonBlankStr | None = None
     assessed_at: AwareDatetime
     complete: bool
     healthy_sources: tuple[NonBlankStr, ...] = ()
