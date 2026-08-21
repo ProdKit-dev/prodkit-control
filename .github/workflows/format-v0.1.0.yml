@@ -31,7 +31,7 @@ jobs:
           uv python install 3.13
           uv sync --all-packages --python 3.13
           uv run ruff format .
-          uv run ruff check .
+          uv run ruff format --check .
           git diff --check
       - name: Commit formatting
         shell: bash
