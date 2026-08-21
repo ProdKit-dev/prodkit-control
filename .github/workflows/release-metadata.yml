@@ -33,7 +33,7 @@ concurrency:
 jobs:
   metadata:
     name: metadata
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-metadata-current.yml@0ab9021d06a59ffeb0a712f75fc963781fd8d739
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-metadata-current.yml@645f3c66557e4a673be38c461a762021536fda00
     with:
       runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]' }}
       version: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
