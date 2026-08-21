@@ -344,7 +344,9 @@ class ActionBroker:
 
         if attempt is not None and self._execution_attempts is not None:
             terminal_state = (
-                ExecutionAttemptState.SUCCEEDED if result.succeeded else ExecutionAttemptState.FAILED
+                ExecutionAttemptState.SUCCEEDED
+                if result.succeeded
+                else ExecutionAttemptState.FAILED
             )
             terminal = attempt.model_copy(
                 update={
