@@ -22,12 +22,6 @@ on:
         required: false
         type: string
         default: ""
-      runner:
-        description: Runner override; policy uses PRODKIT_RUNNER_MODE
-        required: true
-        type: choice
-        default: policy
-        options: [policy, auto, github-hosted, self-hosted]
 
 permissions:
   contents: write
@@ -37,20 +31,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  runner:
-    name: runner
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-runner-policy.yml@877aefdeaa2084b47f4867dc6c7b0dfe6525fb2c
-    with:
-      mode: ${{ github.event_name == 'workflow_dispatch' && inputs.runner || 'policy' }}
-      fork_safe: false
-
   metadata:
     name: metadata
-    needs: runner
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-metadata-current.yml@877aefdeaa2084b47f4867dc6c7b0dfe6525fb2c
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-metadata-current.yml@0ab9021d06a59ffeb0a712f75fc963781fd8d739
     with:
-      runner_json: ${{ needs.runner.outputs.runner_json }}
+      runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]' }}
       version: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
       source_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.source_sha || '' }}
       normalize_all_titles: false
+      normalize_all_releases: ${{ github.event_name == 'push' }}
       environment: release
