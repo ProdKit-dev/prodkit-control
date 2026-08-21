@@ -57,5 +57,9 @@ jobs:
       node_version: "24"
       pnpm_version: "10.15.0"
       generate_sbom: true
-      attest: true
+      # GitHub artifact attestations are unavailable for this private repository
+      # on the current organization plan. Supply-chain evidence remains mandatory
+      # through exact-source Trusted Release Proof, CI/Security/CodeQL, SPDX SBOM,
+      # SHA256SUMS, sealed Actions artifacts, and post-publication checksum checks.
+      attest: false
       environment: release
