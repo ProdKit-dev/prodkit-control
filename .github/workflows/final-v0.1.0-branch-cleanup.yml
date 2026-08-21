@@ -3,6 +3,7 @@ name: Final v0.1.0 Branch Cleanup
 on:
   push:
     branches: [ops/final-v0.1.0-cleanup]
+  pull_request:
 
 permissions:
   actions: read
@@ -15,7 +16,7 @@ concurrency:
 jobs:
   cleanup:
     name: verify exact-main gates and delete stale branches
-    if: ${{ github.ref == 'refs/heads/ops/final-v0.1.0-cleanup' }}
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/ops/final-v0.1.0-cleanup') || (github.event_name == 'pull_request' && github.head_ref == 'ops/final-v0.1.0-cleanup' && github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 10
     steps:
