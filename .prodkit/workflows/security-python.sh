@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Temporary v0.2.0 normalization probe. This runs inside the permanent Security
-# workflow with read-only repository permissions and emits the generated diff;
-# it must be restored before the release candidate is accepted.
+# Temporary read-only v0.2.0 schema-generation probe. Restore before candidate acceptance.
 uv python install 3.13
 python3 scripts/set_release_version.py 0.2.0
 uv lock
@@ -11,8 +9,18 @@ uv sync --all-packages --group dev --locked --python 3.13
 uv run --python 3.13 --no-sync python scripts/export_schemas.py
 uv run --python 3.13 --no-sync ruff format .
 
-echo '=== PRODKIT_V020_GENERATED_DIFF_BEGIN ==='
-git diff -- . ':(exclude).prodkit/workflows/security-python.sh'
-echo '=== PRODKIT_V020_GENERATED_DIFF_END ==='
+for name in \
+  external-audit-event.schema.json \
+  external-state-observation.schema.json \
+  production-completeness-assessment.schema.json \
+  production-completeness-profile.schema.json \
+  reconciliation-batch.schema.json \
+  reconciliation-cursor.schema.json \
+  reconciliation-run-result.schema.json; do
+  echo "=== PRODKIT_SCHEMA_BEGIN:${name} ==="
+  base64 -w0 "schemas/${name}"
+  echo
+  echo "=== PRODKIT_SCHEMA_END:${name} ==="
+done
 
 uv run --python 3.13 --no-sync --with pip-audit==2.10.1 pip-audit --local --skip-editable
