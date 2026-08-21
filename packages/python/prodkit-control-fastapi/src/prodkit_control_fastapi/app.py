@@ -244,7 +244,7 @@ def create_app(
 
     @app.get("/v1/runs/{run_id}", response_model=RunRecord)
     async def get_run(run_id: UUID, principal: Principal, services: Services) -> RunRecord:
-        return _scoped_run(services, run_id, principal.tenant_id)
+        return await _scoped_run(services, run_id, principal.tenant_id)
 
     @app.get("/v1/runs/{run_id}/events", response_model=list[ControlEvent])
     async def list_events(
@@ -252,7 +252,7 @@ def create_app(
         principal: Principal,
         services: Services,
     ) -> list[ControlEvent]:
-        _scoped_run(services, run_id, principal.tenant_id)
+        await _scoped_run(services, run_id, principal.tenant_id)
         return await services.ledger.list_run_events(run_id)
 
     @app.post("/v1/runs/{run_id}/actions:execute")
@@ -265,7 +265,7 @@ def create_app(
         action = request.action
         if action.run_id != run_id or action.tenant_id != principal.tenant_id:
             raise HTTPException(status_code=422, detail="action scope does not match request scope")
-        run = _scoped_run(services, run_id, principal.tenant_id)
+        run = await _scoped_run(services, run_id, principal.tenant_id)
         try:
             outcome = await services.broker.execute(
                 action,
@@ -306,7 +306,7 @@ def create_app(
         action = request.action
         if action.run_id != run_id or action.tenant_id != principal.tenant_id:
             raise HTTPException(status_code=422, detail="action scope does not match request scope")
-        _scoped_run(services, run_id, principal.tenant_id)
+        await _scoped_run(services, run_id, principal.tenant_id)
         policy = await services.policy.evaluate(action)
         if policy.outcome is not PolicyOutcome.REQUIRE_APPROVAL:
             raise HTTPException(status_code=409, detail="action does not require approval")
@@ -343,7 +343,7 @@ def create_app(
         services: Services,
         final_status: RunStatus = RunStatus.SUCCEEDED,
     ) -> RunRecord:
-        _scoped_run(services, run_id, principal.tenant_id)
+        await _scoped_run(services, run_id, principal.tenant_id)
         try:
             return await services.coordinator.complete_run(
                 run_id,
@@ -364,13 +364,13 @@ def create_app(
         principal: Principal,
         services: Services,
     ) -> LineageNode:
-        run = _scoped_run(services, run_id, principal.tenant_id)
+        run = await _scoped_run(services, run_id, principal.tenant_id)
         node = request.node
         if node.run_id != run_id or node.tenant_id != principal.tenant_id:
             raise HTTPException(status_code=422, detail="lineage node scope does not match run")
         await services.lineage.record_node(node)
         graph = await services.lineage.get_graph(run_id)
-        services.coordinator.bind_lineage(
+        await services.coordinator.bind_lineage(
             run_id,
             lineage_graph_digest=sha256_hex(graph),
             specification_revision=(
@@ -406,13 +406,15 @@ def create_app(
         principal: Principal,
         services: Services,
     ) -> LineageRelation:
-        run = _scoped_run(services, run_id, principal.tenant_id)
+        run = await _scoped_run(services, run_id, principal.tenant_id)
         try:
             await services.lineage.record_relation(run_id, request.relation)
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         graph = await services.lineage.get_graph(run_id)
-        services.coordinator.bind_lineage(run_id, lineage_graph_digest=sha256_hex(graph))
+        await services.coordinator.bind_lineage(
+            run_id, lineage_graph_digest=sha256_hex(graph)
+        )
         now = datetime.now(UTC)
         await services.ledger.append(
             ControlEventDraft(
@@ -437,7 +439,7 @@ def create_app(
         principal: Principal,
         services: Services,
     ) -> LineageGraph:
-        _scoped_run(services, run_id, principal.tenant_id)
+        await _scoped_run(services, run_id, principal.tenant_id)
         try:
             return await services.lineage.get_graph(run_id)
         except KeyError as exc:
@@ -453,7 +455,7 @@ def create_app(
         principal: Principal,
         services: Services,
     ) -> ProductionLineageAssessment:
-        run = _scoped_run(services, run_id, principal.tenant_id)
+        run = await _scoped_run(services, run_id, principal.tenant_id)
         try:
             graph = await services.lineage.get_graph(run_id)
             assessment = services.lineage_policy.assess(graph, request.observation_id)
@@ -517,9 +519,9 @@ def _insecure_header_principal(request: Request) -> RequestPrincipal:
     )
 
 
-def _scoped_run(services: AppServices, run_id: UUID, tenant_id: str) -> RunRecord:
+async def _scoped_run(services: AppServices, run_id: UUID, tenant_id: str) -> RunRecord:
     try:
-        run = services.coordinator.get_run(run_id)
+        run = await services.coordinator.require_run(run_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="run not found") from exc
     if run.tenant_id != tenant_id:
