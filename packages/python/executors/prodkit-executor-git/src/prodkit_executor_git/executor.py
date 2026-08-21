@@ -129,7 +129,7 @@ class ConstrainedGitExecutor:
             error_message=None if succeeded else "controlled Git command failed",
         )
 
-    async def observe(self, action: ActionSpec, result: ExecutionResult) -> StateObservation:
+    async def observe(self, action: ActionSpec, _result: ExecutionResult) -> StateObservation:
         state = await self._observe_state(self._repo(action))
         return StateObservation(
             observation_id=uuid4(),
