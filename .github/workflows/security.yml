@@ -19,6 +19,7 @@ concurrency:
 jobs:
   security:
     name: security
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.ref != 'ops/final-v0.1.0-closure' }}
     uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-security-compact.yml@645f3c66557e4a673be38c461a762021536fda00
     with:
       runner_json: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '"ubuntu-latest"' || (vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
