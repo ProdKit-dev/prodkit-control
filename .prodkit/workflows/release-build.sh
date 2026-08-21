@@ -9,7 +9,12 @@ pnpm_version="${PRODKIT_RELEASE_PNPM_VERSION:-10.15.0}"
 python3 scripts/release_check.py --version "$version"
 uv python install "$python_version"
 uv sync --all-packages --group dev --locked --python "$python_version"
-npm install --global "pnpm@$pnpm_version"
+command -v pnpm >/dev/null
+actual_pnpm_version="$(pnpm --version)"
+if [[ "$actual_pnpm_version" != "$pnpm_version" ]]; then
+  echo "release pnpm version mismatch: $actual_pnpm_version != $pnpm_version" >&2
+  exit 2
+fi
 pnpm install --frozen-lockfile
 
 rm -rf .artifacts/release-build
