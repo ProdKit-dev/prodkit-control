@@ -8,13 +8,6 @@ on:
   schedule:
     - cron: "17 3 * * 2"
   workflow_dispatch:
-    inputs:
-      runner:
-        description: Runner override; policy uses PRODKIT_RUNNER_MODE
-        required: true
-        type: choice
-        default: policy
-        options: [policy, auto, github-hosted, self-hosted]
 
 permissions:
   actions: read
@@ -26,19 +19,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  runner:
-    name: runner
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-runner-policy.yml@877aefdeaa2084b47f4867dc6c7b0dfe6525fb2c
-    with:
-      mode: ${{ github.event_name == 'workflow_dispatch' && inputs.runner || 'policy' }}
-      fork_safe: true
-
   codeql:
     name: codeql
-    needs: runner
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-codeql.yml@877aefdeaa2084b47f4867dc6c7b0dfe6525fb2c
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-codeql.yml@0ab9021d06a59ffeb0a712f75fc963781fd8d739
     with:
-      runner_json: ${{ needs.runner.outputs.runner_json }}
+      runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]' }}
       languages_json: '["python","javascript-typescript","actions"]'
       check_script: .prodkit/workflows/codeql-check.sh
