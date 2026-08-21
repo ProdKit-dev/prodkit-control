@@ -56,7 +56,9 @@ class PostgresIdempotencyStore:
                 raise KeyError(f"idempotency key {key!r} was not claimed")
             if current.state == "completed":
                 existing = (
-                    ExecutionResult.model_validate(current.result) if current.result is not None else None
+                    ExecutionResult.model_validate(current.result)
+                    if current.result is not None
+                    else None
                 )
                 if existing != result:
                     raise DuplicateActionError("completed idempotency result is immutable")
