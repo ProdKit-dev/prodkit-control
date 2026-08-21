@@ -9,10 +9,14 @@ permissions:
   contents: read
   deployments: read
 
+concurrency:
+  group: control-state-diagnostic
+  cancel-in-progress: true
+
 jobs:
   inspect:
     if: ${{ github.event.pull_request.head.ref == 'ops/state-diagnostic' }}
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       EXPECTED_MAIN_SHA: ffa90af32655f61d623154ae507cd9377be9020d
