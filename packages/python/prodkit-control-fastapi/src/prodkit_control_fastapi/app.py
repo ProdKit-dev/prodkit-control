@@ -412,9 +412,7 @@ def create_app(
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         graph = await services.lineage.get_graph(run_id)
-        await services.coordinator.bind_lineage(
-            run_id, lineage_graph_digest=sha256_hex(graph)
-        )
+        await services.coordinator.bind_lineage(run_id, lineage_graph_digest=sha256_hex(graph))
         now = datetime.now(UTC)
         await services.ledger.append(
             ControlEventDraft(
