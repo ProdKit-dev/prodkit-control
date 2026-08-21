@@ -28,5 +28,10 @@ done
 
 uv run --python "$python_version" --no-sync python scripts/inspect_release_artifacts.py \
   .artifacts/release-build --version "$version"
-find .artifacts/release-build -maxdepth 1 -type f -exec cp {} "$output/" \;
+
+# uv may place build-control files (for example .gitignore) beside distributions.
+# Publish only package payloads; the central release contract rejects hidden names.
+find .artifacts/release-build -maxdepth 1 -type f \
+  \( -name '*.whl' -o -name '*.tar.gz' -o -name '*.tgz' \) \
+  -exec cp {} "$output/" \;
 test -n "$(find "$output" -maxdepth 1 -type f -print -quit)"
