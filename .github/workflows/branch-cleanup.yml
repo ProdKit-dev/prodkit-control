@@ -1,0 +1,29 @@
+name: Branch Cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      branches_json:
+        description: JSON array of explicit branch names to clean
+        required: true
+        type: string
+      dry_run:
+        description: Validate and report only
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    permissions:
+      contents: write
+      pull-requests: read
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-branch-cleanup.yml@45e4dacd65c736588e0c7e2d3cdcb1cb0d11045e
+    with:
+      branches_json: ${{ inputs.branches_json }}
+      expected_default_sha: ${{ github.sha }}
+      dry_run: ${{ inputs.dry_run }}
+      runner_json: '"ubuntu-latest"'
