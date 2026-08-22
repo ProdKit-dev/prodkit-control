@@ -20,10 +20,6 @@ permissions:
   attestations: write
   artifact-metadata: write
 
-concurrency:
-  group: release-${{ inputs.version }}
-  cancel-in-progress: false
-
 jobs:
   proof-gate:
     name: Verify release-candidate proof
@@ -84,7 +80,7 @@ jobs:
   release:
     name: release
     needs: proof-gate
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@7f3d25ab467cfef1c1e2bcb397da461964f39204
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@9b9933d1a78eff08882710174b2c6cd148734fab
     with:
       version: ${{ inputs.version }}
       target_sha: ${{ github.sha }}
