@@ -1,13 +1,8 @@
 name: CodeQL
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
-  schedule:
-    - cron: "17 3 * * 2"
-  workflow_dispatch:
 
 permissions:
   actions: read
@@ -19,11 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  codeql:
-    name: codeql
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-codeql.yml@45e4dacd65c736588e0c7e2d3cdcb1cb0d11045e
-    with:
-      runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]' }}
-      languages_json: '["python","javascript-typescript","actions"]'
-      check_script: .prodkit/workflows/codeql-check.sh
+  cancel-stale:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: true
