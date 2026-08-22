@@ -7,7 +7,7 @@ import re
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 CENTRAL_REPOSITORY = "ProdKit-dev/prodkit-workflows"
-CENTRAL_SHA = "7f3d25ab467cfef1c1e2bcb397da461964f39204"
+CENTRAL_SHA = "9b9933d1a78eff08882710174b2c6cd148734fab"
 
 EXPECTED = {
     "ci.yml": "reusable-ci-compact.yml",
