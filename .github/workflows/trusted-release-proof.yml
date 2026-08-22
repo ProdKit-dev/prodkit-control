@@ -7,15 +7,23 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   proof:
     name: proof
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-proof.yml@9b9933d1a78eff08882710174b2c6cd148734fab
+    permissions:
+      contents: read
+      actions: read
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-proof.yml@bcff80f7b5570b231f3b0f9d6cf24fd2600be497
     with:
       source_sha: ${{ github.sha }}
       runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]' }}
       proof_script: .prodkit/workflows/release-proof.sh
+      timeout_minutes: 90
+      required_workflows_json: '["CI","Security","CodeQL"]'
+      manifest_path: .prodkit/release.json
+      prepare_release_payload: true
       python_enabled: true
       python_version: "3.13"
       uv_version: "0.10.0"
