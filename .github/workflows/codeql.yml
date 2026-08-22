@@ -21,7 +21,7 @@ concurrency:
 jobs:
   codeql:
     name: codeql
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    if: ${{ github.head_ref != 'ops/v0.2.0-finalize' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-codeql.yml@9b9933d1a78eff08882710174b2c6cd148734fab
     with:
       runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]' }}
