@@ -1,0 +1,248 @@
+name: Control Cleanup Operator
+
+on:
+  push:
+    branches:
+      - ops/control-cleanup-37e6d984
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: control-cleanup-operator
+  cancel-in-progress: false
+
+jobs:
+  operate:
+    name: Verify main and dispatch canonical cleanup
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_MAIN_SHA: 37e6d9840b8634dde505df3a3a28b0c94e7ee25a
+      OPERATOR_BRANCH: ops/control-cleanup-37e6d984
+      TARGETS_JSON: >-
+        ["chore/adopt-workflows-v0.1.1","chore/resumable-release-lifecycle","feat/v0.2.0-delivery-chain-reconciliation","fix/v0.2.0-release-deadlock","ops/v0.2.0-bootstrap-base","ops/v0.2.0-finalize","ops/control-cleanup-37e6d984"]
+    steps:
+      - name: Wait for exact-main gates and run canonical cleanup
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          token = os.environ["GH_TOKEN"]
+          expected_main = os.environ["EXPECTED_MAIN_SHA"]
+          targets = json.loads(os.environ["TARGETS_JSON"])
+          api = os.environ.get("GITHUB_API_URL", "https://api.github.com")
+          root = f"{api}/repos/{repo}"
+          headers = {
+              "Authorization": f"Bearer {token}",
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+              "User-Agent": "prodkit-control-cleanup-operator",
+          }
+
+          def call(method, path, payload=None, allow_404=False):
+              body = None if payload is None else json.dumps(payload).encode()
+              req = urllib.request.Request(root + path, data=body, headers=headers, method=method)
+              try:
+                  with urllib.request.urlopen(req, timeout=60) as response:
+                      raw = response.read()
+                      return response.status, json.loads(raw) if raw else None
+              except urllib.error.HTTPError as exc:
+                  detail = exc.read().decode("utf-8", errors="replace")
+                  if allow_404 and exc.code == 404:
+                      return 404, None
+                  raise SystemExit(
+                      f"GitHub API {method} {path} failed: HTTP {exc.code}: {detail[:500]}"
+                  ) from exc
+
+          def branch_info(branch):
+              path = "/branches/" + urllib.parse.quote(branch, safe="")
+              return call("GET", path, allow_404=True)
+
+          def assert_main(stage):
+              status, info = branch_info("main")
+              if status != 200:
+                  raise SystemExit(f"main missing during {stage}")
+              sha = (info.get("commit") or {}).get("sha")
+              if sha != expected_main:
+                  raise SystemExit(
+                      f"main moved during {stage}: expected {expected_main}, current {sha}"
+                  )
+              return sha
+
+          def wait_main_gates():
+              required = {"CI", "Security", "CodeQL"}
+              deadline = time.time() + 20 * 60
+              last = None
+              while time.time() < deadline:
+                  query = urllib.parse.urlencode(
+                      {"head_sha": expected_main, "event": "push", "per_page": 100}
+                  )
+                  _, data = call("GET", f"/actions/runs?{query}")
+                  runs = data.get("workflow_runs") or []
+                  latest = {}
+                  for run in runs:
+                      name = run.get("name")
+                      if name not in required:
+                          continue
+                      current = latest.get(name)
+                      key = (
+                          run.get("run_number") or 0,
+                          run.get("run_attempt") or 0,
+                          run.get("id") or 0,
+                      )
+                      if current is None:
+                          latest[name] = run
+                      else:
+                          current_key = (
+                              current.get("run_number") or 0,
+                              current.get("run_attempt") or 0,
+                              current.get("id") or 0,
+                          )
+                          if key > current_key:
+                              latest[name] = run
+                  state = {
+                      name: (
+                          latest.get(name, {}).get("status"),
+                          latest.get(name, {}).get("conclusion"),
+                          latest.get(name, {}).get("id"),
+                      )
+                      for name in sorted(required)
+                  }
+                  if state != last:
+                      print("main gate state:", json.dumps(state, sort_keys=True))
+                      last = state
+                  missing = required - set(latest)
+                  if not missing:
+                      failed = [
+                          (name, run.get("conclusion"), run.get("html_url"))
+                          for name, run in latest.items()
+                          if run.get("status") == "completed"
+                          and run.get("conclusion") != "success"
+                      ]
+                      if failed:
+                          raise SystemExit(f"exact-main gate failure: {failed}")
+                      if all(
+                          latest[name].get("status") == "completed"
+                          and latest[name].get("conclusion") == "success"
+                          for name in required
+                      ):
+                          return {
+                              name: latest[name]["id"] for name in sorted(required)
+                          }
+                  time.sleep(15)
+              raise SystemExit(
+                  f"timed out waiting for exact-main gates; last state={last}"
+              )
+
+          def cleanup_runs():
+              query = urllib.parse.urlencode(
+                  {"event": "workflow_dispatch", "branch": "main", "per_page": 100}
+              )
+              _, data = call(
+                  "GET", f"/actions/workflows/branch-cleanup.yml/runs?{query}"
+              )
+              return data.get("workflow_runs") or []
+
+          def dispatch_cleanup(dry_run):
+              before = {run["id"] for run in cleanup_runs()}
+              payload = {
+                  "ref": "main",
+                  "inputs": {
+                      "branches_json": json.dumps(targets, separators=(",", ":")),
+                      "dry_run": dry_run,
+                  },
+              }
+              status, _ = call(
+                  "POST",
+                  "/actions/workflows/branch-cleanup.yml/dispatches",
+                  payload,
+              )
+              if status != 204:
+                  raise SystemExit(f"unexpected cleanup dispatch status: {status}")
+              deadline = time.time() + 3 * 60
+              while time.time() < deadline:
+                  candidates = [
+                      run
+                      for run in cleanup_runs()
+                      if run["id"] not in before
+                      and run.get("head_sha") == expected_main
+                  ]
+                  if candidates:
+                      candidates.sort(key=lambda run: run["id"])
+                      run = candidates[0]
+                      print(
+                          f"dispatched cleanup dry_run={dry_run}: "
+                          f"run_id={run['id']} url={run.get('html_url')}"
+                      )
+                      return run["id"]
+                  time.sleep(5)
+              raise SystemExit(
+                  f"could not identify cleanup run after dry_run={dry_run} dispatch"
+              )
+
+          def wait_run(run_id, label):
+              deadline = time.time() + 15 * 60
+              last = None
+              while time.time() < deadline:
+                  _, run = call("GET", f"/actions/runs/{run_id}")
+                  state = (run.get("status"), run.get("conclusion"))
+                  if state != last:
+                      print(
+                          f"{label} run {run_id} state={state} "
+                          f"url={run.get('html_url')}"
+                      )
+                      last = state
+                  if run.get("status") == "completed":
+                      if run.get("conclusion") != "success":
+                          raise SystemExit(
+                              f"{label} run {run_id} failed with "
+                              f"{run.get('conclusion')}: {run.get('html_url')}"
+                          )
+                      return
+                  time.sleep(10)
+              raise SystemExit(f"timed out waiting for {label} run {run_id}")
+
+          assert_main("operator start")
+          gate_runs = wait_main_gates()
+          print("exact-main gates successful:", json.dumps(gate_runs, sort_keys=True))
+          assert_main("before dry-run dispatch")
+
+          dry_id = dispatch_cleanup(True)
+          wait_run(dry_id, "cleanup dry-run")
+          assert_main("after dry-run")
+
+          actual_id = dispatch_cleanup(False)
+          wait_run(actual_id, "cleanup")
+          assert_main("after cleanup")
+
+          remaining = []
+          for branch in targets:
+              status, _ = branch_info(branch)
+              if status != 404:
+                  remaining.append(branch)
+          if remaining:
+              raise SystemExit(f"cleanup succeeded but branches remain: {remaining}")
+
+          print(
+              json.dumps(
+                  {
+                      "main": expected_main,
+                      "gate_runs": gate_runs,
+                      "cleanup_dry_run": dry_id,
+                      "cleanup": actual_id,
+                      "deleted": targets,
+                  },
+                  sort_keys=True,
+              )
+          )
+          PY
