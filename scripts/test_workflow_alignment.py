@@ -105,7 +105,17 @@ def main() -> None:
         "expected_default_sha: ${{ github.sha }}",
         workflow="branch-cleanup.yml",
     )
-    require(cleanup, "runner_json: '\"ubuntu-latest\"'", workflow="branch-cleanup.yml")
+    require(
+        cleanup,
+        "runner_json: ${{ vars.PRODKIT_RUNNER_JSON",
+        workflow="branch-cleanup.yml",
+    )
+    require(
+        cleanup,
+        '["self-hosted","Linux","X64"]',
+        workflow="branch-cleanup.yml",
+    )
+    reject(cleanup, "ubuntu-latest", workflow="branch-cleanup.yml")
     for forbidden_trigger in ("issue_comment:", "schedule:", "pull_request_target:"):
         reject(cleanup, forbidden_trigger, workflow="branch-cleanup.yml")
 
