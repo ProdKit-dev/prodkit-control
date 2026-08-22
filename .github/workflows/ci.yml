@@ -17,7 +17,7 @@ concurrency:
 jobs:
   ci:
     name: ci
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci-compact.yml@9b9933d1a78eff08882710174b2c6cd148734fab
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci-compact.yml@bcff80f7b5570b231f3b0f9d6cf24fd2600be497
     with:
       runner_json: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '"ubuntu-latest"' || (vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
       hygiene_enabled: true

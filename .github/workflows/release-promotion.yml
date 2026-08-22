@@ -1,0 +1,24 @@
+name: Release Promotion
+
+on:
+  workflow_run:
+    workflows: ["Trusted Release Proof"]
+    types: [completed]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  promote:
+    name: promote
+    if: ${{ github.event.workflow_run.event == 'workflow_dispatch' && github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      actions: write
+      contents: read
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-promote.yml@bcff80f7b5570b231f3b0f9d6cf24fd2600be497
+    with:
+      source_sha: ${{ github.event.workflow_run.head_sha }}
+      runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]' }}
+      manifest_path: .prodkit/release.json
+      release_workflow_file: release.yml

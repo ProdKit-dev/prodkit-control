@@ -7,14 +7,16 @@ import re
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 CENTRAL_REPOSITORY = "ProdKit-dev/prodkit-workflows"
-CENTRAL_SHA = "9b9933d1a78eff08882710174b2c6cd148734fab"
+CENTRAL_SHA = "bcff80f7b5570b231f3b0f9d6cf24fd2600be497"
 
 EXPECTED = {
     "ci.yml": "reusable-ci-compact.yml",
     "security.yml": "reusable-security-compact.yml",
     "codeql.yml": "reusable-codeql.yml",
     "trusted-release-proof.yml": "reusable-release-proof.yml",
+    "release-promotion.yml": "reusable-release-promote.yml",
     "release.yml": "reusable-release.yml",
+    "release-verification.yml": "reusable-release-verification.yml",
     "release-metadata.yml": "reusable-release-metadata-current.yml",
 }
 
@@ -95,29 +97,76 @@ def main() -> None:
         "run-name: Trusted Release Proof — ${{ github.sha }}",
         workflow="trusted-release-proof.yml",
     )
+    require(proof, "actions: read", workflow="trusted-release-proof.yml")
     require(proof, "source_sha: ${{ github.sha }}", workflow="trusted-release-proof.yml")
     reject(proof, "inputs.source_sha", workflow="trusted-release-proof.yml")
+    require(
+        proof,
+        'required_workflows_json: \'["CI","Security","CodeQL"]\'',
+        workflow="trusted-release-proof.yml",
+    )
+    require(proof, "manifest_path: .prodkit/release.json", workflow="trusted-release-proof.yml")
+    require(proof, "prepare_release_payload: true", workflow="trusted-release-proof.yml")
     require(proof, 'python_version: "3.13"', workflow="trusted-release-proof.yml")
     require(proof, 'node_version: "24"', workflow="trusted-release-proof.yml")
     require(proof, 'pnpm_version: "10.15.0"', workflow="trusted-release-proof.yml")
 
-    release = texts["release.yml"]
+    promotion = texts["release-promotion.yml"]
+    require(promotion, "workflow_run:", workflow="release-promotion.yml")
+    require(promotion, 'workflows: ["Trusted Release Proof"]', workflow="release-promotion.yml")
+    require(promotion, "types: [completed]", workflow="release-promotion.yml")
     require(
-        release,
-        "PROOF_WORKFLOW_FILE: .github/workflows/trusted-release-proof.yml",
-        workflow="release.yml",
+        promotion,
+        "github.event.workflow_run.conclusion == 'success'",
+        workflow="release-promotion.yml",
     )
-    require(release, 'run.get("path") == workflow_file', workflow="release.yml")
+    require(
+        promotion,
+        "source_sha: ${{ github.event.workflow_run.head_sha }}",
+        workflow="release-promotion.yml",
+    )
+    require(promotion, "release_workflow_file: release.yml", workflow="release-promotion.yml")
+    reject(promotion, "while", workflow="release-promotion.yml")
+    reject(promotion, "sleep", workflow="release-promotion.yml")
+
+    release = texts["release.yml"]
+    reject(release, "proof-gate:", workflow="release.yml")
+    reject(release, "needs: proof-gate", workflow="release.yml")
+    reject(release, "PROOF_WORKFLOW_FILE", workflow="release.yml")
+    reject(release, "group: release-", workflow="release.yml")
     require(release, "target_sha: ${{ github.sha }}", workflow="release.yml")
     reject(release, "inputs.target_sha", workflow="release.yml")
-    reject(release, "description: Exact current main SHA", workflow="release.yml")
     require(
-        release, 'required_workflows_json: \'["CI","Security","CodeQL"]\'', workflow="release.yml"
+        release,
+        'required_workflows_json: \'["CI","Security","CodeQL"]\'',
+        workflow="release.yml",
     )
+    require(
+        release,
+        "proof_workflow_file: .github/workflows/trusted-release-proof.yml",
+        workflow="release.yml",
+    )
+    require(release, "reuse_proof_payload: true", workflow="release.yml")
     require(release, "attest: false", workflow="release.yml")
     require(release, 'python_version: "3.13"', workflow="release.yml")
     require(release, 'node_version: "24"', workflow="release.yml")
     require(release, 'pnpm_version: "10.15.0"', workflow="release.yml")
+
+    verification = texts["release-verification.yml"]
+    require(verification, "workflow_run:", workflow="release-verification.yml")
+    require(verification, 'workflows: ["Release"]', workflow="release-verification.yml")
+    require(verification, "types: [completed]", workflow="release-verification.yml")
+    require(
+        verification,
+        "github.event.workflow_run.conclusion == 'success'",
+        workflow="release-verification.yml",
+    )
+    require(
+        verification,
+        "source_sha: ${{ github.event.workflow_run.head_sha }}",
+        workflow="release-verification.yml",
+    )
+    require(verification, "release_workflow_file: release.yml", workflow="release-verification.yml")
 
     metadata = texts["release-metadata.yml"]
     require(
@@ -126,9 +175,36 @@ def main() -> None:
         workflow="release-metadata.yml",
     )
 
+    proof_adapter = (ROOT / ".prodkit/workflows/release-proof.sh").read_text(encoding="utf-8")
+    for duplicated in (
+        "pytest ",
+        "ruff check",
+        "ruff format",
+        "mypy",
+        "ci_postgres.py",
+        "pip-audit",
+        "pnpm audit",
+        "pnpm typecheck",
+        "pnpm build",
+        "uv build",
+        "scripts/inspect_release_artifacts.py",
+    ):
+        reject(proof_adapter, duplicated, workflow=".prodkit/workflows/release-proof.sh")
+    require(
+        proof_adapter,
+        "Permanent exact-SHA CI, Security, and CodeQL are verified",
+        workflow=".prodkit/workflows/release-proof.sh",
+    )
+    require(
+        proof_adapter,
+        "python3 scripts/release_check.py --version",
+        workflow=".prodkit/workflows/release-proof.sh",
+    )
+
     print(
-        "workflow alignment contract satisfied: direct runners, compact CI/Security, "
-        f"exact central pin {CENTRAL_SHA}, workflow-file release proof identity"
+        "workflow alignment contract satisfied: direct compact gates, completed-proof promotion, "
+        "proof-once payload reuse, independent verification, "
+        f"exact central pin {CENTRAL_SHA}"
     )
 
 
