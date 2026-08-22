@@ -4,29 +4,33 @@ name: Control Cleanup Operator
 on:
   pull_request:
     branches: [main]
-    types: [opened, reopened, synchronize]
+    types: [reopened, synchronize]
 
 permissions:
   actions: write
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
-  phase-a:
-    name: Verify main and dispatch canonical cleanup dry-run
+  cleanup-state-machine:
+    name: Advance canonical branch cleanup
     if: github.head_ref == 'ops/control-cleanup-31803a8c'
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 3
+    timeout-minutes: 4
     env:
       GH_TOKEN: ${{ github.token }}
       EXPECTED_MAIN_SHA: 31803a8ce53e79100eee7b56d0f3d6a29050a0e5
-      BRANCHES_JSON: '["chore/adopt-workflows-v0.1.1","chore/resumable-release-lifecycle","feat/v0.2.0-delivery-chain-reconciliation","fix/cleanup-runner-policy","fix/v0.2.0-release-deadlock","ops/control-cleanup-37e6d984","ops/v0.2.0-bootstrap-base","ops/v0.2.0-finalize"]'
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_BRANCH: ${{ github.head_ref }}
+      STALE_8: '["chore/adopt-workflows-v0.1.1","chore/resumable-release-lifecycle","feat/v0.2.0-delivery-chain-reconciliation","fix/cleanup-runner-policy","fix/v0.2.0-release-deadlock","ops/control-cleanup-37e6d984","ops/v0.2.0-bootstrap-base","ops/v0.2.0-finalize"]'
+      ALL_9: '["chore/adopt-workflows-v0.1.1","chore/resumable-release-lifecycle","feat/v0.2.0-delivery-chain-reconciliation","fix/cleanup-runner-policy","fix/v0.2.0-release-deadlock","ops/control-cleanup-37e6d984","ops/v0.2.0-bootstrap-base","ops/v0.2.0-finalize","ops/control-cleanup-31803a8c"]'
     steps:
-      - name: Verify exact-main gates and dispatch dry-run
+      - name: Advance guarded cleanup state machine
         shell: bash
         run: |
           python3 - <<'PY'
-          import datetime
+          import base64
+          import datetime as dt
           import json
           import os
           import time
@@ -36,95 +40,167 @@ jobs:
           repo = os.environ["GITHUB_REPOSITORY"]
           token = os.environ["GH_TOKEN"]
           expected = os.environ["EXPECTED_MAIN_SHA"]
-          branches_json = os.environ["BRANCHES_JSON"]
+          pr = int(os.environ["PR_NUMBER"])
+          head_branch = os.environ["HEAD_BRANCH"]
+          stale8 = os.environ["STALE_8"]
+          all9 = os.environ["ALL_9"]
+          state_path = ".github/cleanup-operator-state.json"
+          root = f"https://api.github.com/repos/{repo}"
           headers = {
               "Authorization": f"Bearer {token}",
               "Accept": "application/vnd.github+json",
               "X-GitHub-Api-Version": "2022-11-28",
-              "User-Agent": "prodkit-control-cleanup-operator",
+              "User-Agent": "prodkit-control-cleanup-state-machine",
           }
 
-          def get_json(url):
-              req = urllib.request.Request(url, headers=headers)
-              with urllib.request.urlopen(req, timeout=60) as response:
-                  return json.load(response)
-
-          actual = get_json(f"https://api.github.com/repos/{repo}/branches/main")["commit"]["sha"]
-          if actual != expected:
-              raise SystemExit(f"main moved: expected {expected}, found {actual}")
-
-          query = urllib.parse.urlencode({"head_sha": expected, "event": "push", "per_page": 100})
-          data = get_json(f"https://api.github.com/repos/{repo}/actions/runs?{query}")
-          required = {"CI", "Security", "CodeQL"}
-          latest = {}
-          for run in data.get("workflow_runs") or []:
-              name = run.get("name")
-              if name not in required:
-                  continue
-              current = latest.get(name)
-              key = (run.get("run_number") or 0, run.get("run_attempt") or 0, run.get("id") or 0)
-              old = (-1, -1, -1) if current is None else (
-                  current.get("run_number") or 0,
-                  current.get("run_attempt") or 0,
-                  current.get("id") or 0,
+          def call(method, path, payload=None):
+              body = None if payload is None else json.dumps(payload).encode()
+              req = urllib.request.Request(
+                  root + path,
+                  data=body,
+                  method=method,
+                  headers={**headers, **({"Content-Type": "application/json"} if body else {})},
               )
-              if key > old:
-                  latest[name] = run
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  raw = response.read()
+                  return response.status, (json.loads(raw) if raw else None)
 
-          result = {
-              name: {
-                  "id": latest.get(name, {}).get("id"),
-                  "status": latest.get(name, {}).get("status"),
-                  "conclusion": latest.get(name, {}).get("conclusion"),
-                  "url": latest.get(name, {}).get("html_url"),
+          def now_iso():
+              return dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+
+          def assert_main():
+              _, branch = call("GET", "/branches/main")
+              actual = branch["commit"]["sha"]
+              if actual != expected:
+                  raise SystemExit(f"main moved: expected {expected}, found {actual}")
+
+          def read_state():
+              q = urllib.parse.urlencode({"ref": head_branch})
+              _, obj = call("GET", f"/contents/{state_path}?{q}")
+              data = json.loads(base64.b64decode(obj["content"]).decode())
+              return data, obj["sha"]
+
+          def write_state(data, sha, message):
+              content = base64.b64encode((json.dumps(data, indent=2, sort_keys=True) + "\n").encode()).decode()
+              call("PUT", f"/contents/{state_path}", {
+                  "message": message,
+                  "content": content,
+                  "sha": sha,
+                  "branch": head_branch,
+              })
+
+          def latest_push_gates_green():
+              q = urllib.parse.urlencode({"head_sha": expected, "event": "push", "per_page": 100})
+              _, data = call("GET", f"/actions/runs?{q}")
+              required = {"CI", "Security", "CodeQL"}
+              latest = {}
+              for run in data.get("workflow_runs") or []:
+                  name = run.get("name")
+                  if name not in required:
+                      continue
+                  cur = latest.get(name)
+                  key = (run.get("run_number") or 0, run.get("run_attempt") or 0, run.get("id") or 0)
+                  old = (-1, -1, -1) if cur is None else (
+                      cur.get("run_number") or 0,
+                      cur.get("run_attempt") or 0,
+                      cur.get("id") or 0,
+                  )
+                  if key > old:
+                      latest[name] = run
+              evidence = {
+                  n: {
+                      "id": latest.get(n, {}).get("id"),
+                      "status": latest.get(n, {}).get("status"),
+                      "conclusion": latest.get(n, {}).get("conclusion"),
+                  }
+                  for n in sorted(required)
               }
-              for name in sorted(required)
-          }
-          print("EXACT_MAIN_GATES=" + json.dumps(result, sort_keys=True))
-          if not all(
-              latest.get(name, {}).get("status") == "completed"
-              and latest.get(name, {}).get("conclusion") == "success"
-              for name in required
-          ):
-              print("CLEANUP_DRY_RUN_DISPATCHED=false")
+              print("EXACT_MAIN_GATES=" + json.dumps(evidence, sort_keys=True))
+              return all(
+                  latest.get(n, {}).get("status") == "completed"
+                  and latest.get(n, {}).get("conclusion") == "success"
+                  for n in required
+              )
+
+          def dispatch(branches_json, dry_run):
+              started = now_iso()
+              call("POST", "/actions/workflows/branch-cleanup.yml/dispatches", {
+                  "ref": "main",
+                  "inputs": {
+                      "branches_json": branches_json,
+                      "dry_run": "true" if dry_run else "false",
+                  },
+              })
+              print(f"DISPATCHED dry_run={dry_run} after={started}")
+              return started
+
+          def runs_after(after):
+              q = urllib.parse.urlencode({"event": "workflow_dispatch", "branch": "main", "per_page": 50})
+              _, data = call("GET", f"/actions/workflows/branch-cleanup.yml/runs?{q}")
+              threshold = dt.datetime.fromisoformat(after.replace("Z", "+00:00"))
+              out = []
+              for run in data.get("workflow_runs") or []:
+                  if run.get("head_sha") != expected or not run.get("created_at"):
+                      continue
+                  created = dt.datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
+                  if created >= threshold - dt.timedelta(seconds=2):
+                      out.append(run)
+              return out
+
+          def requeue_closed_pr():
+              call("PATCH", f"/pulls/{pr}", {"state": "open"})
+              call("PATCH", f"/pulls/{pr}", {"state": "closed"})
+
+          assert_main()
+          state, state_sha = read_state()
+          phase = state.get("phase")
+          print("OPERATOR_STATE=" + json.dumps(state, sort_keys=True))
+
+          if phase == "A":
+              if not latest_push_gates_green():
+                  print("MAIN_GATES_NOT_READY=true")
+                  raise SystemExit(0)
+              after = dispatch(stale8, True)
+              state = {"phase": "B", "after": after, "nonce": 0}
+              write_state(state, state_sha, "ops: advance cleanup operator to phase B")
               raise SystemExit(0)
 
-          before = datetime.datetime.now(datetime.timezone.utc)
-          payload = json.dumps({
-              "ref": "main",
-              "inputs": {"branches_json": branches_json, "dry_run": "true"},
-          }).encode()
-          req = urllib.request.Request(
-              f"https://api.github.com/repos/{repo}/actions/workflows/branch-cleanup.yml/dispatches",
-              data=payload,
-              method="POST",
-              headers={**headers, "Content-Type": "application/json"},
-          )
-          with urllib.request.urlopen(req, timeout=60) as response:
-              if response.status != 204:
-                  raise SystemExit(f"unexpected dispatch status {response.status}")
+          if phase in {"B", "C"}:
+              after = state.get("after")
+              if not after:
+                  raise SystemExit(f"phase {phase} missing dispatch timestamp")
+              runs = runs_after(after)
+              success = [r for r in runs if r.get("status") == "completed" and r.get("conclusion") == "success"]
+              pending = [r for r in runs if r.get("status") != "completed"]
+              failures = [r for r in runs if r.get("status") == "completed" and r.get("conclusion") != "success"]
+              print("CLEANUP_RUNS=" + json.dumps([
+                  {"id": r.get("id"), "status": r.get("status"), "conclusion": r.get("conclusion")}
+                  for r in runs
+              ], sort_keys=True))
 
-          run_id = None
-          for _ in range(12):
-              runs = get_json(
-                  f"https://api.github.com/repos/{repo}/actions/workflows/branch-cleanup.yml/runs?event=workflow_dispatch&branch=main&per_page=20"
-              ).get("workflow_runs") or []
-              candidates = []
-              for run in runs:
-                  if run.get("head_sha") != expected:
-                      continue
-                  created = run.get("created_at")
-                  if not created:
-                      continue
-                  stamp = datetime.datetime.fromisoformat(created.replace("Z", "+00:00"))
-                  if stamp >= before - datetime.timedelta(seconds=3):
-                      candidates.append(run)
-              if candidates:
-                  run_id = max(candidates, key=lambda item: item.get("id") or 0).get("id")
-                  break
-              time.sleep(1)
-          if run_id is None:
-              raise SystemExit("dry-run dispatched but run id was not observed")
-          print("CLEANUP_DRY_RUN_DISPATCHED=true")
-          print(f"DRY_RUN_ID={run_id}")
+              if not success:
+                  if pending or not runs:
+                      state["nonce"] = int(state.get("nonce") or 0) + 1
+                      if phase == "B":
+                          write_state(state, state_sha, f"ops: retry cleanup phase B {state['nonce']}")
+                      else:
+                          requeue_closed_pr()
+                      raise SystemExit(0)
+                  raise SystemExit("canonical cleanup dry-run completed without a success")
+
+              if phase == "B":
+                  call("PATCH", f"/pulls/{pr}", {"state": "closed"})
+                  after2 = dispatch(all9, True)
+                  state = {"phase": "C", "after": after2, "nonce": 0}
+                  write_state(state, state_sha, "ops: advance cleanup operator to phase C")
+                  call("PATCH", f"/pulls/{pr}", {"state": "open"})
+                  call("PATCH", f"/pulls/{pr}", {"state": "closed"})
+                  raise SystemExit(0)
+
+              call("PATCH", f"/pulls/{pr}", {"state": "closed"})
+              real_after = dispatch(all9, False)
+              print(f"REAL_CLEANUP_DISPATCHED_AFTER={real_after}")
+              raise SystemExit(0)
+
+          raise SystemExit(f"unknown operator phase: {phase!r}")
           PY
