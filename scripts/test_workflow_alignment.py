@@ -20,9 +20,7 @@ EXPECTED = {
     "release-metadata.yml": "reusable-release-metadata-current.yml",
 }
 
-CENTRAL_REF = re.compile(
-    rf"{re.escape(CENTRAL_REPOSITORY)}/\.github/workflows/([^@\s]+)@([^\s]+)"
-)
+CENTRAL_REF = re.compile(rf"{re.escape(CENTRAL_REPOSITORY)}/\.github/workflows/([^@\s]+)@([^\s]+)")
 
 FORBIDDEN = (
     "reusable-runner-policy.yml@",
