@@ -21,9 +21,7 @@ EXPECTED = {
     "release-metadata.yml": "reusable-release-metadata-current.yml",
 }
 
-CENTRAL_REF = re.compile(
-    rf"{re.escape(CENTRAL_REPOSITORY)}/\.github/workflows/([^@\s]+)@([^\s]+)"
-)
+CENTRAL_REF = re.compile(rf"{re.escape(CENTRAL_REPOSITORY)}/\.github/workflows/([^@\s]+)@([^\s]+)")
 
 FORBIDDEN = (
     "reusable-runner-policy.yml@",
@@ -69,8 +67,7 @@ def main() -> None:
                 )
             if ref != CENTRAL_SHA:
                 raise SystemExit(
-                    f"{filename}: central SHA drift: {referenced_workflow}@{ref} "
-                    f"!= {CENTRAL_SHA}"
+                    f"{filename}: central SHA drift: {referenced_workflow}@{ref} != {CENTRAL_SHA}"
                 )
 
         for fragment in FORBIDDEN:
