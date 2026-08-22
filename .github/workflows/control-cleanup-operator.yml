@@ -1,3 +1,4 @@
+# Disposable observer; never merge.
 name: Control Cleanup Observer
 
 on:
