@@ -23,7 +23,7 @@ permissions:
 jobs:
   release:
     name: release
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@bcff80f7b5570b231f3b0f9d6cf24fd2600be497
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@45e4dacd65c736588e0c7e2d3cdcb1cb0d11045e
     with:
       version: ${{ inputs.version }}
       target_sha: ${{ github.sha }}
