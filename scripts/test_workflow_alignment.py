@@ -7,12 +7,13 @@ import re
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 CENTRAL_REPOSITORY = "ProdKit-dev/prodkit-workflows"
-CENTRAL_SHA = "bcff80f7b5570b231f3b0f9d6cf24fd2600be497"
+CENTRAL_SHA = "45e4dacd65c736588e0c7e2d3cdcb1cb0d11045e"
 
 EXPECTED = {
     "ci.yml": "reusable-ci-compact.yml",
     "security.yml": "reusable-security-compact.yml",
     "codeql.yml": "reusable-codeql.yml",
+    "branch-cleanup.yml": "reusable-branch-cleanup.yml",
     "trusted-release-proof.yml": "reusable-release-proof.yml",
     "release-promotion.yml": "reusable-release-promote.yml",
     "release.yml": "reusable-release.yml",
@@ -20,7 +21,9 @@ EXPECTED = {
     "release-metadata.yml": "reusable-release-metadata-current.yml",
 }
 
-CENTRAL_REF = re.compile(rf"{re.escape(CENTRAL_REPOSITORY)}/\.github/workflows/([^@\s]+)@([^\s]+)")
+CENTRAL_REF = re.compile(
+    rf"{re.escape(CENTRAL_REPOSITORY)}/\.github/workflows/([^@\s]+)@([^\s]+)"
+)
 
 FORBIDDEN = (
     "reusable-runner-policy.yml@",
@@ -61,11 +64,13 @@ def main() -> None:
         for referenced_workflow, ref in refs:
             if not re.fullmatch(r"[0-9a-f]{40}", ref):
                 raise SystemExit(
-                    f"{filename}: floating/non-canonical central reference: {referenced_workflow}@{ref}"
+                    f"{filename}: floating/non-canonical central reference: "
+                    f"{referenced_workflow}@{ref}"
                 )
             if ref != CENTRAL_SHA:
                 raise SystemExit(
-                    f"{filename}: central SHA drift: {referenced_workflow}@{ref} != {CENTRAL_SHA}"
+                    f"{filename}: central SHA drift: {referenced_workflow}@{ref} "
+                    f"!= {CENTRAL_SHA}"
                 )
 
         for fragment in FORBIDDEN:
@@ -90,6 +95,22 @@ def main() -> None:
         'languages_json: \'["python","javascript-typescript","actions"]\'',
         workflow="codeql.yml",
     )
+
+    cleanup = texts["branch-cleanup.yml"]
+    require(cleanup, "workflow_dispatch:", workflow="branch-cleanup.yml")
+    require(cleanup, "branches_json:", workflow="branch-cleanup.yml")
+    require(cleanup, "dry_run:", workflow="branch-cleanup.yml")
+    require(cleanup, "default: true", workflow="branch-cleanup.yml")
+    require(cleanup, "contents: write", workflow="branch-cleanup.yml")
+    require(cleanup, "pull-requests: read", workflow="branch-cleanup.yml")
+    require(
+        cleanup,
+        "expected_default_sha: ${{ github.sha }}",
+        workflow="branch-cleanup.yml",
+    )
+    require(cleanup, "runner_json: '\"ubuntu-latest\"'", workflow="branch-cleanup.yml")
+    for forbidden_trigger in ("issue_comment:", "schedule:", "pull_request_target:"):
+        reject(cleanup, forbidden_trigger, workflow="branch-cleanup.yml")
 
     proof = texts["trusted-release-proof.yml"]
     require(
@@ -202,7 +223,8 @@ def main() -> None:
     )
 
     print(
-        "workflow alignment contract satisfied: direct compact gates, completed-proof promotion, "
+        "workflow alignment contract satisfied: prodkit-workflows v0.1.1, "
+        "explicit branch cleanup, direct compact gates, completed-proof promotion, "
         "proof-once payload reuse, independent verification, "
         f"exact central pin {CENTRAL_SHA}"
     )
