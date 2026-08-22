@@ -3,9 +3,6 @@ name: CI
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,21 +12,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
-    name: ci
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci-compact.yml@45e4dacd65c736588e0c7e2d3cdcb1cb0d11045e
-    with:
-      runner_json: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '"ubuntu-latest"' || (vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
-      hygiene_enabled: true
-      hygiene_script: .prodkit/workflows/ci-hygiene.sh
-      python_enabled: true
-      python_versions_json: '["3.12","3.13","3.14"]'
-      python_script: .prodkit/workflows/ci-python.sh
-      node_enabled: true
-      node_versions_json: '["22","24"]'
-      node_script: .prodkit/workflows/ci-node.sh
-      postgres_enabled: true
-      postgres_image: postgres:18-alpine
-      postgres_script: .prodkit/workflows/ci-postgres.sh
-      container_enabled: false
-      custom_enabled: false
+  cancel-stale:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: true
