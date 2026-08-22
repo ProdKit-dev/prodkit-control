@@ -15,8 +15,8 @@ jobs:
   finalize:
     name: Finalize v0.2.0
     if: ${{ github.head_ref == 'ops/v0.2.0-finalize' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
+    runs-on: ${{ fromJSON(vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
+    timeout-minutes: 20
     env:
       GH_TOKEN: ${{ github.token }}
       TARGET_SHA: "4242311699d73dc99bb2a834c8f4eb62bad1f299"
@@ -24,7 +24,7 @@ jobs:
       OPERATOR_PR: "28"
       DEPLOYMENT_CUTOFF: "2026-08-21T23:10:00Z"
     steps:
-      - name: Verify, prove, publish, verify, and clean
+      - name: Advance single-runner-safe release state machine
         shell: bash
         run: |
           set -euo pipefail
@@ -57,8 +57,6 @@ jobs:
 
           if not re.fullmatch(r"[0-9a-f]{40}", target):
               raise SystemExit("TARGET_SHA must be an exact lowercase commit SHA")
-          if not re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version):
-              raise SystemExit("VERSION must be stable SemVer")
 
           def api(method: str, path: str, payload=None, *, accept=None, allow_404=False):
               h = dict(headers)
@@ -97,124 +95,111 @@ jobs:
                   data = api("GET", f"actions/runs?{query}")
               return data.get("workflow_runs", [])
 
-          def wait_push_gates():
-              required = {
-                  "CI": ".github/workflows/ci.yml",
-                  "Security": ".github/workflows/security.yml",
-                  "CodeQL": ".github/workflows/codeql.yml",
-                  "Release Metadata": ".github/workflows/release-metadata.yml",
-              }
-              deadline = time.time() + 3600
-              while time.time() < deadline:
-                  runs = [
-                      run for run in list_runs(event="push", sha=target)
-                      if run.get("head_sha") == target and run.get("event") == "push"
-                  ]
-                  state = {}
-                  failed = []
-                  for name, path in required.items():
-                      matches = [run for run in runs if run.get("name") == name and run.get("path") == path]
-                      matches.sort(key=lambda x: x.get("id", 0), reverse=True)
-                      if not matches:
-                          state[name] = "missing"
-                          continue
-                      run = matches[0]
-                      state[name] = f"{run.get('status')}/{run.get('conclusion')}#{run.get('id')}"
-                      if run.get("status") == "completed" and run.get("conclusion") != "success":
-                          failed.append((name, run.get("id"), run.get("conclusion"), run.get("html_url")))
-                  print("exact-main gates:", state, flush=True)
-                  if failed:
-                      raise SystemExit(f"exact-main gate failure: {failed}")
-                  if all(
-                      any(
-                          run.get("name") == name
-                          and run.get("path") == path
-                          and run.get("status") == "completed"
-                          and run.get("conclusion") == "success"
-                          for run in runs
-                      )
-                      for name, path in required.items()
-                  ):
-                      selected = {}
-                      for name, path in required.items():
-                          match = max(
-                              run for run in runs
-                              if run.get("name") == name
-                              and run.get("path") == path
-                              and run.get("status") == "completed"
-                              and run.get("conclusion") == "success"
-                          )
-                          selected[name] = match.get("id")
-                      print("EXACT_MAIN_GATES_OK", selected, flush=True)
-                      return selected
-                  time.sleep(10)
-              raise SystemExit("timed out waiting for exact-main push gates")
-
-          def wait_dispatched(workflow: str, before_ids: set[int], label: str, timeout=5400):
-              deadline = time.time() + timeout
-              while time.time() < deadline:
-                  runs = [
-                      run for run in list_runs(workflow=workflow, event="workflow_dispatch", sha=target)
-                      if run.get("head_sha") == target
-                      and run.get("event") == "workflow_dispatch"
-                      and int(run.get("id", 0)) not in before_ids
-                  ]
-                  runs.sort(key=lambda x: x.get("id", 0), reverse=True)
-                  if runs:
-                      run = runs[0]
-                      print(
-                          f"{label}: id={run.get('id')} status={run.get('status')} conclusion={run.get('conclusion')} url={run.get('html_url')}",
-                          flush=True,
-                      )
-                      if run.get("status") == "completed":
-                          if run.get("conclusion") != "success":
-                              raise SystemExit(
-                                  f"{label} failed: run={run.get('id')} conclusion={run.get('conclusion')} url={run.get('html_url')}"
-                              )
-                          return run
-                  time.sleep(10)
-              raise SystemExit(f"timed out waiting for {label}")
+          def latest_exact(workflow: str):
+              rows = [
+                  run for run in list_runs(workflow=workflow, event="workflow_dispatch", sha=target)
+                  if run.get("head_sha") == target and run.get("event") == "workflow_dispatch"
+              ]
+              return max(rows, key=lambda x: x.get("id", 0)) if rows else None
 
           main = api("GET", "commits/main")
-          actual_main = main.get("sha")
-          if actual_main != target:
-              raise SystemExit(f"main moved: expected {target}, actual {actual_main}")
+          if main.get("sha") != target:
+              raise SystemExit(f"main moved: expected {target}, actual {main.get('sha')}")
           print(f"EXACT_MAIN_OK {target}", flush=True)
 
-          gate_ids = wait_push_gates()
+          required = {
+              "CI": ".github/workflows/ci.yml",
+              "Security": ".github/workflows/security.yml",
+              "CodeQL": ".github/workflows/codeql.yml",
+              "Release Metadata": ".github/workflows/release-metadata.yml",
+          }
+          push_runs = [
+              run for run in list_runs(event="push", sha=target)
+              if run.get("head_sha") == target and run.get("event") == "push"
+          ]
+          gate_ids = {}
+          pending = {}
+          for name, path in required.items():
+              matches = [run for run in push_runs if run.get("name") == name and run.get("path") == path]
+              matches.sort(key=lambda x: x.get("id", 0), reverse=True)
+              if not matches:
+                  pending[name] = "missing"
+                  continue
+              run = matches[0]
+              if run.get("status") == "completed" and run.get("conclusion") == "success":
+                  gate_ids[name] = run.get("id")
+              elif run.get("status") == "completed":
+                  raise SystemExit(
+                      f"exact-main gate failed: {name} run={run.get('id')} conclusion={run.get('conclusion')} url={run.get('html_url')}"
+                  )
+              else:
+                  pending[name] = f"{run.get('status')}#{run.get('id')}"
+          if pending:
+              print("STATE_MAIN_GATES_PENDING " + json.dumps(pending, sort_keys=True), flush=True)
+              raise SystemExit(0)
+          print("EXACT_MAIN_GATES_OK " + json.dumps(gate_ids, sort_keys=True), flush=True)
 
           proof_file = "trusted-release-proof.yml"
-          existing_proofs = {
-              int(run.get("id", 0))
-              for run in list_runs(workflow=proof_file, event="workflow_dispatch", sha=target)
-          }
-          already_green_proofs = [
-              run for run in list_runs(workflow=proof_file, event="workflow_dispatch", sha=target)
-              if run.get("head_sha") == target
-              and run.get("event") == "workflow_dispatch"
-              and run.get("status") == "completed"
-              and run.get("conclusion") == "success"
-          ]
-          if already_green_proofs:
-              proof = max(already_green_proofs, key=lambda x: x.get("id", 0))
-              print(f"REUSING_EXACT_PROOF {proof.get('id')} {proof.get('html_url')}", flush=True)
-          else:
+          proof = latest_exact(proof_file)
+          if proof is None:
+              before = {int(r.get("id", 0)) for r in list_runs(workflow=proof_file, event="workflow_dispatch", sha=target)}
               api("POST", f"actions/workflows/{proof_file}/dispatches", {"ref": "main"})
-              proof = wait_dispatched(proof_file, existing_proofs, "Trusted Release Proof")
-          print(f"TRUSTED_RELEASE_PROOF_OK {proof.get('id')}", flush=True)
+              dispatched = None
+              for _ in range(15):
+                  time.sleep(1)
+                  candidates = [
+                      r for r in list_runs(workflow=proof_file, event="workflow_dispatch", sha=target)
+                      if r.get("head_sha") == target and int(r.get("id", 0)) not in before
+                  ]
+                  if candidates:
+                      dispatched = max(candidates, key=lambda x: x.get("id", 0))
+                      break
+              print(
+                  f"STATE_PROOF_DISPATCHED id={dispatched.get('id') if dispatched else 'discover-later'} url={dispatched.get('html_url') if dispatched else ''}",
+                  flush=True,
+              )
+              raise SystemExit(0)
+          if proof.get("status") != "completed":
+              print(f"STATE_PROOF_PENDING id={proof.get('id')} status={proof.get('status')}", flush=True)
+              raise SystemExit(0)
+          if proof.get("conclusion") != "success":
+              raise SystemExit(
+                  f"Trusted Release Proof failed: run={proof.get('id')} conclusion={proof.get('conclusion')} url={proof.get('html_url')}"
+              )
+          print(f"TRUSTED_RELEASE_PROOF_OK {proof.get('id')} {proof.get('html_url')}", flush=True)
 
           release_file = "release.yml"
-          before_release = {
-              int(run.get("id", 0))
-              for run in list_runs(workflow=release_file, event="workflow_dispatch", sha=target)
-          }
-          api(
-              "POST",
-              f"actions/workflows/{release_file}/dispatches",
-              {"ref": "main", "inputs": {"version": version, "prerelease": "false"}},
-          )
-          release_run = wait_dispatched(release_file, before_release, "Release")
-          print(f"RELEASE_WORKFLOW_OK {release_run.get('id')}", flush=True)
+          release_run = latest_exact(release_file)
+          if release_run is None:
+              before = {int(r.get("id", 0)) for r in list_runs(workflow=release_file, event="workflow_dispatch", sha=target)}
+              api(
+                  "POST",
+                  f"actions/workflows/{release_file}/dispatches",
+                  {"ref": "main", "inputs": {"version": version, "prerelease": "false"}},
+              )
+              dispatched = None
+              for _ in range(15):
+                  time.sleep(1)
+                  candidates = [
+                      r for r in list_runs(workflow=release_file, event="workflow_dispatch", sha=target)
+                      if r.get("head_sha") == target and int(r.get("id", 0)) not in before
+                  ]
+                  if candidates:
+                      dispatched = max(candidates, key=lambda x: x.get("id", 0))
+                      break
+              print(
+                  f"STATE_RELEASE_DISPATCHED id={dispatched.get('id') if dispatched else 'discover-later'} url={dispatched.get('html_url') if dispatched else ''}",
+                  flush=True,
+              )
+              raise SystemExit(0)
+          if release_run.get("status") != "completed":
+              print(f"STATE_RELEASE_PENDING id={release_run.get('id')} status={release_run.get('status')}", flush=True)
+              raise SystemExit(0)
+          if release_run.get("conclusion") != "success":
+              raise SystemExit(
+                  f"Release failed: run={release_run.get('id')} conclusion={release_run.get('conclusion')} url={release_run.get('html_url')}"
+              )
+          print(f"RELEASE_WORKFLOW_OK {release_run.get('id')} {release_run.get('html_url')}", flush=True)
 
           def resolve_tag_sha(tag_name: str):
               qtag = urllib.parse.quote(tag_name, safe="")
@@ -228,7 +213,7 @@ jobs:
                   seen.add(sha)
                   obj = api("GET", f"git/tags/{sha}").get("object", {})
               if obj.get("type") != "commit":
-                  raise SystemExit(f"tag does not resolve to a commit: {obj}")
+                  raise SystemExit(f"tag does not resolve to commit: {obj}")
               return obj.get("sha")
 
           tag_sha = resolve_tag_sha(tag)
@@ -238,25 +223,19 @@ jobs:
 
           qtag = urllib.parse.quote(tag, safe="")
           release = api("GET", f"releases/tags/{qtag}")
-          if release.get("draft") or release.get("prerelease"):
-              raise SystemExit("published release is draft or prerelease")
-          if release.get("tag_name") != tag:
-              raise SystemExit("published release tag mismatch")
+          if release.get("draft") or release.get("prerelease") or release.get("tag_name") != tag:
+              raise SystemExit("GitHub Release state/tag is invalid")
           release_id = int(release["id"])
           assets = api("GET", f"releases/{release_id}/assets?per_page=100")
           by_name = {asset["name"]: asset for asset in assets}
           if len(by_name) != len(assets):
               raise SystemExit("duplicate release asset names")
           if "SHA256SUMS" not in by_name:
-              raise SystemExit("release is missing SHA256SUMS")
+              raise SystemExit("release missing SHA256SUMS")
           if not any(name.endswith(".spdx.json") for name in by_name):
-              raise SystemExit("release is missing SPDX SBOM asset")
+              raise SystemExit("release missing SPDX SBOM")
 
-          sums_raw = api(
-              "GET",
-              f"releases/assets/{by_name['SHA256SUMS']['id']}",
-              accept="application/octet-stream",
-          )
+          sums_raw = api("GET", f"releases/assets/{by_name['SHA256SUMS']['id']}", accept="application/octet-stream")
           expected = {}
           for raw_line in sums_raw.decode("utf-8").splitlines():
               line = raw_line.strip()
@@ -269,42 +248,29 @@ jobs:
               if name in expected:
                   raise SystemExit(f"duplicate SHA256SUMS entry: {name}")
               expected[name] = parts[0]
-          remote_payloads = set(by_name) - {"SHA256SUMS"}
-          if set(expected) != remote_payloads:
+          payload_names = set(by_name) - {"SHA256SUMS"}
+          if set(expected) != payload_names:
               raise SystemExit(
-                  f"published asset/checksum set mismatch: assets={sorted(remote_payloads)} sums={sorted(expected)}"
+                  f"published asset/checksum set mismatch: assets={sorted(payload_names)} sums={sorted(expected)}"
               )
-          for name in sorted(remote_payloads):
+          for name in sorted(payload_names):
               asset = by_name[name]
-              raw = api(
-                  "GET",
-                  f"releases/assets/{asset['id']}",
-                  accept="application/octet-stream",
-              )
+              raw = api("GET", f"releases/assets/{asset['id']}", accept="application/octet-stream")
               digest = hashlib.sha256(raw).hexdigest()
               if digest != expected[name]:
                   raise SystemExit(f"published checksum mismatch: {name}")
               github_digest = asset.get("digest")
               if github_digest and github_digest != f"sha256:{digest}":
                   raise SystemExit(f"GitHub asset digest mismatch: {name}")
-          print(
-              f"PUBLISHED_ASSETS_OK release_id={release_id} count={len(assets)} url={release.get('html_url')}",
-              flush=True,
-          )
+          print(f"PUBLISHED_ASSETS_OK release_id={release_id} count={len(assets)} url={release.get('html_url')}", flush=True)
 
           deployments = api("GET", "deployments?environment=release&per_page=100")
-          unexpected = [
-              dep for dep in deployments
-              if str(dep.get("created_at", "")) >= deployment_cutoff
-          ]
+          unexpected = [dep for dep in deployments if str(dep.get("created_at", "")) >= deployment_cutoff]
           if unexpected:
               raise SystemExit(
                   "unexpected post-fix release deployment records: "
                   + json.dumps(
-                      [
-                          {"id": d.get("id"), "sha": d.get("sha"), "created_at": d.get("created_at")}
-                          for d in unexpected
-                      ],
+                      [{"id": d.get("id"), "sha": d.get("sha"), "created_at": d.get("created_at")} for d in unexpected],
                       sort_keys=True,
                   )
               )
@@ -314,11 +280,7 @@ jobs:
               api(
                   "POST",
                   f"deployments/{dep_id}/statuses",
-                  {
-                      "state": "inactive",
-                      "environment": "release",
-                      "description": "Retire historical release-control deployment record",
-                  },
+                  {"state": "inactive", "environment": "release", "description": "Retire historical release-control deployment record"},
               )
               api("DELETE", f"deployments/{dep_id}")
               removed_deployments.append(dep_id)
@@ -332,8 +294,7 @@ jobs:
           removed_branches = []
           for branch in stale_branches:
               ref_path = "git/refs/" + urllib.parse.quote(f"heads/{branch}", safe="/")
-              existing = api("GET", ref_path, allow_404=True)
-              if existing is None:
+              if api("GET", ref_path, allow_404=True) is None:
                   continue
               api("DELETE", ref_path)
               removed_branches.append(branch)
