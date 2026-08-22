@@ -1,15 +1,15 @@
 name: Control Cleanup Operator
 
 on:
-  push:
-    branches:
-      - ops/control-cleanup-37e6d984
+  pull_request:
+    branches: [main]
     paths:
       - .github/workflows/control-cleanup-operator.yml
 
 permissions:
   actions: write
   contents: write
+  pull-requests: write
 
 concurrency:
   group: control-cleanup-operator
@@ -24,11 +24,12 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       EXPECTED_MAIN_SHA: 37e6d9840b8634dde505df3a3a28b0c94e7ee25a
       OPERATOR_BRANCH: ops/control-cleanup-37e6d984
+      OPERATOR_PR_NUMBER: ${{ github.event.pull_request.number }}
       STATUS_PATH: ops/control-cleanup-status.json
       TARGETS_JSON: >-
         ["chore/adopt-workflows-v0.1.1","chore/resumable-release-lifecycle","feat/v0.2.0-delivery-chain-reconciliation","fix/v0.2.0-release-deadlock","ops/v0.2.0-bootstrap-base","ops/v0.2.0-finalize","ops/control-cleanup-37e6d984"]
     steps:
-      - name: Wait for exact-main gates and run canonical cleanup
+      - name: Close operator PR, verify exact-main gates, and run canonical cleanup
         shell: bash
         run: |
           python3 - <<'PY'
@@ -44,6 +45,7 @@ jobs:
           token = os.environ["GH_TOKEN"]
           expected_main = os.environ["EXPECTED_MAIN_SHA"]
           operator_branch = os.environ["OPERATOR_BRANCH"]
+          operator_pr = os.environ.get("OPERATOR_PR_NUMBER", "")
           targets = json.loads(os.environ["TARGETS_JSON"])
           status_path = os.environ["STATUS_PATH"]
           api = os.environ.get("GITHUB_API_URL", "https://api.github.com")
@@ -75,6 +77,7 @@ jobs:
                   "stage": stage,
                   "expected_main_sha": expected_main,
                   "operator_branch": operator_branch,
+                  "operator_pr": operator_pr,
                   **extra,
               }
               raw = (json.dumps(payload_obj, indent=2, sort_keys=True) + "\n").encode()
@@ -248,6 +251,8 @@ jobs:
               raise RuntimeError(f"timed out waiting for {label} run {run_id}")
 
           try:
+              if operator_pr:
+                  call("PATCH", f"/pulls/{operator_pr}", {"state": "closed"})
               write_status("started")
               assert_main("operator start")
               gate_runs = wait_main_gates()
