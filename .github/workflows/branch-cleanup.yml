@@ -26,4 +26,4 @@ jobs:
       branches_json: ${{ inputs.branches_json }}
       expected_default_sha: ${{ github.sha }}
       dry_run: ${{ inputs.dry_run }}
-      runner_json: '"ubuntu-latest"'
+      runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]' }}
