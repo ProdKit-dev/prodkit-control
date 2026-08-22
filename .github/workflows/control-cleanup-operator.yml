@@ -4,7 +4,6 @@ name: Control Cleanup Observer
 on:
   pull_request:
     branches: [main]
-    types: [opened, reopened, synchronize]
     paths:
       - .github/workflows/control-cleanup-operator.yml
 
@@ -15,7 +14,7 @@ permissions:
 jobs:
   observe:
     name: Observe exact-main gates
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
       GH_TOKEN: ${{ github.token }}
