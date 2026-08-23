@@ -18,7 +18,7 @@ jobs:
   finalize-v050:
     name: finalize v0.5.0 candidate
     if: ${{ github.event_name == 'pull_request' && github.head_ref == 'release/v0.5.0-multi-tenant-isolation' && github.actor != 'github-actions[bot]' }}
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
