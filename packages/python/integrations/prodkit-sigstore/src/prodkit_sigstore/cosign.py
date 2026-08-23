@@ -90,7 +90,9 @@ class CosignClient:
             argv.append("--yes")
         result = self._run(argv, trusted_root=trusted_root)
         if not bundle.is_file():
-            raise SigstoreIntegrationError("cosign succeeded without producing the requested bundle")
+            raise SigstoreIntegrationError(
+                "cosign succeeded without producing the requested bundle"
+            )
         return result
 
     def verify_blob(
@@ -142,7 +144,9 @@ class CosignClient:
         try:
             completed = self._runner(argv, timeout=self._timeout, env=env)
         except (OSError, subprocess.TimeoutExpired) as exc:
-            raise SigstoreIntegrationError("cosign invocation failed before verification completed") from exc
+            raise SigstoreIntegrationError(
+                "cosign invocation failed before verification completed"
+            ) from exc
         result = CosignCommandResult(
             argv=tuple(argv),
             stdout=completed.stdout,

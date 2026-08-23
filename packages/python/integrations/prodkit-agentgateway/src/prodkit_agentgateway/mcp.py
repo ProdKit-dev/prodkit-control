@@ -101,9 +101,7 @@ class MCPActionAdapter:
         if binding.target_resource_id_argument is not None:
             raw_resource_id = call.arguments.get(binding.target_resource_id_argument)
             if not isinstance(raw_resource_id, (str, int)) or isinstance(raw_resource_id, bool):
-                raise ValueError(
-                    "MCP resource-id argument must be a non-empty string or integer"
-                )
+                raise ValueError("MCP resource-id argument must be a non-empty string or integer")
             resource_id = str(raw_resource_id).strip()
         if not resource_id:
             raise ValueError("MCP tool call resolved to an empty resource id")
@@ -148,9 +146,7 @@ class MCPActionAdapter:
                 region=binding.target_region,
             ),
             arguments=call.arguments,
-            idempotency_key=(
-                f"mcp:{tenant_id}:{call.server_id}:{call.call_id}:{call.tool_name}"
-            ),
+            idempotency_key=(f"mcp:{tenant_id}:{call.server_id}:{call.call_id}:{call.tool_name}"),
             proposed_at=proposed_at,
             expires_at=expires_at,
             policy_context=policy_context,

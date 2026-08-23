@@ -6,6 +6,8 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-23
+
 ### Added
 
 - in-toto Statement v1 and SLSA provenance-v1 interoperability contracts with a ProdKit evidence predicate and forward-compatible external-standard parsing.

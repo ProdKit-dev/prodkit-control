@@ -70,7 +70,9 @@ class ConjunctivePolicyEngine:
     external policy decision points.
     """
 
-    def __init__(self, engines: tuple[PolicyEngine, ...], *, revision: str = "conjunctive-v1") -> None:
+    def __init__(
+        self, engines: tuple[PolicyEngine, ...], *, revision: str = "conjunctive-v1"
+    ) -> None:
         if not engines:
             raise ValueError("conjunctive policy requires at least one engine")
         self._engines = engines
@@ -83,7 +85,9 @@ class ConjunctivePolicyEngine:
         decisions = tuple(collected)
         for decision in decisions:
             if decision.action_id != action.action_id or decision.action_digest != action.digest:
-                raise IntegrityViolationError("policy adapter returned a decision for another action")
+                raise IntegrityViolationError(
+                    "policy adapter returned a decision for another action"
+                )
             if decision.tenant_id != action.tenant_id:
                 raise IntegrityViolationError("policy adapter returned a cross-tenant decision")
 
@@ -99,13 +103,7 @@ class ConjunctivePolicyEngine:
             for reason in decision.reason_codes
         )
         roles = tuple(
-            sorted(
-                {
-                    role
-                    for decision in decisions
-                    for role in decision.required_approval_roles
-                }
-            )
+            sorted({role for decision in decisions for role in decision.required_approval_roles})
         )
 
         constraints: dict[str, str | int | float | bool | None] = {}

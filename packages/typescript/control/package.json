@@ -1,6 +1,6 @@
 {
   "name": "@prodkit/control",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Canonical TypeScript contracts for ProdKit Control events, lineage, and actions.",
   "license": "Apache-2.0",
   "type": "module",

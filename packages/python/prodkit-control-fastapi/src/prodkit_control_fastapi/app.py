@@ -203,7 +203,7 @@ def create_app(
     """
     app = FastAPI(
         title="ProdKit Control",
-        version="0.2.0",
+        version="0.3.0",
         description=(
             "Provider-neutral intent-to-production lineage, action control, verification, "
             "reconciliation, and evidence API."

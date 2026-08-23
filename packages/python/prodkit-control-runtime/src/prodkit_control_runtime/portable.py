@@ -102,9 +102,7 @@ class PortableEvidencePackageBuilder:
                 "in_toto_statement": IN_TOTO_STATEMENT_V1,
                 "predicate_type": statement.predicate_type,
                 "slsa_provenance": (
-                    SLSA_PROVENANCE_V1
-                    if statement.predicate_type == SLSA_PROVENANCE_V1
-                    else None
+                    SLSA_PROVENANCE_V1 if statement.predicate_type == SLSA_PROVENANCE_V1 else None
                 ),
                 "canonicalization": "prodkit-json-v1",
             },
@@ -141,7 +139,9 @@ class PortableEvidencePackageVerifier:
         if expected_package_sha256 is not None:
             actual_package_digest = portable_package_sha256(package)
             if actual_package_digest != expected_package_sha256.lower():
-                raise IntegrityViolationError("portable package does not match independent digest anchor")
+                raise IntegrityViolationError(
+                    "portable package does not match independent digest anchor"
+                )
         payloads = self._read_package(package)
         manifest = self._load_manifest(payloads["package-manifest.json"])
         self._validate_manifest(manifest, payloads)
@@ -152,7 +152,9 @@ class PortableEvidencePackageVerifier:
             retention = RetentionLockReceipt.model_validate_json(payloads["retention-lock.json"])
             statement = InTotoStatementV1.model_validate_json(payloads["attestation.json"])
         except ValueError as exc:
-            raise IntegrityViolationError("portable package contains invalid assurance metadata") from exc
+            raise IntegrityViolationError(
+                "portable package contains invalid assurance metadata"
+            ) from exc
 
         standards = cast(dict[str, Any], manifest["standards"])
         if standards.get("predicate_type") != statement.predicate_type:
@@ -172,7 +174,9 @@ class PortableEvidencePackageVerifier:
             effective_trust = trusted_policy
         elif expected_trust_policy_sha256 is not None:
             if embedded_trust_digest != expected_trust_policy_sha256.lower():
-                raise IntegrityViolationError("embedded trust root does not match independent anchor")
+                raise IntegrityViolationError(
+                    "embedded trust root does not match independent anchor"
+                )
             effective_trust = embedded_trust
         else:
             raise IntegrityViolationError(
@@ -251,7 +255,9 @@ class PortableEvidencePackageVerifier:
             if not isinstance(expected_digest, str) or len(expected_digest) != 64:
                 raise IntegrityViolationError("portable package contains an invalid file digest")
             if any(character not in "0123456789abcdef" for character in expected_digest):
-                raise IntegrityViolationError("portable package contains a non-canonical file digest")
+                raise IntegrityViolationError(
+                    "portable package contains a non-canonical file digest"
+                )
             if sha256_hex(payloads[name]) != expected_digest:
                 raise IntegrityViolationError(f"portable package member digest mismatch: {name}")
 
@@ -270,6 +276,8 @@ class PortableEvidencePackageVerifier:
         if not isinstance(standards, dict):
             raise IntegrityViolationError("portable package standards metadata is invalid")
         if standards.get("in_toto_statement") != IN_TOTO_STATEMENT_V1:
-            raise IntegrityViolationError("portable package in-toto statement version is unsupported")
+            raise IntegrityViolationError(
+                "portable package in-toto statement version is unsupported"
+            )
         if standards.get("canonicalization") != "prodkit-json-v1":
             raise IntegrityViolationError("portable package canonicalization is unsupported")

@@ -66,7 +66,9 @@ MODELS = {
 
 
 def render(model: type) -> str:
-    return json.dumps(model.model_json_schema(), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    return (
+        json.dumps(model.model_json_schema(), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    )
 
 
 def main() -> int:

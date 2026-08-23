@@ -3,4 +3,4 @@
 from .executor import ConstrainedFilesystemExecutor, FilesystemExecutorConfig
 
 __all__ = ("ConstrainedFilesystemExecutor", "FilesystemExecutorConfig")
-__version__ = "0.2.0"
+__version__ = "0.3.0"

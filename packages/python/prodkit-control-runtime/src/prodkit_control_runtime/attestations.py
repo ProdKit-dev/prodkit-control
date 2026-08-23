@@ -277,7 +277,9 @@ class OfflineAssuranceVerifier:
         try:
             return InTotoStatementV1.model_validate_json(payload)
         except ValueError as exc:
-            raise IntegrityViolationError("attestation is not a supported in-toto Statement v1") from exc
+            raise IntegrityViolationError(
+                "attestation is not a supported in-toto Statement v1"
+            ) from exc
 
     @staticmethod
     def verify_statement_subject(
@@ -288,7 +290,9 @@ class OfflineAssuranceVerifier:
         if not any(
             subject.digest.get("sha256") == expected_sha256 for subject in statement.subject
         ):
-            raise IntegrityViolationError("attestation does not identify the expected subject digest")
+            raise IntegrityViolationError(
+                "attestation does not identify the expected subject digest"
+            )
 
     @staticmethod
     def verify_checkpoint(
@@ -306,7 +310,10 @@ class OfflineAssuranceVerifier:
             raise IntegrityViolationError("checkpoint signing algorithm does not match trusted key")
         if checkpoint.signer_id != key.signer_id:
             raise IntegrityViolationError("checkpoint signer identity does not match trusted key")
-        if trust_policy.allowed_signers and checkpoint.signer_id not in trust_policy.allowed_signers:
+        if (
+            trust_policy.allowed_signers
+            and checkpoint.signer_id not in trust_policy.allowed_signers
+        ):
             raise IntegrityViolationError("checkpoint signer is not allowed by trust-root policy")
         if checkpoint.created_at < key.valid_from:
             raise IntegrityViolationError("checkpoint predates signing-key validity")
@@ -338,12 +345,18 @@ class OfflineAssuranceVerifier:
         profile: AssuranceProfile,
     ) -> None:
         if receipt.object_sha256 != object_sha256:
-            raise IntegrityViolationError("retention-lock receipt does not identify evidence object")
+            raise IntegrityViolationError(
+                "retention-lock receipt does not identify evidence object"
+            )
         if receipt.mode not in profile.accepted_retention_modes:
-            raise IntegrityViolationError("retention-lock mode is not accepted by assurance profile")
+            raise IntegrityViolationError(
+                "retention-lock mode is not accepted by assurance profile"
+            )
         retained_seconds = (receipt.retain_until - receipt.locked_at).total_seconds()
         if retained_seconds < profile.minimum_retention_days * 86_400:
-            raise IntegrityViolationError("retention-lock duration is below assurance profile minimum")
+            raise IntegrityViolationError(
+                "retention-lock duration is below assurance profile minimum"
+            )
 
     def verify_evidence_archive(
         self,
@@ -358,18 +371,27 @@ class OfflineAssuranceVerifier:
     ) -> dict[str, object]:
         profile = assurance_profile or AssuranceProfile(profile_id="prodkit-enterprise-default")
         archive_digest = evidence_bundle_sha256(archive)
-        if expected_archive_sha256 is not None and archive_digest != expected_archive_sha256.lower():
-            raise IntegrityViolationError("evidence archive does not match independent digest anchor")
+        if (
+            expected_archive_sha256 is not None
+            and archive_digest != expected_archive_sha256.lower()
+        ):
+            raise IntegrityViolationError(
+                "evidence archive does not match independent digest anchor"
+            )
 
         if checkpoint is None:
             if profile.signing is SigningRequirement.REQUIRED:
                 raise IntegrityViolationError("assurance profile requires a signed checkpoint")
         else:
             if trust_policy is None:
-                raise IntegrityViolationError("signed checkpoint verification requires a trust-root policy")
+                raise IntegrityViolationError(
+                    "signed checkpoint verification requires a trust-root policy"
+                )
             self.verify_checkpoint(checkpoint, trust_policy=trust_policy)
             if checkpoint.evidence_bundle_sha256 != archive_digest:
-                raise IntegrityViolationError("signed checkpoint does not identify evidence archive")
+                raise IntegrityViolationError(
+                    "signed checkpoint does not identify evidence archive"
+                )
 
         manifest = self._bundle_verifier.verify(
             archive,
@@ -379,13 +401,17 @@ class OfflineAssuranceVerifier:
             if str(checkpoint.run_id) != manifest.get("run_id"):
                 raise IntegrityViolationError("checkpoint run id does not match evidence bundle")
             if checkpoint.final_event_hash != manifest.get("final_event_hash"):
-                raise IntegrityViolationError("checkpoint final event hash does not match evidence bundle")
+                raise IntegrityViolationError(
+                    "checkpoint final event hash does not match evidence bundle"
+                )
 
         if statement is not None:
             self.verify_statement_subject(statement, expected_sha256=archive_digest)
             statement_digest = attestation_sha256(statement)
             if checkpoint is not None and checkpoint.attestation_sha256 != statement_digest:
-                raise IntegrityViolationError("checkpoint attestation digest does not match statement")
+                raise IntegrityViolationError(
+                    "checkpoint attestation digest does not match statement"
+                )
 
         if profile.require_retention_lock:
             if retention_receipt is None:

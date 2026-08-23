@@ -122,12 +122,12 @@ def test_two_key_rotation_accepts_each_key_only_inside_its_trust_window() -> Non
         final_event_hash="a" * 64,
         evidence_bundle_sha256="b" * 64,
     )
-    assert OfflineAssuranceVerifier.verify_checkpoint(old_checkpoint, trust_policy=trust).key_id == (
-        "release-old"
-    )
-    assert OfflineAssuranceVerifier.verify_checkpoint(new_checkpoint, trust_policy=trust).key_id == (
-        "release-new"
-    )
+    assert OfflineAssuranceVerifier.verify_checkpoint(
+        old_checkpoint, trust_policy=trust
+    ).key_id == ("release-old")
+    assert OfflineAssuranceVerifier.verify_checkpoint(
+        new_checkpoint, trust_policy=trust
+    ).key_id == ("release-new")
 
     too_early_new = new_signer.sign(
         run_id=run_id,
