@@ -43,7 +43,7 @@ class AttestationResourceDescriptor(InteroperabilityModel):
 
 class InTotoStatementV1(InteroperabilityModel):
     type_: Literal["https://in-toto.io/Statement/v1"] = Field(
-        default=IN_TOTO_STATEMENT_V1,
+        default="https://in-toto.io/Statement/v1",
         alias="_type",
     )
     subject: tuple[AttestationResourceDescriptor, ...]
