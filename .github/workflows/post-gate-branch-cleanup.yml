@@ -1,0 +1,24 @@
+name: Post-Gate Branch Cleanup
+
+on:
+  workflow_run:
+    workflows: ["CI", "Security", "CodeQL"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  authorize:
+    if: ${{ github.event.workflow_run.event == 'push' && vars.PRODKIT_GATED_CLEANUP_BRANCHES_JSON != '' }}
+    permissions:
+      actions: write
+      contents: read
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-gated-branch-cleanup.yml@89eec1f6bcd4e45fb67c9fa99122ea6feba9d4bc
+    with:
+      branches_json: ${{ vars.PRODKIT_GATED_CLEANUP_BRANCHES_JSON }}
+      expected_default_sha: ${{ github.event.workflow_run.head_sha }}
+      required_gates_json: ${{ vars.PRODKIT_GATED_CLEANUP_GATES_JSON != '' && vars.PRODKIT_GATED_CLEANUP_GATES_JSON || '[{"name":"CI","path":".github/workflows/ci.yml"},{"name":"Security","path":".github/workflows/security.yml"},{"name":"CodeQL","path":".github/workflows/codeql.yml"}]' }}
+      cleanup_workflow_file: branch-cleanup.yml
+      runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]' }}
