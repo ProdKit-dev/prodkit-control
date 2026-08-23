@@ -96,14 +96,15 @@ async def test_low_risk_action_executes_and_is_idempotent(human, agent) -> None:
     assert first.verification.outcome is VerificationOutcome.PASSED
     assert second.reused_idempotent_result
     assert second.result.execution_attempt_id == first.result.execution_attempt_id
-    events = await ledger.list_run_events(run.run_id)
+    events = await ledger.list_run_events(tenant_id=human.tenant_id, run_id=run.run_id)
     reused_evidence = events[-2:]
     assert [event.event_type for event in reused_evidence] == [
         EventType.STATE_OBSERVED,
         EventType.VERIFICATION_COMPLETED,
     ]
     assert all(event.payload["reused_idempotent_result"] is True for event in reused_evidence)
-    await ledger.verify_run(run.run_id)
+    await ledger.verify_run(tenant_id=human.tenant_id, run_id=run.run_id)
+    assert await ledger.list_run_events(tenant_id="foreign-tenant", run_id=run.run_id) == []
 
 
 @pytest.mark.asyncio
@@ -114,7 +115,7 @@ async def test_executor_exception_records_uncertainty_and_retains_idempotency(hu
     )
     with pytest.raises(RuntimeError, match="simulated executor transport failure"):
         await broker.execute(action, actor=agent, trace_id=run.trace_id)
-    events = await ledger.list_run_events(run.run_id)
+    events = await ledger.list_run_events(tenant_id=human.tenant_id, run_id=run.run_id)
     assert events[-1].event_type is EventType.EXECUTION_UNCERTAIN
     assert events[-1].payload["idempotency_key_retained"] is True
 
@@ -139,15 +140,22 @@ async def test_durable_attempt_is_uncertain_after_ambiguous_executor_failure(hum
     with pytest.raises(RuntimeError, match="simulated crash after durable attempt start"):
         await broker.execute(action, actor=agent, trace_id=run.trace_id)
 
-    attempt = await attempts.latest_for_action(action.action_id)
+    attempt = await attempts.latest_for_action(
+        tenant_id=human.tenant_id,
+        action_id=action.action_id,
+    )
     assert attempt is not None
     assert attempt.state is ExecutionAttemptState.UNCERTAIN
     assert attempt.started_at is not None
     assert attempt.finished_at is not None
     assert attempt.uncertainty_reason == "executor raised after execution was marked started"
     assert attempt.error_type == "RuntimeError"
+    assert (
+        await attempts.latest_for_action(tenant_id="foreign-tenant", action_id=action.action_id)
+        is None
+    )
 
-    events = await ledger.list_run_events(run.run_id)
+    events = await ledger.list_run_events(tenant_id=human.tenant_id, run_id=run.run_id)
     uncertain = [event for event in events if event.event_type is EventType.EXECUTION_UNCERTAIN]
     assert len(uncertain) == 1
     assert uncertain[0].payload["execution_attempt_id"] == str(attempt.attempt_id)
@@ -155,7 +163,13 @@ async def test_durable_attempt_is_uncertain_after_ambiguous_executor_failure(hum
 
     with pytest.raises(DuplicateActionError, match="already in progress or uncertain"):
         await broker.execute(action, actor=agent, trace_id=run.trace_id)
-    assert (await attempts.latest_for_action(action.action_id)) == attempt
+    assert (
+        await attempts.latest_for_action(
+            tenant_id=human.tenant_id,
+            action_id=action.action_id,
+        )
+        == attempt
+    )
 
 
 @pytest.mark.asyncio
