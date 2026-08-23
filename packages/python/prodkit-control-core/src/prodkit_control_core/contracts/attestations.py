@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 from enum import StrEnum
 from typing import Any, Literal
 from uuid import UUID
@@ -141,7 +142,7 @@ class TrustedSigningKey(ContractModel):
     def validate_key(self) -> TrustedSigningKey:
         try:
             raw = base64.b64decode(self.public_key_base64, validate=True)
-        except (ValueError, base64.binascii.Error) as exc:
+        except (ValueError, binascii.Error) as exc:
             raise ValueError("trusted signing key must contain strict base64") from exc
         if self.algorithm is CheckpointSigningAlgorithm.ED25519 and len(raw) != 32:
             raise ValueError("Ed25519 public keys must be exactly 32 bytes")
@@ -205,7 +206,7 @@ class SignedCheckpoint(ContractModel):
     def validate_signature_encoding(self) -> SignedCheckpoint:
         try:
             raw = base64.b64decode(self.signature_base64, validate=True)
-        except (ValueError, base64.binascii.Error) as exc:
+        except (ValueError, binascii.Error) as exc:
             raise ValueError("checkpoint signature must contain strict base64") from exc
         if self.algorithm is CheckpointSigningAlgorithm.ED25519 and len(raw) != 64:
             raise ValueError("Ed25519 signatures must be exactly 64 bytes")
