@@ -27,8 +27,47 @@ from prodkit_control_runtime import (
 )
 
 
-def _actor(tenant_id: str, actor_id: str = "user") -> ActorRef:
-    return ActorRef(kind=ActorKind.HUMAN, id=actor_id, tenant_id=tenant_id)
+def _actor(
+    tenant_id: str,
+    actor_id: str = "user",
+    *,
+    attributes: dict[str, str] | None = None,
+) -> ActorRef:
+    return ActorRef(
+        kind=ActorKind.HUMAN,
+        id=actor_id,
+        tenant_id=tenant_id,
+        attributes=attributes or {},
+    )
+
+
+def _context(
+    tenant_id: str,
+    *capabilities: TenantCapability,
+    actor_id: str = "owner",
+) -> TenantAccessContext:
+    return TenantAccessContext(
+        tenant_id=tenant_id,
+        actor=_actor(tenant_id, actor_id),
+        capabilities=capabilities,
+        issued_at=datetime.now(UTC),
+    )
+
+
+def _support_operator() -> ActorRef:
+    return _actor(
+        "platform",
+        "support-1",
+        attributes={"prodkit.support_operator": "true"},
+    )
+
+
+def _support_authority() -> ActorRef:
+    return _actor(
+        "platform",
+        "support-authority",
+        attributes={"prodkit.support_authority": "true"},
+    )
 
 
 def test_tenant_access_context_rejects_cross_tenant_member_context() -> None:
@@ -47,7 +86,8 @@ def test_support_elevation_requires_reason_ticket_capabilities_and_expiry() -> N
         SupportElevationGrant(
             grant_id=uuid4(),
             target_tenant_id="tenant-a",
-            operator=_actor("platform", "support-1"),
+            operator=_support_operator(),
+            issued_by=_support_authority(),
             capabilities=(),
             reason="incident investigation",
             ticket_reference="SUP-42",
@@ -57,7 +97,7 @@ def test_support_elevation_requires_reason_ticket_capabilities_and_expiry() -> N
     with pytest.raises(ValidationError):
         TenantAccessContext(
             tenant_id="tenant-a",
-            actor=_actor("platform", "support-1"),
+            actor=_support_operator(),
             mode=TenantAccessMode.SUPPORT,
             capabilities=(TenantCapability.READ,),
             issued_at=now,
@@ -67,29 +107,36 @@ def test_support_elevation_requires_reason_ticket_capabilities_and_expiry() -> N
 @pytest.mark.asyncio
 async def test_support_elevation_is_opt_in_bounded_audited_and_revocable() -> None:
     store = InMemoryTenantControlStore()
-    tenant_actor = _actor("tenant-a", "owner")
-    operator = _actor("platform", "support-1")
+    tenant_context = _context(
+        "tenant-a",
+        TenantCapability.CONFIGURE,
+        TenantCapability.READ,
+    )
+    operator = _support_operator()
+    authority = _support_authority()
     disabled = TenantIsolationProfile(
         tenant_id="tenant-a",
         storage_partition="tenant-a",
         cache_namespace="tenant-a",
         allow_support_access=False,
     )
-    await store.put_profile(disabled, actor=tenant_actor)
+    await store.put_profile(disabled, context=tenant_context)
     with pytest.raises(AuthorizationDeniedError):
         await store.issue_support_grant(
             target_tenant_id="tenant-a",
             operator=operator,
+            issued_by=authority,
             capabilities=(TenantCapability.READ,),
             reason="incident investigation",
             ticket_reference="SUP-42",
         )
 
     enabled = disabled.model_copy(update={"allow_support_access": True})
-    await store.put_profile(enabled, actor=tenant_actor)
+    await store.put_profile(enabled, context=tenant_context)
     grant = await store.issue_support_grant(
         target_tenant_id="tenant-a",
         operator=operator,
+        issued_by=authority,
         capabilities=(TenantCapability.READ, TenantCapability.EXPORT),
         reason="incident investigation",
         ticket_reference="SUP-42",
@@ -103,7 +150,18 @@ async def test_support_elevation_is_opt_in_bounded_audited_and_revocable() -> No
     context.require(TenantCapability.READ)
     with pytest.raises(PermissionError):
         context.require(TenantCapability.DELETE)
+    manifest = await store.export_manifest(context=context, record_counts={"runs": 1})
+    assert manifest.elevation_id == grant.grant_id
 
+    await store.put_profile(disabled, context=tenant_context)
+    with pytest.raises(AuthorizationDeniedError, match="disabled support elevation"):
+        await store.export_manifest(context=context, record_counts={"runs": 1})
+    with pytest.raises(AuthorizationDeniedError, match="disabled support elevation"):
+        await store.redeem_support_grant(
+            target_tenant_id="tenant-a", grant_id=grant.grant_id, operator=operator
+        )
+
+    await store.put_profile(enabled, context=tenant_context)
     await store.revoke_support_grant(
         target_tenant_id="tenant-a",
         grant_id=grant.grant_id,
@@ -114,50 +172,88 @@ async def test_support_elevation_is_opt_in_bounded_audited_and_revocable() -> No
         await store.redeem_support_grant(
             target_tenant_id="tenant-a", grant_id=grant.grant_id, operator=operator
         )
-    audit = await store.list_audit("tenant-a")
-    assert [event.event_type.value for event in audit][-3:] == [
-        "support_elevation_issued",
-        "support_elevation_used",
-        "support_elevation_revoked",
-    ]
-    assert await store.list_audit("tenant-b") == ()
+    with pytest.raises(AuthorizationDeniedError, match="no longer authorizes"):
+        await store.export_manifest(context=context, record_counts={"runs": 1})
+
+    audit = await store.list_audit(context=tenant_context)
+    audit_types = [event.event_type.value for event in audit]
+    assert "support_elevation_issued" in audit_types
+    assert "support_elevation_used" in audit_types
+    assert "support_elevation_revoked" in audit_types
+    assert "export_created" in audit_types
+    assert await store.list_audit(
+        context=_context("tenant-b", TenantCapability.READ)
+    ) == ()
 
 
 @pytest.mark.asyncio
-async def test_legal_hold_blocks_deletion_and_export_is_tenant_scoped() -> None:
+async def test_support_elevation_requires_authorized_issuer_and_operator() -> None:
     store = InMemoryTenantControlStore()
-    actor = _actor("tenant-a", "owner")
-    held = await store.set_legal_hold(
-        tenant_id="tenant-a", actor=actor, enabled=True, reason="litigation"
-    )
-    assert held.legal_hold is True
-    with pytest.raises(AuthorizationDeniedError):
-        await store.schedule_deletion(
+    tenant_context = _context("tenant-a", TenantCapability.CONFIGURE)
+    await store.put_profile(
+        TenantIsolationProfile(
             tenant_id="tenant-a",
-            actor=actor,
+            storage_partition="tenant-a",
+            cache_namespace="tenant-a",
+            allow_support_access=True,
+        ),
+        context=tenant_context,
+    )
+    with pytest.raises(AuthorizationDeniedError, match="issuer"):
+        await store.issue_support_grant(
+            target_tenant_id="tenant-a",
+            operator=_support_operator(),
+            issued_by=_actor("platform", "unprivileged"),
+            capabilities=(TenantCapability.READ,),
+            reason="incident",
+            ticket_reference="SUP-43",
+        )
+    with pytest.raises(AuthorizationDeniedError, match="recipient"):
+        await store.issue_support_grant(
+            target_tenant_id="tenant-a",
+            operator=_actor("platform", "not-support"),
+            issued_by=_support_authority(),
+            capabilities=(TenantCapability.READ,),
+            reason="incident",
+            ticket_reference="SUP-43",
+        )
+
+
+@pytest.mark.asyncio
+async def test_legal_hold_blocks_deletion_and_export_uses_capabilities() -> None:
+    store = InMemoryTenantControlStore()
+    context = _context(
+        "tenant-a",
+        TenantCapability.LEGAL_HOLD,
+        TenantCapability.DELETE,
+        TenantCapability.EXPORT,
+        TenantCapability.READ,
+    )
+    held = await store.set_legal_hold(context=context, enabled=True, reason="litigation")
+    assert held.legal_hold is True
+    with pytest.raises(AuthorizationDeniedError, match="legal hold"):
+        await store.schedule_deletion(
+            context=context,
             not_before=datetime.now(UTC) + timedelta(minutes=1),
             reason="account closure",
         )
-    await store.set_legal_hold(
-        tenant_id="tenant-a", actor=actor, enabled=False, reason="matter closed"
-    )
+    await store.set_legal_hold(context=context, enabled=False, reason="matter closed")
     scheduled = await store.schedule_deletion(
-        tenant_id="tenant-a",
-        actor=actor,
+        context=context,
         not_before=datetime.now(UTC) + timedelta(milliseconds=10),
         reason="account closure",
     )
     assert scheduled.status is TenantLifecycleStatus.DELETION_SCHEDULED
     manifest = await store.export_manifest(
-        tenant_id="tenant-a",
-        actor=actor,
+        context=context,
         record_counts={"runs": 3, "events": 9},
         content_digests=(sha256_hex("export"),),
     )
     assert manifest.tenant_id == "tenant-a"
-    with pytest.raises(AuthorizationDeniedError):
+    with pytest.raises(AuthorizationDeniedError, match="export"):
         await store.export_manifest(
-            tenant_id="tenant-b", actor=actor, record_counts={"runs": 0}
+            context=_context("tenant-a", TenantCapability.READ),
+            record_counts={"runs": 0},
         )
 
 
