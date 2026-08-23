@@ -139,18 +139,18 @@ async def _exercise(sessions: async_sessionmaker[AsyncSession]) -> None:
     await _expect_denied(
         store.schedule_deletion(
             context=tenant_a,
-            not_before=datetime.now(UTC) + timedelta(seconds=1),
+            not_before=datetime.now(UTC) + timedelta(seconds=2),
             reason="closure",
         )
     )
     await store.set_legal_hold(context=tenant_a, enabled=False, reason="matter resolved")
     scheduled = await store.schedule_deletion(
         context=tenant_a,
-        not_before=datetime.now(UTC) + timedelta(milliseconds=100),
+        not_before=datetime.now(UTC) + timedelta(seconds=1),
         reason="closure",
     )
     assert scheduled.deletion_not_before is not None
-    await asyncio.sleep(0.15)
+    await asyncio.sleep(1.1)
     deleted = await store.complete_deletion(context=tenant_a)
     assert deleted.status.value == "deleted"
     assert await store.get_lifecycle(context=tenant_a) == deleted
