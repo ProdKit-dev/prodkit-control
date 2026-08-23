@@ -8,8 +8,8 @@ import pytest
 from prodkit_control_core import (
     ActorKind,
     ActorRef,
-    EventType,
     ControlEventDraft,
+    EventType,
     IntegrityViolationError,
 )
 from prodkit_control_runtime import InMemoryEventLedger
@@ -35,10 +35,11 @@ async def test_ledger_sequences_and_verifies(tenant_id: str) -> None:
                 span_id="b" * 16,
             )
         )
-    events = await ledger.list_run_events(run_id)
+    events = await ledger.list_run_events(tenant_id=tenant_id, run_id=run_id)
     assert [event.sequence for event in events] == [1, 2]
     assert events[1].integrity.previous_event_hash == events[0].integrity.event_hash
-    await ledger.verify_run(run_id)
+    await ledger.verify_run(tenant_id=tenant_id, run_id=run_id)
+    assert await ledger.list_run_events(tenant_id="foreign-tenant", run_id=run_id) == []
 
 
 @pytest.mark.asyncio
@@ -60,6 +61,6 @@ async def test_ledger_detects_tampering(tenant_id: str) -> None:
         )
     )
     tampered = event.model_copy(update={"payload": {"modified": True}})
-    ledger.replace_for_test(run_id, [tampered])
+    ledger.replace_for_test(tenant_id, run_id, [tampered])
     with pytest.raises(IntegrityViolationError):
-        await ledger.verify_run(run_id)
+        await ledger.verify_run(tenant_id=tenant_id, run_id=run_id)

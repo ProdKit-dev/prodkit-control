@@ -4,7 +4,11 @@ import json
 
 import pytest
 
-from prodkit_control_core import ContentStorageMode, IntegrityViolationError
+from prodkit_control_core import (
+    AuthorizationDeniedError,
+    ContentStorageMode,
+    IntegrityViolationError,
+)
 from prodkit_control_runtime import EncryptedFilesystemArtifactStore
 
 
@@ -22,10 +26,13 @@ async def test_encrypted_artifact_round_trip_and_redaction(tmp_path) -> None:
         content=b"release evidence",
         classification="confidential",
     )
+    assert artifact.tenant_id == "tenant-a"
     assert artifact.encrypted is True
     assert artifact.storage_mode is ContentStorageMode.FULL
     assert artifact.classification == "confidential"
-    assert await store.get(artifact) == b"release evidence"
+    assert await store.get(tenant_id="tenant-a", artifact=artifact) == b"release evidence"
+    with pytest.raises(AuthorizationDeniedError):
+        await store.get(tenant_id="tenant-b", artifact=artifact)
 
     redacted = await store.put(
         tenant_id="tenant-a",
@@ -34,7 +41,9 @@ async def test_encrypted_artifact_round_trip_and_redaction(tmp_path) -> None:
         redact=True,
     )
     assert redacted.storage_mode is ContentStorageMode.REDACTED
-    envelope = json.loads((await store.get(redacted)).decode())
+    envelope = json.loads(
+        (await store.get(tenant_id="tenant-a", artifact=redacted)).decode()
+    )
     assert envelope["redacted"] is True
     assert envelope["redaction_version"] == "runtime-redaction-v1"
     assert envelope["original_sha256"]
@@ -56,7 +65,7 @@ async def test_encrypted_artifact_detects_ciphertext_tampering(tmp_path) -> None
     path.write_bytes(payload)
 
     with pytest.raises(IntegrityViolationError, match="authentication/decryption failed"):
-        await store.get(artifact)
+        await store.get(tenant_id="tenant-a", artifact=artifact)
 
 
 def test_encrypted_artifact_store_validates_key_and_retention(tmp_path) -> None:

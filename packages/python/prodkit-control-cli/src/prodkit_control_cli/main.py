@@ -56,7 +56,7 @@ app = typer.Typer(help="ProdKit Control command-line utilities.", no_args_is_hel
 
 @app.command()
 def demo(output: Path = Path("artifacts/demo-run")) -> None:
-    """Run a deterministic end-to-end dry-run and export evidence."""
+    """Run a deterministic end-to-end dry-run and export tenant-bound evidence."""
 
     archive = asyncio.run(_demo(output))
     typer.echo(f"Evidence bundle: {archive}")
@@ -127,6 +127,7 @@ async def _demo(output: Path) -> Path:
     )
     await coordinator.bind_lineage(
         run.run_id,
+        tenant_id=tenant,
         lineage_graph_digest=sha256_hex(lineage),
         specification_revision=specification.ref,
     )
@@ -142,6 +143,7 @@ async def _demo(output: Path) -> Path:
     return await EvidenceBundleBuilder(ledger).build(
         run.run_id,
         output / str(run.run_id),
+        tenant_id=tenant,
         lineage=lineage,
     )
 
@@ -316,10 +318,13 @@ def _build_demo_lineage(
 
 @app.command("verify-bundle")
 def verify_bundle(path: Path) -> None:
-    """Verify event ordering, hash chaining, and manifest integrity."""
+    """Verify event ordering, hash chaining, tenant scope, and manifest integrity."""
 
     manifest = EvidenceBundleVerifier().verify(path)
-    typer.echo(f"OK: run={manifest['run_id']} events={manifest['event_count']}")
+    typer.echo(
+        f"OK: tenant={manifest['tenant_id']} run={manifest['run_id']} "
+        f"events={manifest['event_count']}"
+    )
 
 
 if __name__ == "__main__":

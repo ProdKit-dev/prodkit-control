@@ -23,7 +23,7 @@ _MAX_MEMBER_BYTES = 64 * 1024 * 1024
 _MAX_TOTAL_BYTES = 128 * 1024 * 1024
 _ALLOWED_MEMBERS = frozenset({"manifest.json", "events.jsonl", "lineage.json"})
 _MANIFEST_SCHEMA_NAME = "prodkit.evidence-bundle-manifest"
-_MANIFEST_SCHEMA_VERSION = "1.0.0"
+_MANIFEST_SCHEMA_VERSION = "1.1.0"
 
 
 def evidence_bundle_sha256(path: Path) -> str:
@@ -44,19 +44,24 @@ class EvidenceBundleBuilder:
         run_id: UUID,
         destination: Path,
         *,
+        tenant_id: str,
         lineage: LineageGraph | None = None,
     ) -> Path:
-        await self._ledger.verify_run(run_id)
-        events = await self._ledger.list_run_events(run_id)
+        await self._ledger.verify_run(tenant_id=tenant_id, run_id=run_id)
+        events = await self._ledger.list_run_events(tenant_id=tenant_id, run_id=run_id)
         if not events:
-            raise ValueError(f"run {run_id} has no events")
+            raise ValueError(f"run {run_id} has no events for tenant {tenant_id!r}")
+        if any(event.tenant_id != tenant_id for event in events):
+            raise IntegrityViolationError("evidence builder received a foreign-tenant event")
         projection = project_run(events)
         destination.mkdir(parents=True, exist_ok=True)
         events_path = destination / "events.jsonl"
         events_bytes = b"\n".join(canonical_json_bytes(event) for event in events) + b"\n"
         events_path.write_bytes(events_bytes)
-        if lineage is not None and lineage.run_id != run_id:
-            raise ValueError("lineage graph and evidence bundle run ids must match")
+        if lineage is not None and (
+            lineage.run_id != run_id or lineage.tenant_id != tenant_id
+        ):
+            raise ValueError("lineage graph and evidence bundle scope must match")
         files = {"events.jsonl": sha256_hex(events_bytes)}
         lineage_bytes = canonical_json_bytes(lineage) if lineage is not None else None
         if lineage_bytes is not None:
@@ -65,6 +70,7 @@ class EvidenceBundleBuilder:
             "schema_name": _MANIFEST_SCHEMA_NAME,
             "schema_version": _MANIFEST_SCHEMA_VERSION,
             "run_id": str(run_id),
+            "tenant_id": tenant_id,
             "generated_at": datetime.now(UTC).isoformat(),
             "event_count": len(events),
             "events_sha256": sha256_hex(events_bytes),
@@ -101,8 +107,12 @@ class EvidenceBundleVerifier:
 
         manifest_bytes, events_bytes, lineage_bytes = self._read_archive(archive)
         manifest = self._load_manifest(manifest_bytes)
-        run_id = self._validate_manifest(manifest, events_bytes, lineage_bytes)
+        run_id, manifest_tenant_id = self._validate_manifest(
+            manifest, events_bytes, lineage_bytes
+        )
         event_tenant_id = self._validate_events(manifest, run_id, events_bytes)
+        if event_tenant_id != manifest_tenant_id:
+            raise IntegrityViolationError("evidence bundle tenant does not match events")
         self._validate_lineage(manifest, run_id, event_tenant_id, lineage_bytes)
         return cast(dict[str, object], manifest)
 
@@ -148,7 +158,7 @@ class EvidenceBundleVerifier:
         manifest: dict[str, Any],
         events_bytes: bytes,
         lineage_bytes: bytes | None,
-    ) -> str:
+    ) -> tuple[str, str]:
         if manifest.get("schema_name") != _MANIFEST_SCHEMA_NAME:
             raise IntegrityViolationError("evidence bundle manifest schema name is unsupported")
         if manifest.get("schema_version") != _MANIFEST_SCHEMA_VERSION:
@@ -163,6 +173,9 @@ class EvidenceBundleVerifier:
             raise IntegrityViolationError("evidence bundle manifest run id is invalid") from exc
         if run_id != run_id_raw:
             raise IntegrityViolationError("evidence bundle manifest run id is not canonical")
+        tenant_id = manifest.get("tenant_id")
+        if not isinstance(tenant_id, str) or not tenant_id.strip():
+            raise IntegrityViolationError("evidence bundle manifest tenant is invalid")
 
         event_count = _manifest_count(manifest, "event_count", minimum=1)
         _manifest_count(manifest, "lineage_node_count", minimum=0)
@@ -200,7 +213,7 @@ class EvidenceBundleVerifier:
             raise IntegrityViolationError("evidence bundle event counts are invalid")
         if sum(cast(dict[str, int], counts).values()) != event_count:
             raise IntegrityViolationError("evidence bundle event counts do not match event count")
-        return run_id
+        return run_id, tenant_id
 
     @staticmethod
     def _validate_events(
