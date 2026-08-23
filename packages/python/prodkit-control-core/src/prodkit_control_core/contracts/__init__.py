@@ -13,4 +13,5 @@ from .policy import *
 from .providers import *
 from .reconciliation import *
 from .runs import *
+from .tenancy import *
 from .verification import *

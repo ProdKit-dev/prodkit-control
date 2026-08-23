@@ -45,5 +45,7 @@ from .reconciliation import InMemoryReconciliationStore as InMemoryReconciliatio
 from .reconciliation import ReconciliationCoordinator as ReconciliationCoordinator
 from .reconciliation import ReconciliationSource as ReconciliationSource
 from .reconciliation import ReconciliationStore as ReconciliationStore
+from .tenancy import InMemoryTenantControlStore as InMemoryTenantControlStore
+from .tenancy import TenantCacheNamespace as TenantCacheNamespace
 
 __version__ = "0.4.0"

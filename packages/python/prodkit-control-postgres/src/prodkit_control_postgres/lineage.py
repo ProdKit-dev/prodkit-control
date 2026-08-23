@@ -19,7 +19,7 @@ _LINEAGE_NODE_ADAPTER: TypeAdapter[LineageNode] = TypeAdapter(LineageNode)
 
 
 class PostgresLineageStore:
-    """Append-only PostgreSQL persistence for validated lineage graphs."""
+    """Append-only tenant-scoped PostgreSQL persistence for validated lineage graphs."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._sessions = session_factory
@@ -27,11 +27,13 @@ class PostgresLineageStore:
     async def record_node(self, node: LineageNode) -> None:
         document = node.model_dump(mode="json")
         async with self._sessions.begin() as session:
-            await self._lock_run(session, node.run_id)
-            existing = await session.get(LineageNodeRow, node.node_id)
+            await self._lock_run(session, node.tenant_id, node.run_id)
+            existing = await session.scalar(
+                select(LineageNodeRow).where(LineageNodeRow.node_id == node.node_id)
+            )
             if existing is not None:
-                if existing.document != document:
-                    raise IntegrityViolationError("a lineage node id cannot be rewritten")
+                if existing.tenant_id != node.tenant_id or existing.document != document:
+                    raise IntegrityViolationError("a lineage node id cannot cross tenants or be rewritten")
                 return
             session.add(
                 LineageNodeRow(
@@ -45,12 +47,15 @@ class PostgresLineageStore:
                 )
             )
 
-    async def record_relation(self, run_id: UUID, relation: LineageRelation) -> None:
+    async def record_relation(
+        self, *, tenant_id: str, run_id: UUID, relation: LineageRelation
+    ) -> None:
         async with self._sessions.begin() as session:
-            await self._lock_run(session, run_id)
-            graph = await self._get_graph(session, run_id)
+            await self._lock_run(session, tenant_id, run_id)
+            graph = await self._get_graph(session, tenant_id, run_id)
             existing = await session.scalar(
                 select(LineageRelationRow).where(
+                    LineageRelationRow.tenant_id == tenant_id,
                     LineageRelationRow.run_id == run_id,
                     LineageRelationRow.relation == relation.relation.value,
                     LineageRelationRow.subject_node_id == relation.subject.node_id,
@@ -70,7 +75,7 @@ class PostgresLineageStore:
             session.add(
                 LineageRelationRow(
                     run_id=run_id,
-                    tenant_id=validated.tenant_id,
+                    tenant_id=tenant_id,
                     relation=relation.relation.value,
                     subject_node_id=relation.subject.node_id,
                     object_node_id=relation.object.node_id,
@@ -79,23 +84,25 @@ class PostgresLineageStore:
                 )
             )
 
-    async def get_graph(self, run_id: UUID) -> LineageGraph:
+    async def get_graph(self, *, tenant_id: str, run_id: UUID) -> LineageGraph:
         async with self._sessions() as session:
-            return await self._get_graph(session, run_id)
+            return await self._get_graph(session, tenant_id, run_id)
 
     @staticmethod
-    async def _lock_run(session: AsyncSession, run_id: UUID) -> None:
+    async def _lock_run(session: AsyncSession, tenant_id: str, run_id: UUID) -> None:
         await session.execute(
             text("SELECT pg_advisory_xact_lock(hashtextextended(:run_id, 0))"),
-            {"run_id": str(run_id)},
+            {"run_id": f"{tenant_id}:{run_id}"},
         )
 
     @staticmethod
-    async def _get_graph(session: AsyncSession, run_id: UUID) -> LineageGraph:
+    async def _get_graph(
+        session: AsyncSession, tenant_id: str, run_id: UUID
+    ) -> LineageGraph:
         node_rows = (
             await session.scalars(
                 select(LineageNodeRow)
-                .where(LineageNodeRow.run_id == run_id)
+                .where(LineageNodeRow.tenant_id == tenant_id, LineageNodeRow.run_id == run_id)
                 .order_by(LineageNodeRow.recorded_at, LineageNodeRow.node_id)
             )
         ).all()
@@ -104,7 +111,10 @@ class PostgresLineageStore:
         relation_rows = (
             await session.scalars(
                 select(LineageRelationRow)
-                .where(LineageRelationRow.run_id == run_id)
+                .where(
+                    LineageRelationRow.tenant_id == tenant_id,
+                    LineageRelationRow.run_id == run_id,
+                )
                 .order_by(LineageRelationRow.id)
             )
         ).all()
@@ -112,7 +122,7 @@ class PostgresLineageStore:
         relations = tuple(LineageRelation.model_validate(row.document) for row in relation_rows)
         return LineageGraph(
             run_id=run_id,
-            tenant_id=nodes[0].tenant_id,
+            tenant_id=tenant_id,
             nodes=nodes,
             relations=relations,
         )

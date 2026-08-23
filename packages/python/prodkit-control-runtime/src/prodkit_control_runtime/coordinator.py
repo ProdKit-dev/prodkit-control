@@ -70,14 +70,7 @@ class RunCoordinator:
             payload=run.model_dump(mode="json"),
         )
         await self._runs.create(run)
-        try:
-            await self._ledger.append(event)
-        except Exception:
-            # The durable store is authoritative. A failed ledger append must not expose a run that
-            # lacks its canonical RUN_STARTED evidence, so callers treat the start as failed. The
-            # production Postgres composition places these writes behind the same database and its
-            # startup recovery reconciles any pre-event row before accepting traffic.
-            raise
+        await self._ledger.append(event)
         return run
 
     async def complete_run(
@@ -88,9 +81,7 @@ class RunCoordinator:
         status: RunStatus = RunStatus.SUCCEEDED,
         summary: dict[str, object] | None = None,
     ) -> RunRecord:
-        current = await self.require_run(run_id)
-        if actor.tenant_id != current.tenant_id:
-            raise AuthorizationDeniedError("completing actor tenant does not match run tenant")
+        current = await self.require_run(run_id, tenant_id=actor.tenant_id)
         if status not in _TERMINAL_RUN_STATUSES:
             raise ValueError("run completion requires a terminal status")
         if current.status in _TERMINAL_RUN_STATUSES:
@@ -114,11 +105,11 @@ class RunCoordinator:
         await self._runs.replace(completed)
         return completed
 
-    async def get_run(self, run_id: UUID) -> RunRecord | None:
-        return await self._runs.get(run_id)
+    async def get_run(self, run_id: UUID, *, tenant_id: str) -> RunRecord | None:
+        return await self._runs.get(tenant_id=tenant_id, run_id=run_id)
 
-    async def require_run(self, run_id: UUID) -> RunRecord:
-        run = await self._runs.get(run_id)
+    async def require_run(self, run_id: UUID, *, tenant_id: str) -> RunRecord:
+        run = await self._runs.get(tenant_id=tenant_id, run_id=run_id)
         if run is None:
             raise KeyError(run_id)
         return run
@@ -127,10 +118,11 @@ class RunCoordinator:
         self,
         run_id: UUID,
         *,
+        tenant_id: str,
         lineage_graph_digest: str,
         specification_revision: LineageNodeRef | None = None,
     ) -> RunRecord:
-        current = await self.require_run(run_id)
+        current = await self.require_run(run_id, tenant_id=tenant_id)
         if (
             current.specification_revision is not None
             and specification_revision is not None

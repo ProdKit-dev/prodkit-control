@@ -10,8 +10,8 @@ from typing import Annotated, cast
 from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
-from starlette.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.responses import JSONResponse, Response
 
 from prodkit_control_core import (
     ActionSpec,
@@ -307,7 +307,9 @@ def create_app(
         services: Services,
     ) -> list[ControlEvent]:
         await _scoped_run(services, run_id, principal.tenant_id)
-        return await services.ledger.list_run_events(run_id)
+        return await services.ledger.list_run_events(
+            tenant_id=principal.tenant_id, run_id=run_id
+        )
 
     @app.post("/v1/runs/{run_id}/actions:execute")
     async def execute_action(
@@ -423,9 +425,12 @@ def create_app(
         if node.run_id != run_id or node.tenant_id != principal.tenant_id:
             raise HTTPException(status_code=422, detail="lineage node scope does not match run")
         await services.lineage.record_node(node)
-        graph = await services.lineage.get_graph(run_id)
+        graph = await services.lineage.get_graph(
+            tenant_id=principal.tenant_id, run_id=run_id
+        )
         await services.coordinator.bind_lineage(
             run_id,
+            tenant_id=principal.tenant_id,
             lineage_graph_digest=sha256_hex(graph),
             specification_revision=(
                 node.ref if node.kind is LineageNodeKind.SPECIFICATION_REVISION else None
@@ -462,11 +467,21 @@ def create_app(
     ) -> LineageRelation:
         run = await _scoped_run(services, run_id, principal.tenant_id)
         try:
-            await services.lineage.record_relation(run_id, request.relation)
+            await services.lineage.record_relation(
+                tenant_id=principal.tenant_id,
+                run_id=run_id,
+                relation=request.relation,
+            )
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        graph = await services.lineage.get_graph(run_id)
-        await services.coordinator.bind_lineage(run_id, lineage_graph_digest=sha256_hex(graph))
+        graph = await services.lineage.get_graph(
+            tenant_id=principal.tenant_id, run_id=run_id
+        )
+        await services.coordinator.bind_lineage(
+            run_id,
+            tenant_id=principal.tenant_id,
+            lineage_graph_digest=sha256_hex(graph),
+        )
         now = datetime.now(UTC)
         await services.ledger.append(
             ControlEventDraft(
@@ -493,7 +508,9 @@ def create_app(
     ) -> LineageGraph:
         await _scoped_run(services, run_id, principal.tenant_id)
         try:
-            return await services.lineage.get_graph(run_id)
+            return await services.lineage.get_graph(
+                tenant_id=principal.tenant_id, run_id=run_id
+            )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="lineage graph not found") from exc
 
@@ -509,7 +526,9 @@ def create_app(
     ) -> ProductionLineageAssessment:
         run = await _scoped_run(services, run_id, principal.tenant_id)
         try:
-            graph = await services.lineage.get_graph(run_id)
+            graph = await services.lineage.get_graph(
+                tenant_id=principal.tenant_id, run_id=run_id
+            )
             assessment = services.lineage_policy.assess(graph, request.observation_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="lineage graph not found") from exc
@@ -573,9 +592,6 @@ def _insecure_header_principal(request: Request) -> RequestPrincipal:
 
 async def _scoped_run(services: AppServices, run_id: UUID, tenant_id: str) -> RunRecord:
     try:
-        run = await services.coordinator.require_run(run_id)
+        return await services.coordinator.require_run(run_id, tenant_id=tenant_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="run not found") from exc
-    if run.tenant_id != tenant_id:
-        raise HTTPException(status_code=404, detail="run not found")
-    return run

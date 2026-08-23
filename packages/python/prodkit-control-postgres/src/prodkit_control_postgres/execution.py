@@ -77,7 +77,7 @@ class PostgresIdempotencyStore:
 
 
 class PostgresExecutionAttemptStore:
-    """Transactional execution-attempt journal with explicit legal state transitions."""
+    """Tenant-scoped execution-attempt journal with explicit legal state transitions."""
 
     _TRANSITIONS: ClassVar[dict[ExecutionAttemptState, frozenset[ExecutionAttemptState]]] = {
         ExecutionAttemptState.CLAIMED: frozenset({ExecutionAttemptState.STARTED}),
@@ -102,17 +102,19 @@ class PostgresExecutionAttemptStore:
 
     async def replace(self, attempt: ExecutionAttemptRecord) -> None:
         async with self._sessions.begin() as session:
-            current = await session.get(
-                ExecutionAttemptRow,
-                attempt.attempt_id,
-                with_for_update=True,
+            current = await session.scalar(
+                select(ExecutionAttemptRow)
+                .where(
+                    ExecutionAttemptRow.tenant_id == attempt.tenant_id,
+                    ExecutionAttemptRow.attempt_id == attempt.attempt_id,
+                )
+                .with_for_update()
             )
             if current is None:
                 raise KeyError(f"execution attempt {attempt.attempt_id} does not exist")
             if (
                 current.action_id != attempt.action_id
                 or current.run_id != attempt.run_id
-                or current.tenant_id != attempt.tenant_id
                 or current.idempotency_key != attempt.idempotency_key
                 or current.action_digest != attempt.action_digest
                 or current.executor_name != attempt.executor_name
@@ -130,16 +132,28 @@ class PostgresExecutionAttemptStore:
             current.finished_at = attempt.finished_at
             current.document = attempt.model_dump(mode="json")
 
-    async def get(self, attempt_id: UUID) -> ExecutionAttemptRecord | None:
+    async def get(
+        self, *, tenant_id: str, attempt_id: UUID
+    ) -> ExecutionAttemptRecord | None:
         async with self._sessions() as session:
-            row = await session.get(ExecutionAttemptRow, attempt_id)
+            row = await session.scalar(
+                select(ExecutionAttemptRow).where(
+                    ExecutionAttemptRow.tenant_id == tenant_id,
+                    ExecutionAttemptRow.attempt_id == attempt_id,
+                )
+            )
             return ExecutionAttemptRecord.model_validate(row.document) if row is not None else None
 
-    async def latest_for_action(self, action_id: UUID) -> ExecutionAttemptRecord | None:
+    async def latest_for_action(
+        self, *, tenant_id: str, action_id: UUID
+    ) -> ExecutionAttemptRecord | None:
         async with self._sessions() as session:
             row = await session.scalar(
                 select(ExecutionAttemptRow)
-                .where(ExecutionAttemptRow.action_id == action_id)
+                .where(
+                    ExecutionAttemptRow.tenant_id == tenant_id,
+                    ExecutionAttemptRow.action_id == action_id,
+                )
                 .order_by(ExecutionAttemptRow.claimed_at.desc())
                 .limit(1)
             )
