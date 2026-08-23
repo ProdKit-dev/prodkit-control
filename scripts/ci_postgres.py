@@ -73,6 +73,7 @@ async def _apply_migrations() -> None:
             "0003_run_store_and_schema_metadata.sql",
             "0004_delivery_chain_reconciliation.sql",
             "0005_high_availability.sql",
+            "0006_tenant_isolation.sql",
         ]:
             raise AssertionError("unexpected PostgreSQL migration set")
         for migration in migrations:
@@ -80,8 +81,8 @@ async def _apply_migrations() -> None:
         version = await connection.fetchval(
             "SELECT version FROM prodkit_schema_metadata WHERE singleton = TRUE"
         )
-        if version != 5:
-            raise AssertionError(f"expected schema version 5, got {version!r}")
+        if version != 6:
+            raise AssertionError(f"expected schema version 6, got {version!r}")
     finally:
         await connection.close()
 
@@ -97,6 +98,7 @@ async def _exercise_durable_stores() -> None:
         await assert_schema_compatible(sessions)
 
         tenant_id = "ci-tenant-a"
+        foreign_tenant = "ci-tenant-b"
         actor = ActorRef(
             kind=ActorKind.SERVICE,
             id="ci-service",
@@ -111,17 +113,19 @@ async def _exercise_durable_stores() -> None:
             environment="ci",
             purpose="prove durable PostgreSQL service wiring",
         )
-        recovered_run = await runs.get(run.run_id)
+        recovered_run = await runs.get(tenant_id=tenant_id, run_id=run.run_id)
         assert recovered_run == run
-        await ledger.verify_run(run.run_id)
+        assert await runs.get(tenant_id=foreign_tenant, run_id=run.run_id) is None
+        await ledger.verify_run(tenant_id=tenant_id, run_id=run.run_id)
+        assert await ledger.list_run_events(tenant_id=foreign_tenant, run_id=run.run_id) == []
         completed_run = await coordinator.complete_run(
             run.run_id,
             actor=actor,
             status=RunStatus.SUCCEEDED,
         )
-        assert (await runs.get(run.run_id)) == completed_run
-        assert len(await ledger.list_run_events(run.run_id)) == 2
-        await ledger.verify_run(run.run_id)
+        assert await runs.get(tenant_id=tenant_id, run_id=run.run_id) == completed_run
+        assert len(await ledger.list_run_events(tenant_id=tenant_id, run_id=run.run_id)) == 2
+        await ledger.verify_run(tenant_id=tenant_id, run_id=run.run_id)
 
         idempotency_key = f"ci-{uuid4()}"
         action_digest = "a" * 64
@@ -154,7 +158,7 @@ async def _exercise_durable_stores() -> None:
             raise AssertionError("reusing an idempotency key for another action digest must fail")
 
         assert await idempotency.claim(
-            tenant_id="ci-tenant-b",
+            tenant_id=foreign_tenant,
             key=idempotency_key,
             action_digest="b" * 64,
         ), "idempotency ownership must be tenant scoped"
@@ -187,9 +191,17 @@ async def _exercise_durable_stores() -> None:
             }
         )
         await attempts.replace(uncertain)
-        recovered = await attempts.get(attempt_id)
+        recovered = await attempts.get(tenant_id=tenant_id, attempt_id=attempt_id)
         assert recovered == uncertain
-        assert (await attempts.latest_for_action(action_id)) == uncertain
+        assert await attempts.get(tenant_id=foreign_tenant, attempt_id=attempt_id) is None
+        assert (
+            await attempts.latest_for_action(tenant_id=tenant_id, action_id=action_id)
+            == uncertain
+        )
+        assert (
+            await attempts.latest_for_action(tenant_id=foreign_tenant, action_id=action_id)
+            is None
+        )
 
         result = ExecutionResult(
             action_id=action_id,
@@ -228,6 +240,7 @@ async def _exercise_durable_stores() -> None:
         )
         await reconciliation.save_cursor(cursor)
         assert await reconciliation.get_cursor(tenant_id, "github") == cursor
+        assert await reconciliation.get_cursor(foreign_tenant, "github") is None
 
         audit_event = ExternalAuditEvent(
             event_id="ci-audit-1",
@@ -248,6 +261,7 @@ async def _exercise_durable_stores() -> None:
         )
         await reconciliation.save_profile(profile)
         assert await reconciliation.get_profile(tenant_id, "production") == profile
+        assert await reconciliation.get_profile(foreign_tenant, "production") is None
 
         finding = ReconciliationFinding(
             finding_id=uuid4(),
@@ -275,6 +289,7 @@ async def _exercise_durable_stores() -> None:
         await reconciliation.save_result(reconciliation_result)
         await reconciliation.save_result(reconciliation_result)
         assert finding in await reconciliation.list_findings(tenant_id)
+        assert await reconciliation.list_findings(foreign_tenant) == []
     finally:
         await engine.dispose()
 
@@ -365,13 +380,24 @@ async def _exercise_ha_stores(
         queue=queue_name,
         owner_id="replica-a",
         lease_ttl_seconds=0.05,
+        tenant_id=tenant_id,
     )
     assert stale is not None and stale.lease.fence_token == 1
+    assert (
+        await queue.acquire(
+            queue=queue_name,
+            owner_id="foreign-replica",
+            lease_ttl_seconds=0.05,
+            tenant_id="ci-tenant-b",
+        )
+        is None
+    )
     await asyncio.sleep(0.08)
     replacement = await queue.acquire(
         queue=queue_name,
         owner_id="replica-b",
         lease_ttl_seconds=5.0,
+        tenant_id=tenant_id,
     )
     assert replacement is not None
     assert replacement.item.job_id == stale.item.job_id
@@ -388,11 +414,14 @@ async def _exercise_ha_stores(
         queue=queue_name,
         owner_id="replica-c",
         lease_ttl_seconds=5.0,
+        tenant_id=tenant_id,
     )
     assert remaining is not None and remaining.item.job_id == second_item.job_id
     await queue.complete(remaining)
-    snapshot = await queue.snapshot(queue=queue_name)
+    snapshot = await queue.snapshot(queue=queue_name, tenant_id=tenant_id)
     assert snapshot.queued == 0 and snapshot.leased == 0 and snapshot.succeeded == 2
+    foreign_snapshot = await queue.snapshot(queue=queue_name, tenant_id="ci-tenant-b")
+    assert foreign_snapshot.queued == foreign_snapshot.leased == foreign_snapshot.succeeded == 0
 
 
 async def main() -> None:
