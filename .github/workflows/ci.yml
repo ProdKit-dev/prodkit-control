@@ -32,7 +32,7 @@ jobs:
           sha = os.environ['TARGET_SHA']
           release_run_id = int(os.environ['RELEASE_RUN_ID'])
           token = os.environ['GH_TOKEN']
-          url = f'https://api.github.com/repos/{repo}/actions/runs?head_sha={sha}&per_page=100'
+          url = f'https://api.github.com/repos/{repo}/actions/runs?per_page=100'
           request = urllib.request.Request(
               url,
               headers={
@@ -45,31 +45,37 @@ jobs:
           with urllib.request.urlopen(request, timeout=30) as response:
               runs = json.load(response)['workflow_runs']
 
-          selected = {}
-          for run in sorted(runs, key=lambda item: item['id'], reverse=True):
-              if run['head_sha'] != sha:
-                  continue
-              if run['name'] in {'Release', 'Release Verification', 'Release Promotion'} and run['name'] not in selected:
-                  selected[run['name']] = {
-                      'id': run['id'],
-                      'event': run['event'],
-                      'status': run['status'],
-                      'conclusion': run['conclusion'],
-                      'html_url': run['html_url'],
-                  }
-          print('V040_RELEASE_LIFECYCLE=' + json.dumps(selected, sort_keys=True))
+          release_candidates = [
+              run for run in runs
+              if run.get('path') == '.github/workflows/release.yml'
+              and run.get('event') == 'workflow_dispatch'
+              and run.get('head_sha') == sha
+          ]
+          verification_candidates = [
+              run for run in runs
+              if run.get('path') == '.github/workflows/release-verification.yml'
+              and run.get('event') == 'workflow_dispatch'
+          ]
+          release_candidates.sort(key=lambda item: item['id'], reverse=True)
+          verification_candidates.sort(key=lambda item: item['id'], reverse=True)
+          print('V040_RELEASES=' + json.dumps([
+              {'id': r['id'], 'head_sha': r['head_sha'], 'status': r['status'], 'conclusion': r['conclusion'], 'html_url': r['html_url']}
+              for r in release_candidates[:5]
+          ], sort_keys=True))
+          print('V040_VERIFICATIONS=' + json.dumps([
+              {'id': r['id'], 'head_sha': r['head_sha'], 'head_branch': r['head_branch'], 'status': r['status'], 'conclusion': r['conclusion'], 'html_url': r['html_url']}
+              for r in verification_candidates[:10]
+          ], sort_keys=True))
 
-          release = selected.get('Release')
-          if not release or release['id'] != release_run_id:
-              raise SystemExit(f'exact Release run missing or replaced: {release}')
-          if release['status'] != 'completed' or release['conclusion'] != 'success':
-              raise SystemExit(f'Release not successful: {release}')
+          release = next((r for r in release_candidates if int(r['id']) == release_run_id), None)
+          if not release or release['status'] != 'completed' or release['conclusion'] != 'success':
+              raise SystemExit(f'exact Release not successful: {release}')
 
-          verification = selected.get('Release Verification')
-          if not verification:
-              raise SystemExit('Release Verification not found yet')
-          if verification['event'] != 'workflow_dispatch':
-              raise SystemExit(f'unexpected Release Verification event: {verification}')
+          exact_verifications = [r for r in verification_candidates if r.get('head_sha') == sha]
+          if not exact_verifications:
+              raise SystemExit('exact-source Release Verification not found yet')
+          verification = exact_verifications[0]
           if verification['status'] != 'completed' or verification['conclusion'] != 'success':
-              raise SystemExit(f'Release Verification not successful yet: {verification}')
+              raise SystemExit(f'exact-source Release Verification not successful yet: {verification}')
+          print('V040_VERIFIED_RUN_ID=' + str(verification['id']))
           PY
