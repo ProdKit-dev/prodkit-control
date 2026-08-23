@@ -289,7 +289,7 @@ async def _exercise_durable_stores() -> None:
         await reconciliation.save_result(reconciliation_result)
         await reconciliation.save_result(reconciliation_result)
         assert finding in await reconciliation.list_findings(tenant_id)
-        assert await reconciliation.list_findings(foreign_tenant) == []
+        assert await reconciliation.list_findings(foreign_tenant) == ()
     finally:
         await engine.dispose()
 

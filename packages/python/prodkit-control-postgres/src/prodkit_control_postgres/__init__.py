@@ -12,6 +12,7 @@ from .models import (
 )
 from .reconciliation import PostgresReconciliationStore
 from .runs import RunRow, PostgresRunStore, assert_schema_compatible
+from .tenancy import PostgresTenantControlStore
 
 __all__ = (
     "Base",
@@ -29,6 +30,7 @@ __all__ = (
     "PostgresLineageStore",
     "PostgresReconciliationStore",
     "PostgresRunStore",
+    "PostgresTenantControlStore",
     "RunRow",
     "WorkLeaseRow",
     "assert_schema_compatible",
