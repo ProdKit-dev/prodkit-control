@@ -258,7 +258,7 @@ class PostgresLeaseStore:
 
 
 class PostgresDurableWorkQueue:
-    """Bounded durable queue using SKIP LOCKED and per-work fencing for HA workers."""
+    """Bounded tenant-scoped durable queue using SKIP LOCKED and per-work fencing."""
 
     def __init__(
         self,
@@ -331,10 +331,10 @@ class PostgresDurableWorkQueue:
         queue: str,
         owner_id: str,
         lease_ttl_seconds: float,
-        tenant_id: str | None = None,
+        tenant_id: str,
     ) -> LeasedWorkItem | None:
-        if not queue.strip() or not owner_id.strip():
-            raise ValueError("queue and owner must be non-blank")
+        if not tenant_id.strip() or not queue.strip() or not owner_id.strip():
+            raise ValueError("tenant, queue, and owner must be non-blank")
         if lease_ttl_seconds <= 0 or lease_ttl_seconds > 86400:
             raise ValueError("lease TTL must be > 0 and <= 86400 seconds")
         async with self._sessions.begin() as session:
@@ -353,13 +353,15 @@ class PostgresDurableWorkQueue:
                 )
                 statement = (
                     select(DurableWorkItemRow)
-                    .where(DurableWorkItemRow.queue == queue, eligibility)
+                    .where(
+                        DurableWorkItemRow.tenant_id == tenant_id,
+                        DurableWorkItemRow.queue == queue,
+                        eligibility,
+                    )
                     .order_by(DurableWorkItemRow.available_at, DurableWorkItemRow.created_at)
                     .limit(1)
                     .with_for_update(skip_locked=True)
                 )
-                if tenant_id is not None:
-                    statement = statement.where(DurableWorkItemRow.tenant_id == tenant_id)
                 row = await session.scalar(statement)
                 if row is None:
                     return None
@@ -413,16 +415,19 @@ class PostgresDurableWorkQueue:
             self._clear_lease(row)
             return self._item(row)
 
-    async def snapshot(self, *, queue: str, tenant_id: str | None = None) -> QueueSnapshot:
+    async def snapshot(self, *, queue: str, tenant_id: str) -> QueueSnapshot:
+        if not tenant_id.strip() or not queue.strip():
+            raise ValueError("tenant and queue must be non-blank")
         async with self._sessions() as session:
             now = await _database_now(session)
             statement = (
                 select(DurableWorkItemRow.state, func.count())
-                .where(DurableWorkItemRow.queue == queue)
+                .where(
+                    DurableWorkItemRow.tenant_id == tenant_id,
+                    DurableWorkItemRow.queue == queue,
+                )
                 .group_by(DurableWorkItemRow.state)
             )
-            if tenant_id is not None:
-                statement = statement.where(DurableWorkItemRow.tenant_id == tenant_id)
             counts = {
                 str(state): int(count) for state, count in (await session.execute(statement)).all()
             }
