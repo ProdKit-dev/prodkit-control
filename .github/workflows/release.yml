@@ -23,7 +23,7 @@ permissions:
 jobs:
   release:
     name: release
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@45e4dacd65c736588e0c7e2d3cdcb1cb0d11045e
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@89eec1f6bcd4e45fb67c9fa99122ea6feba9d4bc
     with:
       version: ${{ inputs.version }}
       target_sha: ${{ github.sha }}
@@ -44,3 +44,17 @@ jobs:
       # SHA256SUMS, release metadata, and SPDX SBOM remain mandatory.
       attest: false
       environment: release
+
+  verification-dispatch:
+    name: dispatch verification
+    needs: release
+    permissions:
+      actions: write
+      contents: read
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-verification-dispatch.yml@89eec1f6bcd4e45fb67c9fa99122ea6feba9d4bc
+    with:
+      source_sha: ${{ github.sha }}
+      version: ${{ inputs.version }}
+      release_run_id: ${{ github.run_id }}
+      runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]' }}
+      verification_workflow_file: release-verification.yml
