@@ -6,6 +6,35 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-23
+
+### Added
+
+- in-toto Statement v1 and SLSA provenance-v1 interoperability contracts with a ProdKit evidence predicate and forward-compatible external-standard parsing.
+- Standalone Ed25519 signed checkpoints, trust-root/key validity and revocation policy, assurance profiles, and independent offline verification.
+- Portable evidence packages containing the evidence bundle, attestation, checkpoint, trust-root metadata, and retention-lock receipt with per-member SHA-256 verification and independent trust anchoring.
+- Hardened Cosign/Sigstore blob signing and verification integration with key/keyless identity constraints, custom trust roots, offline verification, timeouts, and fail-closed process handling.
+- MCP and framework-neutral agent adapters that convert tool/function calls into deterministic `ActionSpec` proposals without bypassing policy, approval, credential, execution, observation, or evidence boundaries.
+- Conjunctive multi-policy composition for OPA, Permit/AuthZen-style, and custom policy engines.
+- Bounded OpenTelemetry semantic projection with predictable error status/type handling and no arbitrary event-payload projection.
+
+### Changed
+
+- External interoperability models tolerate unknown compatible fields while authoritative ProdKit trust, checkpoint, retention, and assurance contracts remain strict.
+- v0.3 targets the stable `https://in-toto.io/Statement/v1` and `https://slsa.dev/provenance/v1` wire identifiers instead of binding ProdKit architecture to transient standard minor versions.
+- Policy composition is fail closed: `DENY` dominates `REQUIRE_APPROVAL`, which dominates `ALLOW`; approval roles are unioned and conflicting constraints deny.
+
+### Security
+
+- Portable packages do not trust embedded signing keys by themselves; verification requires an independently supplied trust-root policy or trust-root digest.
+- Key validity, signer identity, revocation time, checkpoint signatures, evidence/attestation digests, retention mode/duration, archive membership, and size limits are verified before portable evidence is accepted.
+- MCP/agent effect class, risk class, executor, operation, and target scope are administrator-owned bindings rather than model-supplied annotations.
+- Required signing or retention controls fail closed; local storage is not mislabeled as compliance-grade WORM retention.
+
+### Release scope
+
+The unreleased v0.3.0 milestone is portable attestations and interoperability. The release remains incomplete until its exact-head CI/Security/CodeQL gates and the roadmap's offline verification, key-rotation/revocation, cross-version, and interoperability fixture gates are all evidenced.
+
 ## [0.2.0] - 2026-08-22
 
 ### Added

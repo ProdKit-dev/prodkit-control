@@ -1,0 +1,8 @@
+{
+  "result": {
+    "outcome": "require_approval",
+    "reason_codes": ["fixture_requires_review"],
+    "required_approval_roles": ["production_approver"],
+    "constraints": {"environment": "production"}
+  }
+}

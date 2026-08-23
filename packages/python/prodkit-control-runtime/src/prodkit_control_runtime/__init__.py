@@ -2,6 +2,12 @@
 
 from .approvals import HTTPApprovalProvider as HTTPApprovalProvider
 from .artifacts import EncryptedFilesystemArtifactStore as EncryptedFilesystemArtifactStore
+from .attestations import Ed25519CheckpointSigner as Ed25519CheckpointSigner
+from .attestations import OfflineAssuranceVerifier as OfflineAssuranceVerifier
+from .attestations import PortableAttestationBuilder as PortableAttestationBuilder
+from .attestations import attestation_bytes as attestation_bytes
+from .attestations import attestation_sha256 as attestation_sha256
+from .attestations import checkpoint_sha256 as checkpoint_sha256
 from .attempts import InMemoryExecutionAttemptStore as InMemoryExecutionAttemptStore
 from .broker import ActionBroker as ActionBroker
 from .broker import BrokerOutcome as BrokerOutcome
@@ -21,7 +27,11 @@ from .memory import (
     InMemoryEventLedger as InMemoryEventLedger,
     InMemoryIdempotencyStore as InMemoryIdempotencyStore,
 )
+from .policy import ConjunctivePolicyEngine as ConjunctivePolicyEngine
 from .policy import DefaultPolicyEngine as DefaultPolicyEngine
+from .portable import PortableEvidencePackageBuilder as PortableEvidencePackageBuilder
+from .portable import PortableEvidencePackageVerifier as PortableEvidencePackageVerifier
+from .portable import portable_package_sha256 as portable_package_sha256
 from .projectors import RunProjection as RunProjection
 from .projectors import project_run as project_run
 from .reconciliation import InMemoryReconciliationStore as InMemoryReconciliationStore
@@ -29,4 +39,4 @@ from .reconciliation import ReconciliationCoordinator as ReconciliationCoordinat
 from .reconciliation import ReconciliationSource as ReconciliationSource
 from .reconciliation import ReconciliationStore as ReconciliationStore
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

@@ -1,0 +1,72 @@
+{
+  "$defs": {
+    "RetentionLockMode": {
+      "enum": [
+        "logical",
+        "governance",
+        "compliance",
+        "write_once"
+      ],
+      "title": "RetentionLockMode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "immutable": {
+      "default": true,
+      "title": "Immutable",
+      "type": "boolean"
+    },
+    "locked_at": {
+      "format": "date-time",
+      "title": "Locked At",
+      "type": "string"
+    },
+    "mode": {
+      "$ref": "#/$defs/RetentionLockMode"
+    },
+    "object_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Object Sha256",
+      "type": "string"
+    },
+    "provider": {
+      "minLength": 1,
+      "title": "Provider",
+      "type": "string"
+    },
+    "provider_reference": {
+      "minLength": 1,
+      "title": "Provider Reference",
+      "type": "string"
+    },
+    "retain_until": {
+      "format": "date-time",
+      "title": "Retain Until",
+      "type": "string"
+    },
+    "schema_name": {
+      "const": "prodkit.retention-lock-receipt",
+      "default": "prodkit.retention-lock-receipt",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "object_sha256",
+    "locked_at",
+    "retain_until",
+    "mode",
+    "provider",
+    "provider_reference"
+  ],
+  "title": "RetentionLockReceipt",
+  "type": "object"
+}

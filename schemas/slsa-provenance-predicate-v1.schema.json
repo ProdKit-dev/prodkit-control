@@ -1,0 +1,225 @@
+{
+  "$defs": {
+    "AttestationResourceDescriptor": {
+      "properties": {
+        "annotations": {
+          "additionalProperties": true,
+          "title": "Annotations",
+          "type": "object"
+        },
+        "digest": {
+          "additionalProperties": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "title": "Digest",
+          "type": "object"
+        },
+        "downloadLocation": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Downloadlocation"
+        },
+        "mediaType": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mediatype"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "uri": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uri"
+        }
+      },
+      "title": "AttestationResourceDescriptor",
+      "type": "object"
+    },
+    "SlsaBuildDefinitionV1": {
+      "properties": {
+        "buildType": {
+          "minLength": 1,
+          "title": "Buildtype",
+          "type": "string"
+        },
+        "externalParameters": {
+          "additionalProperties": true,
+          "title": "Externalparameters",
+          "type": "object"
+        },
+        "internalParameters": {
+          "additionalProperties": true,
+          "title": "Internalparameters",
+          "type": "object"
+        },
+        "resolvedDependencies": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AttestationResourceDescriptor"
+          },
+          "title": "Resolveddependencies",
+          "type": "array"
+        }
+      },
+      "required": [
+        "buildType"
+      ],
+      "title": "SlsaBuildDefinitionV1",
+      "type": "object"
+    },
+    "SlsaBuildMetadataV1": {
+      "properties": {
+        "finishedOn": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finishedon"
+        },
+        "invocationId": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Invocationid"
+        },
+        "startedOn": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Startedon"
+        }
+      },
+      "title": "SlsaBuildMetadataV1",
+      "type": "object"
+    },
+    "SlsaBuilderV1": {
+      "properties": {
+        "builderDependencies": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AttestationResourceDescriptor"
+          },
+          "title": "Builderdependencies",
+          "type": "array"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "version": {
+          "additionalProperties": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "title": "Version",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "SlsaBuilderV1",
+      "type": "object"
+    },
+    "SlsaRunDetailsV1": {
+      "properties": {
+        "builder": {
+          "$ref": "#/$defs/SlsaBuilderV1"
+        },
+        "byproducts": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AttestationResourceDescriptor"
+          },
+          "title": "Byproducts",
+          "type": "array"
+        },
+        "metadata": {
+          "$ref": "#/$defs/SlsaBuildMetadataV1"
+        }
+      },
+      "required": [
+        "builder"
+      ],
+      "title": "SlsaRunDetailsV1",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "buildDefinition": {
+      "$ref": "#/$defs/SlsaBuildDefinitionV1"
+    },
+    "runDetails": {
+      "$ref": "#/$defs/SlsaRunDetailsV1"
+    }
+  },
+  "required": [
+    "buildDefinition",
+    "runDetails"
+  ],
+  "title": "SlsaProvenancePredicateV1",
+  "type": "object"
+}

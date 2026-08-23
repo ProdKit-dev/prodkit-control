@@ -1,0 +1,109 @@
+{
+  "$defs": {
+    "AttestationResourceDescriptor": {
+      "properties": {
+        "annotations": {
+          "additionalProperties": true,
+          "title": "Annotations",
+          "type": "object"
+        },
+        "digest": {
+          "additionalProperties": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "title": "Digest",
+          "type": "object"
+        },
+        "downloadLocation": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Downloadlocation"
+        },
+        "mediaType": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mediatype"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "uri": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uri"
+        }
+      },
+      "title": "AttestationResourceDescriptor",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "_type": {
+      "const": "https://in-toto.io/Statement/v1",
+      "default": "https://in-toto.io/Statement/v1",
+      "title": "Type",
+      "type": "string"
+    },
+    "predicate": {
+      "additionalProperties": true,
+      "title": "Predicate",
+      "type": "object"
+    },
+    "predicateType": {
+      "minLength": 1,
+      "title": "Predicatetype",
+      "type": "string"
+    },
+    "subject": {
+      "items": {
+        "$ref": "#/$defs/AttestationResourceDescriptor"
+      },
+      "title": "Subject",
+      "type": "array"
+    }
+  },
+  "required": [
+    "subject",
+    "predicateType"
+  ],
+  "title": "InTotoStatementV1",
+  "type": "object"
+}

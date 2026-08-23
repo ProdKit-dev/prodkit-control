@@ -1,0 +1,73 @@
+{
+  "$defs": {
+    "RetentionLockMode": {
+      "enum": [
+        "logical",
+        "governance",
+        "compliance",
+        "write_once"
+      ],
+      "title": "RetentionLockMode",
+      "type": "string"
+    },
+    "SigningRequirement": {
+      "enum": [
+        "optional",
+        "required"
+      ],
+      "title": "SigningRequirement",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "accepted_retention_modes": {
+      "default": [
+        "compliance",
+        "write_once"
+      ],
+      "items": {
+        "$ref": "#/$defs/RetentionLockMode"
+      },
+      "title": "Accepted Retention Modes",
+      "type": "array"
+    },
+    "minimum_retention_days": {
+      "default": 30,
+      "minimum": 1,
+      "title": "Minimum Retention Days",
+      "type": "integer"
+    },
+    "profile_id": {
+      "minLength": 1,
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "require_retention_lock": {
+      "default": true,
+      "title": "Require Retention Lock",
+      "type": "boolean"
+    },
+    "schema_name": {
+      "const": "prodkit.assurance-profile",
+      "default": "prodkit.assurance-profile",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "signing": {
+      "$ref": "#/$defs/SigningRequirement",
+      "default": "required"
+    }
+  },
+  "required": [
+    "profile_id"
+  ],
+  "title": "AssuranceProfile",
+  "type": "object"
+}

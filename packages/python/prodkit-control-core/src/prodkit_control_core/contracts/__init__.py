@@ -3,6 +3,7 @@
 from .actions import *
 from .approvals import *
 from .artifacts import *
+from .attestations import *
 from .events import *
 from .execution import *
 from .identity import *

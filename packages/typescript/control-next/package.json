@@ -1,6 +1,6 @@
 {
   "name": "@prodkit/control-next",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Next.js server and route-handler integration boundary.",
   "license": "Apache-2.0",
   "type": "module",

@@ -1,0 +1,120 @@
+{
+  "$defs": {
+    "CheckpointSigningAlgorithm": {
+      "enum": [
+        "ed25519"
+      ],
+      "title": "CheckpointSigningAlgorithm",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "algorithm": {
+      "$ref": "#/$defs/CheckpointSigningAlgorithm",
+      "default": "ed25519"
+    },
+    "attestation_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Attestation Sha256"
+    },
+    "checkpoint_id": {
+      "format": "uuid",
+      "title": "Checkpoint Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "evidence_bundle_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Evidence Bundle Sha256",
+      "type": "string"
+    },
+    "final_event_hash": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Final Event Hash",
+      "type": "string"
+    },
+    "key_id": {
+      "minLength": 1,
+      "title": "Key Id",
+      "type": "string"
+    },
+    "previous_checkpoint_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Previous Checkpoint Sha256"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "schema_name": {
+      "const": "prodkit.signed-checkpoint",
+      "default": "prodkit.signed-checkpoint",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sequence": {
+      "minimum": 1,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "signature_base64": {
+      "minLength": 1,
+      "title": "Signature Base64",
+      "type": "string"
+    },
+    "signer_id": {
+      "minLength": 1,
+      "title": "Signer Id",
+      "type": "string"
+    },
+    "tenant_id": {
+      "minLength": 1,
+      "title": "Tenant Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "checkpoint_id",
+    "run_id",
+    "tenant_id",
+    "created_at",
+    "sequence",
+    "final_event_hash",
+    "evidence_bundle_sha256",
+    "signer_id",
+    "key_id",
+    "signature_base64"
+  ],
+  "title": "SignedCheckpoint",
+  "type": "object"
+}
