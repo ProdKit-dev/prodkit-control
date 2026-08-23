@@ -10,6 +10,7 @@ uv run --python "$python_version" --no-sync pytest --cov-report=xml
 uv run --python "$python_version" --no-sync python scripts/export_schemas.py --check
 
 if [[ "$python_version" == "3.13" ]]; then
+  uv run --python "$python_version" --no-sync python scripts/ci_ha_scale.py
   rm -rf .artifacts/python-release
   mkdir -p .artifacts/python-release
   uv build --all-packages --out-dir .artifacts/python-release
