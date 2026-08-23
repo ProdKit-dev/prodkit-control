@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from prodkit_control_core import (
     ArtifactRef,
+    AuthorizationDeniedError,
     ContentStorageMode,
     IntegrityViolationError,
     canonical_json_bytes,
@@ -18,12 +19,7 @@ from prodkit_control_core import (
 
 
 class EncryptedFilesystemArtifactStore:
-    """AES-256-GCM content-addressed artifact store with atomic local persistence.
-
-    The key is supplied by the deployment secret/KMS boundary and is never serialized into an
-    artifact reference. Stored bytes are authenticated ciphertext; the reference digest remains
-    the digest of the retrievable plaintext (or the deterministic redaction envelope).
-    """
+    """Tenant-partitioned AES-256-GCM artifact store with tenant-bound AAD."""
 
     _MAGIC = b"PKCA1"
     _NONCE_BYTES = 12
@@ -65,6 +61,7 @@ class EncryptedFilesystemArtifactStore:
         path = (self._root / relative).resolve()
         self._assert_under_root(path)
         aad = self._aad(
+            tenant_id=tenant_id,
             digest=digest,
             media_type=media_type,
             classification=classification,
@@ -75,6 +72,7 @@ class EncryptedFilesystemArtifactStore:
         payload = self._MAGIC + nonce + ciphertext
         await asyncio.to_thread(self._atomic_write, path, payload)
         return ArtifactRef(
+            tenant_id=tenant_id,
             artifact_id=f"artifact-{digest}",
             media_type=media_type,
             sha256=digest,
@@ -88,7 +86,9 @@ class EncryptedFilesystemArtifactStore:
             classification=classification,
         )
 
-    async def get(self, artifact: ArtifactRef) -> bytes:
+    async def get(self, *, tenant_id: str, artifact: ArtifactRef) -> bytes:
+        if artifact.tenant_id != tenant_id:
+            raise AuthorizationDeniedError("artifact is not owned by the requested tenant")
         if not artifact.encrypted:
             raise IntegrityViolationError(
                 "encrypted store refuses an unencrypted artifact reference"
@@ -98,6 +98,9 @@ class EncryptedFilesystemArtifactStore:
         relative = Path(artifact.location.removeprefix("pkc+file://"))
         if relative.is_absolute() or ".." in relative.parts:
             raise IntegrityViolationError("artifact location escapes the configured store")
+        expected_partition = sha256_hex({"tenant_id": tenant_id})
+        if not relative.parts or relative.parts[0] != expected_partition:
+            raise AuthorizationDeniedError("artifact storage partition does not match tenant")
         path = (self._root / relative).resolve()
         self._assert_under_root(path)
         payload = await asyncio.to_thread(path.read_bytes)
@@ -110,6 +113,7 @@ class EncryptedFilesystemArtifactStore:
         nonce = payload[nonce_start:nonce_end]
         ciphertext = payload[nonce_end:]
         aad = self._aad(
+            tenant_id=tenant_id,
             digest=artifact.sha256,
             media_type=artifact.media_type,
             classification=artifact.classification,
@@ -130,9 +134,12 @@ class EncryptedFilesystemArtifactStore:
             raise IntegrityViolationError("artifact path escapes the configured store")
 
     @staticmethod
-    def _aad(*, digest: str, media_type: str, classification: str, redacted: bool) -> bytes:
+    def _aad(
+        *, tenant_id: str, digest: str, media_type: str, classification: str, redacted: bool
+    ) -> bytes:
         return canonical_json_bytes(
             {
+                "tenant_id": tenant_id,
                 "sha256": digest,
                 "media_type": media_type,
                 "classification": classification,

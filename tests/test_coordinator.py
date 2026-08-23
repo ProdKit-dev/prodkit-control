@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from prodkit_control_core import AuthorizationDeniedError, RunStatus
+from prodkit_control_core import RunStatus
 from prodkit_control_runtime import InMemoryEventLedger, RunCoordinator
 
 
 @pytest.mark.asyncio
-async def test_completion_rejects_cross_tenant_actor_before_state_mutation(human) -> None:
+async def test_completion_hides_cross_tenant_run_before_state_mutation(human) -> None:
     ledger = InMemoryEventLedger()
     coordinator = RunCoordinator(ledger)
     run = await coordinator.start_run(
@@ -18,12 +18,14 @@ async def test_completion_rejects_cross_tenant_actor_before_state_mutation(human
     )
     foreign_actor = human.model_copy(update={"tenant_id": "another-tenant"})
 
-    with pytest.raises(AuthorizationDeniedError):
+    with pytest.raises(KeyError):
         await coordinator.complete_run(run.run_id, actor=foreign_actor)
 
-    current = await coordinator.require_run(run.run_id)
+    current = await coordinator.require_run(run.run_id, tenant_id=human.tenant_id)
     assert current.status is RunStatus.RUNNING
-    assert len(await ledger.list_run_events(run.run_id)) == 1
+    assert len(await ledger.list_run_events(tenant_id=human.tenant_id, run_id=run.run_id)) == 1
+    with pytest.raises(KeyError):
+        await coordinator.require_run(run.run_id, tenant_id="another-tenant")
 
 
 @pytest.mark.asyncio
@@ -43,7 +45,7 @@ async def test_completion_requires_terminal_status_and_is_single_use(human) -> N
             actor=human,
             status=RunStatus.WAITING_FOR_APPROVAL,
         )
-    current = await coordinator.require_run(run.run_id)
+    current = await coordinator.require_run(run.run_id, tenant_id=human.tenant_id)
     assert current.status is RunStatus.RUNNING
 
     completed = await coordinator.complete_run(

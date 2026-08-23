@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import AwareDatetime, Field, model_validator
+from pydantic import AwareDatetime, model_validator
 
 from .base import ContractModel, NonBlankStr, Sha256
 
@@ -15,10 +15,11 @@ class ContentStorageMode(StrEnum):
 
 
 class ArtifactRef(ContractModel):
+    tenant_id: NonBlankStr
     artifact_id: NonBlankStr
     media_type: NonBlankStr
     sha256: Sha256
-    size_bytes: int = Field(ge=0)
+    size_bytes: int
     storage_mode: ContentStorageMode
     location: NonBlankStr | None = None
     encrypted: bool = False
@@ -29,6 +30,8 @@ class ArtifactRef(ContractModel):
 
     @model_validator(mode="after")
     def validate_storage(self) -> ArtifactRef:
+        if self.size_bytes < 0:
+            raise ValueError("artifact size cannot be negative")
         if (
             self.storage_mode in {ContentStorageMode.NONE, ContentStorageMode.HASH_ONLY}
             and self.location

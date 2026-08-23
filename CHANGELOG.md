@@ -6,6 +6,33 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-23
+
+### Added
+
+- Canonical tenant access, isolation profile, support-elevation, lifecycle, export, and audit contracts with Python, TypeScript, and JSON Schema surfaces.
+- Durable PostgreSQL tenant-control state for isolation profiles, support grants, legal hold/deletion lifecycle, export manifests, and tenant administration audit evidence.
+- Tenant-bound evidence bundles, artifact references and encryption authentication context, cache namespaces, execution attempts, lineage, events, runs, and durable work acquisition.
+- Known-foreign-ID negative/property qualification plus PostgreSQL 18 tests for tenant partitions, live grant revocation, lifecycle precedence, append-only audit/export evidence, and immutable tenant ownership.
+
+### Changed
+
+- Repository, service, storage, queue, event, lineage, attempt, artifact, and reconciliation APIs require explicit tenant scope instead of relying on globally unique identifiers.
+- Durable queues and snapshots require a concrete tenant; cross-tenant operational aggregation is reserved for an explicitly privileged administrative surface.
+- PostgreSQL schema version 6 adds tenant-first indexes, composite ownership constraints, immutable tenant ownership, and durable tenant-governance tables.
+- Support elevation is opt-in, time-bounded, exact-capability scoped, reason/ticket bound, revalidated on every use, and cannot modify the isolation profile that authorizes support access.
+
+### Security
+
+- Known valid foreign identifiers resolve as tenant-local not-found or empty results rather than leaking another tenant's resource existence.
+- AES-GCM artifact authentication binds tenant identity, preventing a valid encrypted artifact from being replayed under another tenant reference.
+- Grant revocation, expiry, operator identity, tenant opt-in, reason/ticket binding, and exact capability are checked at privileged-use time.
+- Tenant audit events and export manifests are append-only in PostgreSQL; mutable tenant-owned rows cannot be reassigned to another tenant.
+
+### Release scope
+
+`v0.5.0` implements the multi-tenant enterprise-isolation engineering milestone. It does not claim that an independent tenant-isolation security review has been completed. Wording such as “independently reviewed enterprise isolation” remains blocked until an external review is completed and recorded.
+
 ## [0.4.0] - 2026-08-23
 
 ### Added

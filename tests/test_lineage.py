@@ -285,21 +285,31 @@ def test_graph_rejects_invalid_relations_and_scope() -> None:
 
 
 @pytest.mark.asyncio
-async def test_lineage_store_is_idempotent_and_append_only() -> None:
+async def test_lineage_store_is_idempotent_append_only_and_tenant_scoped() -> None:
     graph, _ = make_complete_lineage()
     store = InMemoryLineageStore()
     with pytest.raises(KeyError, match="does not exist"):
-        await store.get_graph(graph.run_id)
+        await store.get_graph(tenant_id=graph.tenant_id, run_id=graph.run_id)
 
     for node in graph.nodes:
         await store.record_node(node)
         await store.record_node(node)
     for relation in graph.relations:
-        await store.record_relation(graph.run_id, relation)
-        await store.record_relation(graph.run_id, relation)
+        await store.record_relation(
+            tenant_id=graph.tenant_id,
+            run_id=graph.run_id,
+            relation=relation,
+        )
+        await store.record_relation(
+            tenant_id=graph.tenant_id,
+            run_id=graph.run_id,
+            relation=relation,
+        )
 
-    stored = await store.get_graph(graph.run_id)
+    stored = await store.get_graph(tenant_id=graph.tenant_id, run_id=graph.run_id)
     assert stored == graph
+    with pytest.raises(KeyError, match="does not exist"):
+        await store.get_graph(tenant_id="foreign-tenant", run_id=graph.run_id)
 
     first = graph.nodes[0]
     with pytest.raises(IntegrityViolationError, match="cannot be rewritten"):
@@ -311,8 +321,9 @@ async def test_lineage_store_is_idempotent_and_append_only() -> None:
     first_relation = graph.relations[0]
     with pytest.raises(IntegrityViolationError, match="relation cannot be rewritten"):
         await store.record_relation(
-            graph.run_id,
-            first_relation.model_copy(
+            tenant_id=graph.tenant_id,
+            run_id=graph.run_id,
+            relation=first_relation.model_copy(
                 update={"recorded_at": first_relation.recorded_at + timedelta(seconds=1)}
             ),
         )

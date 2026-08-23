@@ -3,4 +3,4 @@
 from .executor import ConstrainedGitExecutor, GitExecutorConfig
 
 __all__ = ("ConstrainedGitExecutor", "GitExecutorConfig")
-__version__ = "0.4.0"
+__version__ = "0.5.0"

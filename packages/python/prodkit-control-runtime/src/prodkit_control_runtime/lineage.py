@@ -36,27 +36,32 @@ LineageNodeT = TypeVar("LineageNodeT", bound=LineageNodeBase)
 
 
 class InMemoryLineageStore:
-    """Concurrency-safe lineage store for local use and contract testing."""
+    """Tenant-partitioned lineage store for local and standalone operation."""
 
     def __init__(self) -> None:
-        self._nodes: dict[UUID, dict[UUID, LineageNode]] = defaultdict(dict)
-        self._relations: dict[UUID, list[LineageRelation]] = defaultdict(list)
-        self._tenants: dict[UUID, str] = {}
-        self._locks: dict[UUID, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self._nodes: dict[tuple[str, UUID], dict[UUID, LineageNode]] = defaultdict(dict)
+        self._relations: dict[tuple[str, UUID], list[LineageRelation]] = defaultdict(list)
+        self._locks: dict[tuple[str, UUID], asyncio.Lock] = defaultdict(asyncio.Lock)
 
     async def record_node(self, node: LineageNode) -> None:
-        async with self._locks[node.run_id]:
-            tenant = self._tenants.setdefault(node.run_id, node.tenant_id)
-            if tenant != node.tenant_id:
+        identity = (node.tenant_id, node.run_id)
+        async with self._locks[identity]:
+            if any(
+                run_id == node.run_id and tenant_id != node.tenant_id and nodes
+                for (tenant_id, run_id), nodes in self._nodes.items()
+            ):
                 raise IntegrityViolationError("a lineage run cannot cross tenant boundaries")
-            existing = self._nodes[node.run_id].get(node.node_id)
+            existing = self._nodes[identity].get(node.node_id)
             if existing is not None and existing != node:
                 raise IntegrityViolationError("a lineage node id cannot be rewritten")
-            self._nodes[node.run_id][node.node_id] = node
+            self._nodes[identity][node.node_id] = node
 
-    async def record_relation(self, run_id: UUID, relation: LineageRelation) -> None:
-        async with self._locks[run_id]:
-            for existing in self._relations[run_id]:
+    async def record_relation(
+        self, *, tenant_id: str, run_id: UUID, relation: LineageRelation
+    ) -> None:
+        identity = (tenant_id, run_id)
+        async with self._locks[identity]:
+            for existing in self._relations[identity]:
                 if (
                     existing.relation == relation.relation
                     and existing.subject == relation.subject
@@ -65,25 +70,28 @@ class InMemoryLineageStore:
                     if existing != relation:
                         raise IntegrityViolationError("a lineage relation cannot be rewritten")
                     return
-            graph = self._graph(run_id, (*self._relations[run_id], relation))
-            self._relations[run_id] = list(graph.relations)
+            graph = self._graph(tenant_id, run_id, (*self._relations[identity], relation))
+            self._relations[identity] = list(graph.relations)
 
-    async def get_graph(self, run_id: UUID) -> LineageGraph:
-        async with self._locks[run_id]:
-            return self._graph(run_id, tuple(self._relations[run_id]))
+    async def get_graph(self, *, tenant_id: str, run_id: UUID) -> LineageGraph:
+        identity = (tenant_id, run_id)
+        async with self._locks[identity]:
+            return self._graph(tenant_id, run_id, tuple(self._relations[identity]))
 
     def _graph(
         self,
+        tenant_id: str,
         run_id: UUID,
         relations: tuple[LineageRelation, ...],
     ) -> LineageGraph:
-        tenant_id = self._tenants.get(run_id)
-        if tenant_id is None:
+        identity = (tenant_id, run_id)
+        nodes = self._nodes.get(identity)
+        if not nodes:
             raise KeyError(f"lineage run {run_id} does not exist")
         return LineageGraph(
             run_id=run_id,
             tenant_id=tenant_id,
-            nodes=tuple(self._nodes[run_id].values()),
+            nodes=tuple(nodes.values()),
             relations=relations,
         )
 

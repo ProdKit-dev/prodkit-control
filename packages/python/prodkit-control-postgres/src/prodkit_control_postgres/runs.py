@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, Index, String, text
+from sqlalchemy import DateTime, Index, String, select, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
@@ -12,7 +12,7 @@ from prodkit_control_core import RunRecord
 
 from .models import Base
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 class RunRow(Base):
@@ -27,14 +27,15 @@ class RunRow(Base):
 
 
 class PostgresRunStore:
-    """Durable current-state projection for control runs."""
+    """Durable current-state projection with mandatory tenant predicates."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._sessions = session_factory
 
     async def create(self, run: RunRecord) -> None:
         async with self._sessions.begin() as session:
-            if await session.get(RunRow, run.run_id) is not None:
+            existing = await session.scalar(select(RunRow).where(RunRow.run_id == run.run_id))
+            if existing is not None:
                 raise ValueError(f"run {run.run_id} already exists")
             session.add(
                 RunRow(
@@ -48,17 +49,23 @@ class PostgresRunStore:
 
     async def replace(self, run: RunRecord) -> None:
         async with self._sessions.begin() as session:
-            row = await session.get(RunRow, run.run_id, with_for_update=True)
+            row = await session.scalar(
+                select(RunRow)
+                .where(RunRow.tenant_id == run.tenant_id, RunRow.run_id == run.run_id)
+                .with_for_update()
+            )
             if row is None:
                 raise KeyError(run.run_id)
-            if row.tenant_id != run.tenant_id or row.started_at != run.started_at:
+            if row.started_at != run.started_at:
                 raise ValueError("run identity is immutable")
             row.status = run.status.value
             row.document = run.model_dump(mode="json")
 
-    async def get(self, run_id: UUID) -> RunRecord | None:
+    async def get(self, *, tenant_id: str, run_id: UUID) -> RunRecord | None:
         async with self._sessions() as session:
-            row = await session.get(RunRow, run_id)
+            row = await session.scalar(
+                select(RunRow).where(RunRow.tenant_id == tenant_id, RunRow.run_id == run_id)
+            )
             return RunRecord.model_validate(row.document) if row is not None else None
 
 

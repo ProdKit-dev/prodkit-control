@@ -143,12 +143,14 @@ class InMemoryLeaseStore:
 
 
 class InMemoryDurableWorkQueue:
-    """Bounded recoverable queue for standalone deployments and deterministic qualification tests.
+    """Bounded tenant-scoped recoverable queue for standalone deployments and qualification.
 
     The queue fences *scheduler ownership*. A handler that produces an externally visible effect must
     additionally propagate ``lease.fence_token`` to a fence-aware sink or use a provider-enforced
     idempotency key. Unknown external-effect outcomes must still follow ActionBroker reconciliation
-    rules rather than being blindly replayed after lease expiry.
+    rules rather than being blindly replayed after lease expiry. Ordinary acquisition and snapshots
+    require an explicit tenant; aggregate cross-tenant administration belongs behind a separate
+    privileged interface rather than an optional tenant filter.
     """
 
     def __init__(self, *, max_queue_depth: int, clock: Clock = _utc_now) -> None:
@@ -199,11 +201,11 @@ class InMemoryDurableWorkQueue:
         queue: str,
         owner_id: str,
         lease_ttl_seconds: float,
-        tenant_id: str | None = None,
+        tenant_id: str,
     ) -> LeasedWorkItem | None:
         _require_positive_ttl(lease_ttl_seconds)
-        if not queue.strip() or not owner_id.strip():
-            raise ValueError("queue and owner must be non-blank")
+        if not tenant_id.strip() or not queue.strip() or not owner_id.strip():
+            raise ValueError("tenant, queue, and owner must be non-blank")
         async with self._lock:
             now = self._clock()
             candidates = sorted(
@@ -211,7 +213,7 @@ class InMemoryDurableWorkQueue:
                     item
                     for item in self._items.values()
                     if item.queue == queue
-                    and (tenant_id is None or item.tenant_id == tenant_id)
+                    and item.tenant_id == tenant_id
                     and self._eligible(item, now)
                 ),
                 key=lambda item: (item.available_at, item.created_at, str(item.job_id)),
@@ -285,12 +287,14 @@ class InMemoryDurableWorkQueue:
             self._leases.pop(current.job_id, None)
             return updated
 
-    async def snapshot(self, *, queue: str, tenant_id: str | None = None) -> QueueSnapshot:
+    async def snapshot(self, *, queue: str, tenant_id: str) -> QueueSnapshot:
+        if not tenant_id.strip() or not queue.strip():
+            raise ValueError("tenant and queue must be non-blank")
         async with self._lock:
             items = [
                 item
                 for item in self._items.values()
-                if item.queue == queue and (tenant_id is None or item.tenant_id == tenant_id)
+                if item.queue == queue and item.tenant_id == tenant_id
             ]
             return QueueSnapshot(
                 queue=queue,
@@ -317,8 +321,10 @@ class InMemoryDurableWorkQueue:
         if (
             current is None
             or current.state is not WorkState.LEASED
+            or current.tenant_id != leased.item.tenant_id
             or current.attempt != leased.item.attempt
             or active is None
+            or active.tenant_id != leased.item.tenant_id
             or active.lease_id != leased.lease.lease_id
             or active.owner_id != leased.lease.owner_id
             or active.fence_token != leased.lease.fence_token
@@ -430,7 +436,7 @@ class CapacityAdmissionController:
 
 
 class RecoverableScheduler:
-    """Provider-neutral worker loop over a durable fenced queue.
+    """Provider-neutral tenant-scoped worker loop over a durable fenced queue.
 
     Handlers receive the fencing lease. Any handler that can create an external side effect must
     make that effect fence-aware or provider-idempotent. This scheduler deliberately does not claim
@@ -455,7 +461,9 @@ class RecoverableScheduler:
         self._lease_ttl_seconds = lease_ttl_seconds
         self._retry_delay_seconds = retry_delay_seconds
 
-    async def run_once(self, handler: WorkHandler, *, tenant_id: str | None = None) -> bool:
+    async def run_once(self, handler: WorkHandler, *, tenant_id: str) -> bool:
+        if not tenant_id.strip():
+            raise ValueError("scheduler tenant must be non-blank")
         leased = await self._queue.acquire(
             queue=self._queue_name,
             owner_id=self._owner_id,

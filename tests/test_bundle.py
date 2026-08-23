@@ -45,8 +45,9 @@ def _minimal_archive(
     events_bytes = json.dumps(event, sort_keys=True, separators=(",", ":")).encode() + b"\n"
     manifest: dict[str, object] = {
         "schema_name": "prodkit.evidence-bundle-manifest",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "run_id": run_id,
+        "tenant_id": "tenant-a",
         "generated_at": datetime.now(UTC).isoformat(),
         "event_count": 1,
         "events_sha256": sha256_hex(events_bytes),
@@ -97,6 +98,7 @@ async def test_evidence_bundle_roundtrip(tmp_path: Path, human) -> None:
     archive = await EvidenceBundleBuilder(ledger).build(
         run.run_id,
         tmp_path / "bundle",
+        tenant_id=human.tenant_id,
         lineage=lineage,
     )
     digest = evidence_bundle_sha256(archive)
@@ -105,12 +107,21 @@ async def test_evidence_bundle_roundtrip(tmp_path: Path, human) -> None:
         expected_archive_sha256=digest,
     )
     assert manifest["run_id"] == str(run.run_id)
+    assert manifest["tenant_id"] == human.tenant_id
     assert manifest["event_count"] == 2
     assert manifest["lineage_node_count"] == 1
     assert manifest["lineage_relation_count"] == 0
 
     with pytest.raises(IntegrityViolationError, match="external trust anchor"):
         EvidenceBundleVerifier().verify(archive, expected_archive_sha256="0" * 64)
+
+    with pytest.raises(ValueError, match="no events"):
+        await EvidenceBundleBuilder(ledger).build(
+            run.run_id,
+            tmp_path / "foreign-bundle",
+            tenant_id="foreign-tenant",
+            lineage=None,
+        )
 
 
 def test_evidence_bundle_rejects_invalid_zip(tmp_path: Path) -> None:
@@ -135,6 +146,7 @@ def test_evidence_bundle_rejects_invalid_manifest_json(tmp_path: Path) -> None:
         ({"schema_name": "other"}, "schema name"),
         ({"schema_version": "2.0.0"}, "schema version"),
         ({"run_id": "not-a-uuid"}, "run id"),
+        ({"tenant_id": ""}, "manifest tenant"),
         ({"event_count": 0}, "event_count"),
         ({"counts_by_type": {"run.started": 2}}, "event counts"),
         ({"events_sha256": "0" * 64}, "events digest"),
@@ -168,6 +180,12 @@ def test_evidence_bundle_rejects_invalid_event_scope(
 ) -> None:
     archive = _minimal_archive(tmp_path, event_changes=changes)
     with pytest.raises(IntegrityViolationError, match=message):
+        EvidenceBundleVerifier().verify(archive)
+
+
+def test_evidence_bundle_rejects_manifest_event_tenant_mismatch(tmp_path: Path) -> None:
+    archive = _minimal_archive(tmp_path, manifest_changes={"tenant_id": "tenant-b"})
+    with pytest.raises(IntegrityViolationError, match="tenant does not match events"):
         EvidenceBundleVerifier().verify(archive)
 
 
