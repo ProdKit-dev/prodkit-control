@@ -18,9 +18,9 @@ from prodkit_control_core import (
     InTotoStatementV1,
     IntegrityViolationError,
     ProdKitEvidencePredicateV1,
+    PRODKIT_EVIDENCE_PREDICATE_V1,
     RetentionLockReceipt,
     SLSA_PROVENANCE_V1,
-    PRODKIT_EVIDENCE_PREDICATE_V1,
     SignedCheckpoint,
     SigningRequirement,
     SlsaBuildDefinitionV1,
@@ -91,7 +91,7 @@ class PortableAttestationBuilder:
         )
         return InTotoStatementV1(
             subject=(self.resource(name=bundle_name, sha256=bundle_sha256),),
-            predicateType=PRODKIT_EVIDENCE_PREDICATE_V1,
+            predicate_type=PRODKIT_EVIDENCE_PREDICATE_V1,
             predicate=predicate.model_dump(mode="json", exclude_none=True),
         )
 
@@ -112,29 +112,29 @@ class PortableAttestationBuilder:
         byproducts: tuple[AttestationResourceDescriptor, ...] = (),
     ) -> InTotoStatementV1:
         provenance = SlsaProvenancePredicateV1(
-            buildDefinition=SlsaBuildDefinitionV1(
-                buildType=build_type,
-                externalParameters=external_parameters,
-                internalParameters=internal_parameters or {},
-                resolvedDependencies=resolved_dependencies,
+            build_definition=SlsaBuildDefinitionV1(
+                build_type=build_type,
+                external_parameters=external_parameters,
+                internal_parameters=internal_parameters or {},
+                resolved_dependencies=resolved_dependencies,
             ),
-            runDetails=SlsaRunDetailsV1(
+            run_details=SlsaRunDetailsV1(
                 builder=SlsaBuilderV1(
                     id=builder_id,
                     version=builder_versions or {},
-                    builderDependencies=builder_dependencies,
+                    builder_dependencies=builder_dependencies,
                 ),
                 metadata=SlsaBuildMetadataV1(
-                    invocationId=invocation_id,
-                    startedOn=started_on,
-                    finishedOn=finished_on,
+                    invocation_id=invocation_id,
+                    started_on=started_on,
+                    finished_on=finished_on,
                 ),
                 byproducts=byproducts,
             ),
         )
         return InTotoStatementV1(
             subject=subjects,
-            predicateType=SLSA_PROVENANCE_V1,
+            predicate_type=SLSA_PROVENANCE_V1,
             predicate=provenance.model_dump(mode="json", by_alias=True, exclude_none=True),
         )
 
@@ -232,7 +232,7 @@ class Ed25519CheckpointSigner:
                 )
             ),
         )
-        unsigned = {
+        signing_material = {
             "schema_name": "prodkit.signed-checkpoint",
             "schema_version": "1.0.0",
             "checkpoint_id": checkpoint_id,
@@ -248,9 +248,20 @@ class Ed25519CheckpointSigner:
             "key_id": self._key_id,
             "algorithm": CheckpointSigningAlgorithm.ED25519,
         }
-        signature = self._private_key.sign(canonical_json_bytes(unsigned))
+        signature = self._private_key.sign(canonical_json_bytes(signing_material))
         return SignedCheckpoint(
-            **unsigned,
+            checkpoint_id=checkpoint_id,
+            run_id=run_id,
+            tenant_id=tenant_id,
+            created_at=created_at,
+            sequence=sequence,
+            final_event_hash=final_event_hash,
+            evidence_bundle_sha256=evidence_bundle_sha256,
+            attestation_sha256=attestation_sha256,
+            previous_checkpoint_sha256=previous_checkpoint_sha256,
+            signer_id=self._signer_id,
+            key_id=self._key_id,
+            algorithm=CheckpointSigningAlgorithm.ED25519,
             signature_base64=base64.b64encode(signature).decode("ascii"),
         )
 
@@ -275,8 +286,7 @@ class OfflineAssuranceVerifier:
         expected_sha256: str,
     ) -> None:
         if not any(
-            subject.digest.get("sha256") == expected_sha256
-            for subject in statement.subject
+            subject.digest.get("sha256") == expected_sha256 for subject in statement.subject
         ):
             raise IntegrityViolationError("attestation does not identify the expected subject digest")
 
