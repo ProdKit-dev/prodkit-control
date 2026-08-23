@@ -6,6 +6,31 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-23
+
+### Added
+
+- Provider-neutral fenced lease and bounded durable-work contracts with Python and TypeScript surfaces.
+- Standalone and PostgreSQL HA implementations with monotonic fencing, database-clock expiry, `SKIP LOCKED` acquisition, bounded retry, and dead-letter state.
+- Global/per-tenant capacity admission, graceful runtime draining, and recoverable scheduler integration.
+- Published capacity envelope, HA operations guidance, and ADR 0001 for failover-safe ownership semantics.
+
+### Changed
+
+- PostgreSQL schema advances additively to version 5 for durable scheduler state.
+- API/runtime replicas can drain before shutdown and fail readiness while draining.
+- Scale qualification is a permanent CI release gate on the Python 3.13 lane.
+
+### Security
+
+- Scheduler fencing is explicitly separated from permanent action idempotency ownership; lease expiry never authorizes blind replay of an uncertain external effect.
+- Stale workers cannot acknowledge or retry work after a higher fence is issued.
+- Queue and in-flight admission are bounded so overload fails explicitly instead of becoming unbounded resource consumption.
+
+### Release scope
+
+`v0.4.0` is the high-availability and scale milestone. It qualifies concurrency, failover, bounded load/soak, and no-duplicate external-effect identity under the documented replay-safe failover path. Disaster recovery drills and broader enterprise isolation remain later roadmap milestones.
+
 ## [0.3.0] - 2026-08-23
 
 ### Added

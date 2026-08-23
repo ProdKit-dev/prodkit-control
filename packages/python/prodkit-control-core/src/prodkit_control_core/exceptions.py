@@ -45,3 +45,19 @@ class IncompleteLineageError(ProdKitControlError):
         self.missing_requirements = missing_requirements
         missing = ", ".join(missing_requirements)
         super().__init__(f"Production lineage is incomplete: {missing}")
+
+
+class LeaseLostError(ProdKitControlError):
+    """Raised when a stale or expired owner attempts a fenced state transition."""
+
+
+class QueueOverloadedError(ProdKitControlError):
+    """Raised when bounded durable work admission would exceed the configured envelope."""
+
+
+class CapacityExceededError(ProdKitControlError):
+    """Raised when global or tenant-scoped in-flight admission is exhausted."""
+
+
+class RuntimeDrainingError(ProdKitControlError):
+    """Raised when new work is submitted after graceful draining has begun."""

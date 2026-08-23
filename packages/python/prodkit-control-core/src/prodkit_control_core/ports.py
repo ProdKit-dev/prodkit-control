@@ -15,12 +15,16 @@ from .contracts import (
     ControlEvent,
     ControlEventDraft,
     CredentialLease,
+    DurableWorkItem,
     ExecutionAttemptRecord,
     ExecutionResult,
+    FencedLease,
+    LeasedWorkItem,
     LineageGraph,
     LineageNode,
     LineageRelation,
     PolicyDecision,
+    QueueSnapshot,
     ReconciliationFinding,
     RunRecord,
     StateObservation,
@@ -156,6 +160,8 @@ class Reconciler(Protocol):
 
 @runtime_checkable
 class IdempotencyStore(Protocol):
+    """Permanent external-effect ownership; claims are never lease-expired for replay."""
+
     async def claim(self, *, tenant_id: str, key: str, action_digest: str) -> bool: ...
     async def complete(self, *, tenant_id: str, key: str, result: ExecutionResult) -> None: ...
     async def result(self, *, tenant_id: str, key: str) -> ExecutionResult | None: ...
@@ -173,6 +179,52 @@ class ExecutionAttemptStore(Protocol):
 class CredentialLeaseProvider(Protocol):
     async def issue(self, *, action: ActionSpec, executor_identity: str) -> CredentialLease: ...
     async def revoke(self, lease_id: UUID) -> None: ...
+
+
+@runtime_checkable
+class LeaseStore(Protocol):
+    """Reusable exclusive ownership with monotonic fencing across expiry and release."""
+
+    async def acquire(
+        self,
+        *,
+        tenant_id: str,
+        resource_key: str,
+        owner_id: str,
+        ttl_seconds: float,
+    ) -> FencedLease | None: ...
+
+    async def renew(self, lease: FencedLease, *, ttl_seconds: float) -> FencedLease: ...
+    async def release(self, lease: FencedLease) -> None: ...
+    async def is_current(self, lease: FencedLease) -> bool: ...
+
+
+@runtime_checkable
+class DurableWorkQueue(Protocol):
+    """Bounded recoverable work queue whose mutations require the current fencing lease."""
+
+    async def enqueue(self, item: DurableWorkItem) -> DurableWorkItem: ...
+
+    async def acquire(
+        self,
+        *,
+        queue: str,
+        owner_id: str,
+        lease_ttl_seconds: float,
+        tenant_id: str | None = None,
+    ) -> LeasedWorkItem | None: ...
+
+    async def complete(self, leased: LeasedWorkItem) -> DurableWorkItem: ...
+
+    async def retry(
+        self,
+        leased: LeasedWorkItem,
+        *,
+        delay_seconds: float,
+        error: str,
+    ) -> DurableWorkItem: ...
+
+    async def snapshot(self, *, queue: str, tenant_id: str | None = None) -> QueueSnapshot: ...
 
 
 @runtime_checkable

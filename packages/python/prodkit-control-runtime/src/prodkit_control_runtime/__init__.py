@@ -19,6 +19,13 @@ from .credentials import HTTPCredentialLeaseProvider as HTTPCredentialLeaseProvi
 from .executors import DigestEffectVerifier as DigestEffectVerifier
 from .executors import DryRunExecutor as DryRunExecutor
 from .executors import ExecutorRegistry as ExecutorRegistry
+from .ha import CapacityAdmissionController as CapacityAdmissionController
+from .ha import InMemoryDurableWorkQueue as InMemoryDurableWorkQueue
+from .ha import InMemoryLeaseStore as InMemoryLeaseStore
+from .ha import REFERENCE_CAPACITY_ENVELOPE as REFERENCE_CAPACITY_ENVELOPE
+from .ha import RecoverableScheduler as RecoverableScheduler
+from .ha import RuntimeLifecycle as RuntimeLifecycle
+from .ha import RuntimeState as RuntimeState
 from .lineage import InMemoryLineageStore as InMemoryLineageStore
 from .lineage import ProductionLineagePolicy as ProductionLineagePolicy
 from .memory import (
@@ -39,4 +46,4 @@ from .reconciliation import ReconciliationCoordinator as ReconciliationCoordinat
 from .reconciliation import ReconciliationSource as ReconciliationSource
 from .reconciliation import ReconciliationStore as ReconciliationStore
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"

@@ -53,6 +53,33 @@ async def test_start_and_read_run() -> None:
 
 
 @pytest.mark.asyncio
+async def test_draining_replica_fails_readiness_and_new_work_admission() -> None:
+    app = create_app(allow_insecure_header_auth=True)
+    await app.state.services.lifecycle.begin_draining()
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        health = await client.get("/healthz")
+        assert health.status_code == 200
+        assert health.json() == {"status": "ok"}
+
+        ready = await client.get("/readyz")
+        assert ready.status_code == 503
+        assert ready.json()["detail"] == {"status": "not_ready", "reason": "draining"}
+
+        rejected = await client.post(
+            "/v1/runs",
+            headers=auth_headers(),
+            json={"purpose": "must not enter a draining replica"},
+        )
+        assert rejected.status_code == 503
+        assert rejected.headers["retry-after"] == "1"
+        assert rejected.json()["detail"]["code"] == "runtime_draining"
+
+
+@pytest.mark.asyncio
 async def test_record_and_assess_lineage() -> None:
     headers = auth_headers(actor_id="recorder", actor_kind="service")
     async with httpx.AsyncClient(

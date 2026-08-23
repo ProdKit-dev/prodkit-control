@@ -109,3 +109,68 @@ export interface ControlEvent {
     readonly event_hash: string;
   };
 }
+
+export type WorkState = "queued" | "leased" | "succeeded" | "dead_letter";
+
+export interface FencedLease {
+  readonly schema_name: "prodkit.fenced-lease";
+  readonly schema_version: "1.0.0";
+  readonly lease_id: string;
+  readonly tenant_id: string;
+  readonly resource_key: string;
+  readonly owner_id: string;
+  readonly fence_token: number;
+  readonly acquired_at: string;
+  readonly expires_at: string;
+}
+
+export interface DurableWorkItem {
+  readonly schema_name: "prodkit.durable-work-item";
+  readonly schema_version: "1.0.0";
+  readonly job_id: string;
+  readonly tenant_id: string;
+  readonly queue: string;
+  readonly kind: string;
+  readonly idempotency_key: string;
+  readonly payload: Readonly<Record<string, unknown>>;
+  readonly created_at: string;
+  readonly available_at: string;
+  readonly attempt: number;
+  readonly max_attempts: number;
+  readonly state: WorkState;
+  readonly completed_at?: string | null;
+  readonly last_error?: string | null;
+}
+
+export interface LeasedWorkItem {
+  readonly schema_name: "prodkit.leased-work-item";
+  readonly schema_version: "1.0.0";
+  readonly item: DurableWorkItem;
+  readonly lease: FencedLease;
+}
+
+export interface QueueSnapshot {
+  readonly schema_name: "prodkit.queue-snapshot";
+  readonly schema_version: "1.0.0";
+  readonly queue: string;
+  readonly tenant_id?: string | null;
+  readonly queued: number;
+  readonly leased: number;
+  readonly dead_letter: number;
+  readonly succeeded: number;
+  readonly captured_at: string;
+}
+
+export interface CapacityEnvelope {
+  readonly schema_name: "prodkit.capacity-envelope";
+  readonly schema_version: "1.0.0";
+  readonly profile_id: string;
+  readonly max_queue_depth: number;
+  readonly max_in_flight: number;
+  readonly max_per_tenant_in_flight: number;
+  readonly lease_ttl_seconds: number;
+  readonly shutdown_grace_seconds: number;
+  readonly qualification_concurrency: number;
+  readonly qualification_work_items: number;
+  readonly qualification_soak_seconds: number;
+}

@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import inspect
 import secrets
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, cast
 from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
+from starlette.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from prodkit_control_core import (
@@ -32,6 +34,7 @@ from prodkit_control_core import (
     ProductionLineageAssessment,
     RunRecord,
     RunStatus,
+    RuntimeDrainingError,
     sha256_hex,
 )
 from prodkit_control_runtime import (
@@ -46,7 +49,9 @@ from prodkit_control_runtime import (
     InMemoryIdempotencyStore,
     InMemoryLineageStore,
     ProductionLineagePolicy,
+    REFERENCE_CAPACITY_ENVELOPE,
     RunCoordinator,
+    RuntimeLifecycle,
 )
 
 
@@ -115,6 +120,7 @@ class AppServices:
     broker: ActionBroker
     lineage: InMemoryLineageStore
     lineage_policy: ProductionLineagePolicy
+    lifecycle: RuntimeLifecycle
 
 
 def build_services() -> AppServices:
@@ -143,6 +149,7 @@ def build_services() -> AppServices:
         broker=broker,
         lineage=InMemoryLineageStore(),
         lineage_policy=ProductionLineagePolicy(),
+        lifecycle=RuntimeLifecycle(),
     )
 
 
@@ -195,23 +202,62 @@ def create_app(
     *,
     principal_resolver: PrincipalResolver | None = None,
     allow_insecure_header_auth: bool = False,
+    shutdown_grace_seconds: float = REFERENCE_CAPACITY_ENVELOPE.shutdown_grace_seconds,
 ) -> FastAPI:
     """Create the API.
 
     Production deployments must provide ``principal_resolver``. Header-based identity is
     intentionally disabled unless ``allow_insecure_header_auth`` is explicitly enabled.
     """
+    if shutdown_grace_seconds <= 0:
+        raise ValueError("shutdown_grace_seconds must be positive")
+    configured_services = services or build_services()
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            await configured_services.lifecycle.begin_draining()
+            await configured_services.lifecycle.wait_for_drain(
+                timeout_seconds=shutdown_grace_seconds
+            )
+            await configured_services.lifecycle.stop()
+
     app = FastAPI(
         title="ProdKit Control",
-        version="0.3.0",
+        lifespan=lifespan,
+        version="0.4.0",
         description=(
             "Provider-neutral intent-to-production lineage, action control, verification, "
             "reconciliation, and evidence API."
         ),
     )
-    app.state.services = services or build_services()
+    app.state.services = configured_services
     app.state.principal_resolver = principal_resolver
     app.state.allow_insecure_header_auth = allow_insecure_header_auth
+
+    @app.middleware("http")
+    async def lifecycle_admission(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        if request.url.path in {"/healthz", "/readyz"}:
+            return await call_next(request)
+        try:
+            async with configured_services.lifecycle.admit():
+                return await call_next(request)
+        except RuntimeDrainingError:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={
+                    "detail": {
+                        "code": "runtime_draining",
+                        "message": "control replica is draining",
+                    }
+                },
+                headers={"Retry-After": "1"},
+            )
 
     @app.get("/healthz", tags=["operations"])
     async def healthz() -> dict[str, str]:
@@ -219,6 +265,14 @@ def create_app(
 
     @app.get("/readyz", tags=["operations"])
     async def readyz() -> dict[str, str]:
+        if not configured_services.lifecycle.accepting:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "status": "not_ready",
+                    "reason": configured_services.lifecycle.state.value,
+                },
+            )
         if principal_resolver is None and not allow_insecure_header_auth:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

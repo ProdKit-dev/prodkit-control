@@ -1,0 +1,76 @@
+{
+  "additionalProperties": false,
+  "description": "Published operating envelope for a supported control-plane deployment profile.",
+  "properties": {
+    "lease_ttl_seconds": {
+      "exclusiveMinimum": 0,
+      "maximum": 86400,
+      "title": "Lease Ttl Seconds",
+      "type": "number"
+    },
+    "max_in_flight": {
+      "minimum": 1,
+      "title": "Max In Flight",
+      "type": "integer"
+    },
+    "max_per_tenant_in_flight": {
+      "minimum": 1,
+      "title": "Max Per Tenant In Flight",
+      "type": "integer"
+    },
+    "max_queue_depth": {
+      "minimum": 1,
+      "title": "Max Queue Depth",
+      "type": "integer"
+    },
+    "profile_id": {
+      "minLength": 1,
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "qualification_concurrency": {
+      "minimum": 1,
+      "title": "Qualification Concurrency",
+      "type": "integer"
+    },
+    "qualification_soak_seconds": {
+      "exclusiveMinimum": 0,
+      "title": "Qualification Soak Seconds",
+      "type": "number"
+    },
+    "qualification_work_items": {
+      "minimum": 1,
+      "title": "Qualification Work Items",
+      "type": "integer"
+    },
+    "schema_name": {
+      "default": "prodkit.capacity-envelope",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "shutdown_grace_seconds": {
+      "exclusiveMinimum": 0,
+      "maximum": 3600,
+      "title": "Shutdown Grace Seconds",
+      "type": "number"
+    }
+  },
+  "required": [
+    "profile_id",
+    "max_queue_depth",
+    "max_in_flight",
+    "max_per_tenant_in_flight",
+    "lease_ttl_seconds",
+    "shutdown_grace_seconds",
+    "qualification_concurrency",
+    "qualification_work_items",
+    "qualification_soak_seconds"
+  ],
+  "title": "CapacityEnvelope",
+  "type": "object"
+}

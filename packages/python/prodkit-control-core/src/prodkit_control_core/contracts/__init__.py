@@ -6,6 +6,7 @@ from .artifacts import *
 from .attestations import *
 from .events import *
 from .execution import *
+from .ha import *
 from .identity import *
 from .lineage import *
 from .policy import *
