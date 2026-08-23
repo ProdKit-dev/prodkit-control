@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   fix-v040-type-narrowing:
-    if: github.event.pull_request.head.sha == 'ed2137f27f1b28af587ca7609a39d598ab9a4a39'
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feat/v0.4.0-ha-scale'
     runs-on: ${{ vars.PRODKIT_RUNNER_JSON != '' && fromJSON(vars.PRODKIT_RUNNER_JSON) || fromJSON('["self-hosted","Linux","X64"]') }}
     timeout-minutes: 10
     steps:
@@ -47,13 +47,16 @@ jobs:
                   '''            if slot is None:\n                raise LeaseLostError("cannot release a stale, replaced, or expired lease")\n            current = slot.current\n            if not self._matches(current, lease) or current is None or current.is_expired(now):\n                raise LeaseLostError("cannot release a stale, replaced, or expired lease")\n''',
               ),
           ]
+          changed = False
           for old, new in pairs:
               if new in text:
                   continue
               if old not in text:
                   raise SystemExit('lease narrowing patch anchor missing')
               text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
+              changed = True
+          if changed:
+              path.write_text(text, encoding='utf-8')
           PY
           uv python install 3.13
           uv sync --all-packages --group dev --locked --python 3.13
@@ -68,6 +71,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- packages/python/prodkit-control-runtime/src/prodkit_control_runtime/ha.py
-          git diff --cached --quiet && { echo "no runtime change"; exit 0; }
+          if git diff --cached --quiet; then
+            echo "runtime fix already present"
+            exit 0
+          fi
           git commit -m "fix(runtime): narrow lease slot ownership"
           git push origin HEAD:feat/v0.4.0-ha-scale
