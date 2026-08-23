@@ -27,6 +27,7 @@ from .memory import (
     InMemoryEventLedger as InMemoryEventLedger,
     InMemoryIdempotencyStore as InMemoryIdempotencyStore,
 )
+from .policy import ConjunctivePolicyEngine as ConjunctivePolicyEngine
 from .policy import DefaultPolicyEngine as DefaultPolicyEngine
 from .projectors import RunProjection as RunProjection
 from .projectors import project_run as project_run
