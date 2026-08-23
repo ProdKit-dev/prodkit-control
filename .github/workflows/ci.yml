@@ -15,10 +15,11 @@ jobs:
     timeout-minutes: 5
     env:
       TARGET_SHA: be19defdafe9ecb6552f722c1fd344f3d9d07a27
+      RELEASE_RUN_ID: "32657765488"
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
     steps:
-      - name: Inspect v0.4.0 release lifecycle
+      - name: Verify v0.4.0 release and independent verification
         shell: bash
         run: |
           set -euo pipefail
@@ -29,6 +30,7 @@ jobs:
 
           repo = os.environ['REPOSITORY']
           sha = os.environ['TARGET_SHA']
+          release_run_id = int(os.environ['RELEASE_RUN_ID'])
           token = os.environ['GH_TOKEN']
           url = f'https://api.github.com/repos/{repo}/actions/runs?head_sha={sha}&per_page=100'
           request = urllib.request.Request(
@@ -43,24 +45,31 @@ jobs:
           with urllib.request.urlopen(request, timeout=30) as response:
               runs = json.load(response)['workflow_runs']
 
-          wanted = ('Trusted Release Proof', 'Release Promotion', 'Release', 'Release Verification')
-          latest = {}
+          selected = {}
           for run in sorted(runs, key=lambda item: item['id'], reverse=True):
-              name = run['name']
-              if name in wanted and run['head_sha'] == sha and name not in latest:
-                  latest[name] = {
+              if run['head_sha'] != sha:
+                  continue
+              if run['name'] in {'Release', 'Release Verification', 'Release Promotion'} and run['name'] not in selected:
+                  selected[run['name']] = {
                       'id': run['id'],
                       'event': run['event'],
                       'status': run['status'],
                       'conclusion': run['conclusion'],
                       'html_url': run['html_url'],
                   }
-          print('V040_LIFECYCLE=' + json.dumps(latest, sort_keys=True))
-          proof = latest.get('Trusted Release Proof')
-          if not proof:
-              raise SystemExit('Trusted Release Proof run not found for exact source SHA')
-          if proof['event'] != 'workflow_dispatch':
-              raise SystemExit(f'unexpected proof event: {proof}')
-          if proof['status'] != 'completed' or proof['conclusion'] != 'success':
-              raise SystemExit(f'Trusted Release Proof not successful yet: {proof}')
+          print('V040_RELEASE_LIFECYCLE=' + json.dumps(selected, sort_keys=True))
+
+          release = selected.get('Release')
+          if not release or release['id'] != release_run_id:
+              raise SystemExit(f'exact Release run missing or replaced: {release}')
+          if release['status'] != 'completed' or release['conclusion'] != 'success':
+              raise SystemExit(f'Release not successful: {release}')
+
+          verification = selected.get('Release Verification')
+          if not verification:
+              raise SystemExit('Release Verification not found yet')
+          if verification['event'] != 'workflow_dispatch':
+              raise SystemExit(f'unexpected Release Verification event: {verification}')
+          if verification['status'] != 'completed' or verification['conclusion'] != 'success':
+              raise SystemExit(f'Release Verification not successful yet: {verification}')
           PY
