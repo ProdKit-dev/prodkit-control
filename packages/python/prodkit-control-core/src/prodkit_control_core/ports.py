@@ -26,8 +26,11 @@ from .contracts import (
     PolicyDecision,
     QueueSnapshot,
     ReconciliationFinding,
+    RetentionCandidate,
+    RetentionDecision,
     RunRecord,
     StateObservation,
+    TenantAccessContext,
     VerificationResult,
 )
 
@@ -68,6 +71,19 @@ class ArtifactStore(Protocol):
         redact: bool = False,
     ) -> ArtifactRef: ...
     async def get(self, *, tenant_id: str, artifact: ArtifactRef) -> bytes: ...
+
+
+@runtime_checkable
+class RetentionDeletionAdapter(Protocol):
+    """Bounded deletion effect that consumes the exact governed retention decision."""
+
+    async def delete(
+        self,
+        *,
+        context: TenantAccessContext,
+        candidate: RetentionCandidate,
+        decision: RetentionDecision,
+    ) -> str: ...
 
 
 @runtime_checkable
