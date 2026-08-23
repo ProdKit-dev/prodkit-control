@@ -1,0 +1,59 @@
+name: Ops v0.4.0 PR Runner
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feat/v0.4.0-ha-scale'
+    runs-on: ${{ vars.PRODKIT_RUNNER_JSON != '' && fromJSON(vars.PRODKIT_RUNNER_JSON) || fromJSON('["self-hosted","Linux","X64"]') }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/v0.4.0-ha-scale
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Execute one-shot candidate preparation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          source = Path('.github/workflows/ops-v040-build.yml')
+          lines = source.read_text(encoding='utf-8').splitlines()
+          blocks: list[str] = []
+          index = 0
+          while index < len(lines):
+              line = lines[index]
+              if line.strip() != 'run: |':
+                  index += 1
+                  continue
+              indent = len(line) - len(line.lstrip())
+              index += 1
+              body: list[str] = []
+              while index < len(lines):
+                  current = lines[index]
+                  current_indent = len(current) - len(current.lstrip()) if current.strip() else indent + 2
+                  if current.strip() and current_indent <= indent:
+                      break
+                  body.append(current[indent + 2 :] if len(current) >= indent + 2 else '')
+                  index += 1
+              blocks.append('\n'.join(body) + '\n')
+
+          if len(blocks) != 3:
+              raise SystemExit(f'expected exactly three one-shot run blocks, found {len(blocks)}')
+
+          for number, block in enumerate(blocks, start=1):
+              if number == 3:
+                  block = 'rm -f .github/workflows/ops-v040-pr-runner.yml\n' + block
+              print(f'=== executing candidate preparation block {number}/3 ===', flush=True)
+              subprocess.run(['bash', '-c', 'set -euo pipefail\n' + block], check=True)
+          PY
