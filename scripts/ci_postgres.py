@@ -13,22 +13,28 @@ from prodkit_control_core import (
     ActorKind,
     ActorRef,
     DuplicateActionError,
+    DurableWorkItem,
     ExecutionAttemptRecord,
     ExecutionAttemptState,
     ExecutionResult,
     ExternalAuditEvent,
+    LeaseLostError,
     ProductionCompletenessProfile,
+    QueueOverloadedError,
     ReconciliationCursor,
     ReconciliationFinding,
     ReconciliationOutcome,
     ReconciliationRunResult,
     ReconciliationSourceHealth,
     RunStatus,
+    WorkState,
 )
 from prodkit_control_postgres import (
+    PostgresDurableWorkQueue,
     PostgresEventLedger,
     PostgresExecutionAttemptStore,
     PostgresIdempotencyStore,
+    PostgresLeaseStore,
     PostgresReconciliationStore,
     PostgresRunStore,
     assert_schema_compatible,
@@ -66,6 +72,7 @@ async def _apply_migrations() -> None:
             "0002_hardened_execution.sql",
             "0003_run_store_and_schema_metadata.sql",
             "0004_delivery_chain_reconciliation.sql",
+            "0005_high_availability.sql",
         ]:
             raise AssertionError("unexpected PostgreSQL migration set")
         for migration in migrations:
@@ -73,8 +80,8 @@ async def _apply_migrations() -> None:
         version = await connection.fetchval(
             "SELECT version FROM prodkit_schema_metadata WHERE singleton = TRUE"
         )
-        if version != 4:
-            raise AssertionError(f"expected schema version 4, got {version!r}")
+        if version != 5:
+            raise AssertionError(f"expected schema version 5, got {version!r}")
     finally:
         await connection.close()
 
@@ -208,6 +215,8 @@ async def _exercise_durable_stores() -> None:
             action_digest=action_digest,
         )
 
+        await _exercise_ha_stores(sessions, tenant_id)
+
         reconciliation = PostgresReconciliationStore(sessions)
         cursor = ReconciliationCursor(
             tenant_id=tenant_id,
@@ -268,6 +277,122 @@ async def _exercise_durable_stores() -> None:
         assert finding in await reconciliation.list_findings(tenant_id)
     finally:
         await engine.dispose()
+
+
+async def _exercise_ha_stores(
+    sessions: async_sessionmaker,
+    tenant_id: str,
+) -> None:
+    leases = PostgresLeaseStore(sessions)
+    resource_key = f"ci-resource-{uuid4()}"
+    contenders = await asyncio.gather(
+        *(
+            leases.acquire(
+                tenant_id=tenant_id,
+                resource_key=resource_key,
+                owner_id=f"replica-{index}",
+                ttl_seconds=5.0,
+            )
+            for index in range(32)
+        )
+    )
+    winners = [lease for lease in contenders if lease is not None]
+    assert len(winners) == 1, "concurrent lease acquisition must elect exactly one owner"
+    first = winners[0]
+    assert first.fence_token == 1
+    await leases.release(first)
+    second = await leases.acquire(
+        tenant_id=tenant_id,
+        resource_key=resource_key,
+        owner_id="replacement",
+        ttl_seconds=5.0,
+    )
+    assert second is not None and second.fence_token == 2
+    try:
+        await leases.release(first)
+    except LeaseLostError:
+        pass
+    else:
+        raise AssertionError("stale lease release must fail closed")
+    await leases.release(second)
+
+    queue_name = f"ci-ha-{uuid4()}"
+    queue = PostgresDurableWorkQueue(sessions, max_queue_depth=2)
+    created = datetime.now(UTC)
+    first_item = DurableWorkItem(
+        job_id=uuid4(),
+        tenant_id=tenant_id,
+        queue=queue_name,
+        kind="ci-failover",
+        idempotency_key="job-1",
+        payload={"ordinal": 1},
+        created_at=created,
+        available_at=created,
+        max_attempts=3,
+    )
+    second_item = DurableWorkItem(
+        job_id=uuid4(),
+        tenant_id=tenant_id,
+        queue=queue_name,
+        kind="ci-failover",
+        idempotency_key="job-2",
+        payload={"ordinal": 2},
+        created_at=created,
+        available_at=created,
+        max_attempts=3,
+    )
+    await queue.enqueue(first_item)
+    await queue.enqueue(second_item)
+    assert await queue.enqueue(first_item) == first_item
+    overflow = DurableWorkItem(
+        job_id=uuid4(),
+        tenant_id=tenant_id,
+        queue=queue_name,
+        kind="ci-failover",
+        idempotency_key="job-3",
+        payload={"ordinal": 3},
+        created_at=created,
+        available_at=created,
+    )
+    try:
+        await queue.enqueue(overflow)
+    except QueueOverloadedError:
+        pass
+    else:
+        raise AssertionError("bounded queue must reject overload")
+
+    stale = await queue.acquire(
+        queue=queue_name,
+        owner_id="replica-a",
+        lease_ttl_seconds=0.05,
+    )
+    assert stale is not None and stale.lease.fence_token == 1
+    await asyncio.sleep(0.08)
+    replacement = await queue.acquire(
+        queue=queue_name,
+        owner_id="replica-b",
+        lease_ttl_seconds=5.0,
+    )
+    assert replacement is not None
+    assert replacement.item.job_id == stale.item.job_id
+    assert replacement.lease.fence_token == 2
+    try:
+        await queue.complete(stale)
+    except LeaseLostError:
+        pass
+    else:
+        raise AssertionError("stale worker must not complete work after failover")
+    completed = await queue.complete(replacement)
+    assert completed.state is WorkState.SUCCEEDED
+    remaining = await queue.acquire(
+        queue=queue_name,
+        owner_id="replica-c",
+        lease_ttl_seconds=5.0,
+    )
+    assert remaining is not None and remaining.item.job_id == second_item.job_id
+    await queue.complete(remaining)
+    snapshot = await queue.snapshot(queue=queue_name)
+    assert snapshot.queued == 0 and snapshot.leased == 0 and snapshot.succeeded == 2
 
 
 async def main() -> None:
