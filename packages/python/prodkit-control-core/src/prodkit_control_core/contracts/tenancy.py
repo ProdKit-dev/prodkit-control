@@ -27,7 +27,7 @@ class TenantCapability(StrEnum):
 
 
 class TenantAccessContext(ContractModel):
-    """Authoritative tenant context carried across service/adapter boundaries."""
+    """Authoritative tenant context carried across service and adapter boundaries."""
 
     schema_name: str = "prodkit.tenant-access-context"
     schema_version: str = "1.0.0"
@@ -45,11 +45,13 @@ class TenantAccessContext(ContractModel):
     def validate_scope(self) -> TenantAccessContext:
         if self.expires_at is not None and self.expires_at <= self.issued_at:
             raise ValueError("tenant access context must expire after issuance")
+        if len(set(self.capabilities)) != len(self.capabilities):
+            raise ValueError("tenant capabilities must be unique")
         if self.mode is TenantAccessMode.TENANT:
             if self.actor.tenant_id != self.tenant_id:
                 raise ValueError("ordinary tenant access cannot cross tenant boundaries")
-            if self.elevation_id is not None:
-                raise ValueError("ordinary tenant access cannot carry a support elevation")
+            if self.elevation_id is not None or self.reason is not None or self.ticket_reference is not None:
+                raise ValueError("ordinary tenant access cannot carry support-elevation metadata")
         else:
             if self.elevation_id is None or not self.reason or not self.ticket_reference:
                 raise ValueError("support access requires elevation, reason, and ticket reference")
@@ -64,6 +66,22 @@ class TenantAccessContext(ContractModel):
         if capability not in self.capabilities:
             raise PermissionError(f"tenant capability {capability.value!r} is not granted")
 
+    def audited_actor(self) -> ActorRef:
+        """Return an actor reference that preserves elevation identity in durable records."""
+
+        if self.mode is TenantAccessMode.TENANT:
+            return self.actor
+        assert self.elevation_id is not None
+        return self.actor.model_copy(
+            update={
+                "attributes": {
+                    **self.actor.attributes,
+                    "prodkit.support_elevation": str(self.elevation_id),
+                    "prodkit.target_tenant": self.tenant_id,
+                }
+            }
+        )
+
 
 class SupportElevationGrant(ContractModel):
     """Time-bounded, capability-bounded support access to one target tenant."""
@@ -73,6 +91,7 @@ class SupportElevationGrant(ContractModel):
     grant_id: UUID
     target_tenant_id: NonBlankStr
     operator: ActorRef
+    issued_by: ActorRef
     capabilities: tuple[TenantCapability, ...]
     reason: NonBlankStr
     ticket_reference: NonBlankStr
@@ -84,6 +103,8 @@ class SupportElevationGrant(ContractModel):
     def validate_grant(self) -> SupportElevationGrant:
         if not self.capabilities:
             raise ValueError("support elevation requires at least one capability")
+        if len(set(self.capabilities)) != len(self.capabilities):
+            raise ValueError("support elevation capabilities must be unique")
         if self.expires_at <= self.issued_at:
             raise ValueError("support elevation must expire after issuance")
         if self.revoked_at is not None and self.revoked_at < self.issued_at:
@@ -126,13 +147,16 @@ class TenantLifecycleRecord(ContractModel):
     deletion_not_before: AwareDatetime | None = None
     updated_at: AwareDatetime
     updated_by: ActorRef
+    elevation_id: UUID | None = None
 
     @model_validator(mode="after")
     def validate_lifecycle(self) -> TenantLifecycleRecord:
-        if self.updated_by.tenant_id != self.tenant_id and not self.updated_by.attributes.get(
-            "prodkit.support_elevation"
-        ):
-            raise ValueError("tenant lifecycle mutations require tenant or elevated support identity")
+        support_marker = self.updated_by.attributes.get("prodkit.support_elevation")
+        if self.updated_by.tenant_id != self.tenant_id:
+            if self.elevation_id is None or support_marker != str(self.elevation_id):
+                raise ValueError("cross-tenant lifecycle mutation requires recorded support elevation")
+        elif self.elevation_id is not None and support_marker != str(self.elevation_id):
+            raise ValueError("lifecycle elevation identity does not match the audited actor")
         if self.legal_hold and self.status is TenantLifecycleStatus.DELETED:
             raise ValueError("a tenant under legal hold cannot be marked deleted")
         if self.status is TenantLifecycleStatus.DELETION_SCHEDULED:
@@ -178,6 +202,7 @@ class TenantExportManifest(ContractModel):
     tenant_id: NonBlankStr
     created_at: AwareDatetime
     created_by: ActorRef
+    elevation_id: UUID | None = None
     record_counts: dict[str, int] = Field(default_factory=dict)
     content_digests: tuple[NonBlankStr, ...] = ()
     legal_hold_preserved: bool = True
