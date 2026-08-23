@@ -10,12 +10,12 @@ permissions:
 
 concurrency:
   group: v050-finalize
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   finalize:
     if: github.actor != 'github-actions[bot]'
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout exact branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -37,20 +37,17 @@ jobs:
 
           VERSION = "0.5.0"
 
-          # Version every first-party Python project.
           for path in [Path("pyproject.toml"), *sorted(Path("packages/python").glob("**/pyproject.toml"))]:
               text = path.read_text(encoding="utf-8")
               text = re.sub(r'(?m)^version = "0\.4\.0"$', f'version = "{VERSION}"', text)
               path.write_text(text, encoding="utf-8")
 
-          # Version every first-party TypeScript project.
           for path in sorted(Path("packages/typescript").glob("**/package.json")):
               data = json.loads(path.read_text(encoding="utf-8"))
               if data.get("version") == "0.4.0":
                   data["version"] = VERSION
                   path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
-          # Runtime version metadata.
           for path in sorted(Path("packages/python").glob("**/__init__.py")):
               text = path.read_text(encoding="utf-8")
               if '__version__ = "0.4.0"' in text:
@@ -60,7 +57,6 @@ jobs:
           text = app.read_text(encoding="utf-8").replace('version="0.4.0"', f'version="{VERSION}"')
           app.write_text(text, encoding="utf-8")
 
-          # Export canonical v0.5 tenant contracts as JSON Schemas.
           export = Path("scripts/export_schemas.py")
           text = export.read_text(encoding="utf-8")
           text = text.replace(
@@ -210,15 +206,12 @@ jobs:
           Until an external reviewer and review artifact are recorded, ProdKit Control may describe v0.5.0 as implementing and automatically qualifying its multi-tenant isolation profile, but not as independently reviewed, certified, audited, or externally validated.
           EOF
 
-          # Refresh lockfile, schemas, and formatting with the exact toolchain used by CI.
           uv python install 3.13
           uv lock --python 3.13
           uv sync --all-packages --group dev --locked --python 3.13
           uv run --python 3.13 --no-sync python scripts/export_schemas.py
           uv run --python 3.13 --no-sync ruff format .
           uv run --python 3.13 --no-sync ruff check --fix .
-
-          # Validate locally before committing; leave full multi-version and PostgreSQL checks to permanent CI.
           uv run --python 3.13 --no-sync ruff format --check .
           uv run --python 3.13 --no-sync ruff check .
           python3 scripts/release_check.py --version 0.5.0
