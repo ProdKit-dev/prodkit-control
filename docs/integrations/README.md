@@ -12,3 +12,5 @@ Integrations are replaceable adapters. Each adapter must document:
 - version compatibility.
 
 No commercial integration may become mandatory for the core execution and evidence contracts.
+
+For v0.3.0 standards, agent, telemetry, Sigstore, and policy-engine semantics, see the [interoperability profile](interoperability.md).
