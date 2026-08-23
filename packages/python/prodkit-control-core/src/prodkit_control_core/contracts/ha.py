@@ -100,10 +100,12 @@ class LeasedWorkItem(ContractModel):
 
 
 class QueueSnapshot(ContractModel):
+    """Tenant-local queue state; aggregate cross-tenant views require a privileged admin API."""
+
     schema_name: str = "prodkit.queue-snapshot"
     schema_version: str = "1.0.0"
     queue: NonBlankStr
-    tenant_id: NonBlankStr | None = None
+    tenant_id: NonBlankStr
     queued: int = Field(ge=0)
     leased: int = Field(ge=0)
     dead_letter: int = Field(ge=0)
