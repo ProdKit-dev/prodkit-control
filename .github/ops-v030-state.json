@@ -1,5 +1,5 @@
 {
-  "phase": "advance-release",
-  "nonce": 4,
+  "phase": "cleanup-dry-run",
+  "nonce": 5,
   "dry_run_id": 0
 }
