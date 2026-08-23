@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import zipfile
@@ -39,7 +40,7 @@ _MAX_TOTAL_BYTES = 256 * 1024 * 1024
 
 
 def portable_package_sha256(path: Path) -> str:
-    digest = __import__("hashlib").sha256()
+    digest = hashlib.sha256()
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
@@ -153,6 +154,16 @@ class PortableEvidencePackageVerifier:
         except ValueError as exc:
             raise IntegrityViolationError("portable package contains invalid assurance metadata") from exc
 
+        standards = cast(dict[str, Any], manifest["standards"])
+        if standards.get("predicate_type") != statement.predicate_type:
+            raise IntegrityViolationError("portable package predicate metadata is inconsistent")
+        slsa_marker = standards.get("slsa_provenance")
+        if statement.predicate_type == SLSA_PROVENANCE_V1:
+            if slsa_marker != SLSA_PROVENANCE_V1:
+                raise IntegrityViolationError("portable package SLSA metadata is inconsistent")
+        elif slsa_marker is not None:
+            raise IntegrityViolationError("portable package falsely declares SLSA provenance")
+
         embedded_trust_digest = sha256_hex(canonical_json_bytes(embedded_trust))
         if trusted_policy is not None:
             trusted_digest = sha256_hex(canonical_json_bytes(trusted_policy))
@@ -239,6 +250,8 @@ class PortableEvidencePackageVerifier:
         for name, expected_digest in files.items():
             if not isinstance(expected_digest, str) or len(expected_digest) != 64:
                 raise IntegrityViolationError("portable package contains an invalid file digest")
+            if any(character not in "0123456789abcdef" for character in expected_digest):
+                raise IntegrityViolationError("portable package contains a non-canonical file digest")
             if sha256_hex(payloads[name]) != expected_digest:
                 raise IntegrityViolationError(f"portable package member digest mismatch: {name}")
 
