@@ -1,0 +1,171 @@
+name: Cleanup v0.1.3 Operator
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  advance:
+    name: Advance v0.1.3 cleanup
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: [self-hosted, Linux, X64]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      OPERATOR_BRANCH: ops/cleanup-v013-e376db05
+      EXPECTED_MAIN: e376db054819d22bcc64430383bc06e623d196f5
+      STATE_PATH: .github/cleanup-v013-state.json
+      STALE_BRANCHES_JSON: '["chore/adopt-workflows-v0.1.1","chore/resumable-release-lifecycle","chore/workflows-v0.1.3","feat/v0.2.0-delivery-chain-reconciliation","fix/cleanup-runner-policy","fix/v0.2.0-release-deadlock","ops/control-cleanup-37e6d984","ops/control-cleanup-31803a8c","ops/v0.2.0-bootstrap-base","ops/v0.2.0-finalize"]'
+    steps:
+      - name: Advance cleanup state machine
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+          from datetime import datetime, timedelta, timezone
+
+          repo = os.environ["REPOSITORY"]
+          token = os.environ["GH_TOKEN"]
+          pr_number = int(os.environ["PR_NUMBER"])
+          branch = os.environ["OPERATOR_BRANCH"]
+          expected_main = os.environ["EXPECTED_MAIN"]
+          state_path = os.environ["STATE_PATH"]
+          stale = json.loads(os.environ["STALE_BRANCHES_JSON"])
+          api_root = f"https://api.github.com/repos/{repo}"
+
+          def api(method, path, payload=None):
+              data = None if payload is None else json.dumps(payload).encode()
+              req = urllib.request.Request(
+                  api_root + path,
+                  data=data,
+                  method=method,
+                  headers={
+                      "Authorization": f"Bearer {token}",
+                      "Accept": "application/vnd.github+json",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                      "User-Agent": "prodkit-control-cleanup-v013",
+                  },
+              )
+              with urllib.request.urlopen(req) as response:
+                  raw = response.read()
+                  return None if not raw else json.loads(raw)
+
+          def get_state():
+              item = api("GET", f"/contents/{state_path}?ref={urllib.parse.quote(branch, safe='')}")
+              text = base64.b64decode(item["content"]).decode()
+              return json.loads(text), item["sha"]
+
+          def put_state(state, sha, message):
+              payload = {
+                  "message": message,
+                  "content": base64.b64encode((json.dumps(state, indent=2) + "\n").encode()).decode(),
+                  "sha": sha,
+                  "branch": branch,
+              }
+              api("PUT", f"/contents/{state_path}", payload)
+
+          def dispatch(branches, dry_run):
+              api(
+                  "POST",
+                  "/actions/workflows/branch-cleanup.yml/dispatches",
+                  {
+                      "ref": "main",
+                      "inputs": {
+                          "branches_json": json.dumps(branches, separators=(",", ":")),
+                          "dry_run": "true" if dry_run else "false",
+                          "expected_default_sha": expected_main,
+                      },
+                  },
+              )
+
+          main = api("GET", "/branches/main")
+          actual_main = main["commit"]["sha"]
+          if actual_main != expected_main:
+              raise SystemExit(f"main moved: {actual_main} != {expected_main}")
+
+          state, state_sha = get_state()
+          phase = state.get("phase", "A")
+          print(f"phase={phase} main={actual_main}")
+
+          if phase == "A":
+              query = urllib.parse.urlencode(
+                  {
+                      "event": "push",
+                      "branch": "main",
+                      "head_sha": expected_main,
+                      "per_page": 100,
+                  }
+              )
+              runs = api("GET", f"/actions/runs?{query}")["workflow_runs"]
+              gates = {}
+              for required in ("CI", "Security", "CodeQL"):
+                  matching = [r for r in runs if r.get("name") == required]
+                  matching.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+                  gates[required] = None if not matching else {
+                      "id": matching[0]["id"],
+                      "status": matching[0]["status"],
+                      "conclusion": matching[0].get("conclusion"),
+                  }
+              print("exact-main-gates=" + json.dumps(gates, sort_keys=True))
+              bad = {
+                  name: value
+                  for name, value in gates.items()
+                  if value is None
+                  or value["status"] != "completed"
+                  or value["conclusion"] != "success"
+              }
+              if bad:
+                  raise SystemExit("exact-main gates are not all green: " + json.dumps(bad, sort_keys=True))
+
+              after = (datetime.now(timezone.utc) - timedelta(seconds=5)).isoformat().replace("+00:00", "Z")
+              dispatch(stale, True)
+              put_state(
+                  {"phase": "B", "after": after, "nonce": int(state.get("nonce", 0)) + 1},
+                  state_sha,
+                  "ops(cleanup): await v0.1.3 dry-run",
+              )
+              print("dry-run dispatched")
+              raise SystemExit(0)
+
+          if phase != "B":
+              raise SystemExit(f"unknown phase: {phase}")
+
+          after = state.get("after")
+          query = urllib.parse.urlencode({"event": "workflow_dispatch", "branch": "main", "per_page": 30})
+          runs = api("GET", f"/actions/workflows/branch-cleanup.yml/runs?{query}")["workflow_runs"]
+          candidates = [
+              r for r in runs
+              if r.get("head_sha") == expected_main and (not after or r.get("created_at", "") >= after)
+          ]
+          candidates.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+          if not candidates or candidates[0]["status"] != "completed":
+              put_state(
+                  {"phase": "B", "after": after, "nonce": int(state.get("nonce", 0)) + 1},
+                  state_sha,
+                  "ops(cleanup): recheck v0.1.3 dry-run",
+              )
+              print("dry-run not complete; requeued phase B")
+              raise SystemExit(0)
+
+          dry = candidates[0]
+          print("dry-run-result=" + json.dumps({"id": dry["id"], "conclusion": dry.get("conclusion")}))
+          if dry.get("conclusion") != "success":
+              raise SystemExit(f"canonical dry-run failed: run {dry['id']} conclusion={dry.get('conclusion')}")
+
+          api("PATCH", f"/pulls/{pr_number}", {"state": "closed"})
+          real_targets = stale + [branch]
+          dispatch(real_targets, False)
+          print("canonical real cleanup dispatched after successful dry-run; operator PR closed")
+          PY
