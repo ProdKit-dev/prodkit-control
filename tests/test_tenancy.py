@@ -164,7 +164,7 @@ async def test_legal_hold_blocks_deletion_and_export_is_tenant_scoped() -> None:
     await store.set_legal_hold(context=context, enabled=False, reason="matter closed")
     scheduled = await store.schedule_deletion(
         context=context,
-        not_before=datetime.now(UTC) + timedelta(milliseconds=10),
+        not_before=datetime.now(UTC) + timedelta(seconds=1),
         reason="account closure",
     )
     assert scheduled.status is TenantLifecycleStatus.DELETION_SCHEDULED
