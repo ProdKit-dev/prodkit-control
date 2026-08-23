@@ -8,59 +8,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  normalize-v060:
-    name: normalize v0.6 development candidate
-    if: ${{ github.event_name == 'pull_request' && github.head_ref == 'release/v0.6.0-governance-lifecycle' }}
-    runs-on: [self-hosted, Linux, X64]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
-        with:
-          version: 0.10.0
-          enable-cache: false
-      - name: Normalize demonstrated v0.6 failures
-        shell: bash
-        run: |
-          set -euo pipefail
-          uv python install 3.13
-          uv sync --all-packages --group dev --locked --python 3.13
-          uv run --python 3.13 --no-sync python scripts/v060_normalize_dev.py
-          files=(
-            packages/python/prodkit-control-core/src/prodkit_control_core/contracts/governance.py
-            packages/python/prodkit-control-postgres/src/prodkit_control_postgres/governance.py
-            packages/python/prodkit-control-runtime/src/prodkit_control_runtime/governance.py
-            packages/python/prodkit-control-runtime/src/prodkit_control_runtime/transfers.py
-            scripts/ci_governance_migrations.py
-            scripts/ci_governance_postgres.py
-            tests/test_governance.py
-          )
-          uv run --python 3.13 --no-sync ruff format "${files[@]}"
-          uv run --python 3.13 --no-sync ruff check --fix "${files[@]}"
-          uv run --python 3.13 --no-sync ruff format --check "${files[@]}"
-          uv run --python 3.13 --no-sync ruff check "${files[@]}"
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add "${files[@]}"
-          if git diff --cached --quiet; then
-            echo "No normalization changes required."
-            exit 0
-          fi
-          git commit -m 'style: normalize v0.6 governance implementation'
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
-
   ci:
     name: ci
-    if: ${{ !(github.event_name == 'pull_request' && github.head_ref == 'release/v0.6.0-governance-lifecycle') }}
     uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci-compact.yml@89eec1f6bcd4e45fb67c9fa99122ea6feba9d4bc
     with:
       runner_json: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '"ubuntu-latest"' || (vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
