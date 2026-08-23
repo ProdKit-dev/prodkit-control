@@ -8,6 +8,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 CENTRAL_REPOSITORY = "ProdKit-dev/prodkit-workflows"
 CENTRAL_SHA = "89eec1f6bcd4e45fb67c9fa99122ea6feba9d4bc"
+VERIFICATION_DISPATCH_SHA = "237d54ed3e9ffe6baa58196aa13cfa1b610298aa"
 
 EXPECTED = {
     "ci.yml": "reusable-ci-compact.yml",
@@ -66,9 +67,14 @@ def main() -> None:
                     f"{filename}: floating/non-canonical central reference: "
                     f"{referenced_workflow}@{ref}"
                 )
-            if ref != CENTRAL_SHA:
+            expected_sha = (
+                VERIFICATION_DISPATCH_SHA
+                if referenced_workflow == "reusable-release-verification-dispatch.yml"
+                else CENTRAL_SHA
+            )
+            if ref != expected_sha:
                 raise SystemExit(
-                    f"{filename}: central SHA drift: {referenced_workflow}@{ref} != {CENTRAL_SHA}"
+                    f"{filename}: central SHA drift: {referenced_workflow}@{ref} != {expected_sha}"
                 )
 
         for fragment in FORBIDDEN:
@@ -242,7 +248,8 @@ def main() -> None:
     require(release, 'pnpm_version: "10.15.0"', workflow="release.yml")
     require(
         release,
-        "reusable-release-verification-dispatch.yml@",
+        f"{CENTRAL_REPOSITORY}/.github/workflows/reusable-release-verification-dispatch.yml@"
+        f"{VERIFICATION_DISPATCH_SHA}",
         workflow="release.yml",
     )
     for required in (
@@ -326,10 +333,10 @@ def main() -> None:
     )
 
     print(
-        "workflow alignment contract satisfied: prodkit-workflows v0.1.3, "
-        "exact-SHA branch cleanup, dormant post-gate cleanup authorization, direct compact gates, "
-        "completed-proof promotion, proof-once payload reuse, release verification dispatch, "
-        f"independent verification, exact central pin {CENTRAL_SHA}"
+        "workflow alignment contract satisfied: prodkit-workflows v0.1.3 baseline, "
+        "verification-dispatch recovery, exact-SHA branch cleanup, dormant post-gate cleanup authorization, "
+        "direct compact gates, completed-proof promotion, proof-once payload reuse, "
+        f"independent verification, exact baseline {CENTRAL_SHA}, dispatcher recovery {VERIFICATION_DISPATCH_SHA}"
     )
 
 
