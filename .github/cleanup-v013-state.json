@@ -1,5 +1,5 @@
 {
-  "phase": "A",
-  "after": null,
-  "nonce": 0
+  "phase": "B",
+  "after": "2026-08-23T10:16:46.573159Z",
+  "nonce": 1
 }
