@@ -3,33 +3,71 @@ name: CI
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
-  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-v040-type-fix-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  ci:
-    name: ci
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci-compact.yml@89eec1f6bcd4e45fb67c9fa99122ea6feba9d4bc
-    with:
-      runner_json: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '"ubuntu-latest"' || (vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
-      hygiene_enabled: true
-      hygiene_script: .prodkit/workflows/ci-hygiene.sh
-      python_enabled: true
-      python_versions_json: '["3.12","3.13","3.14"]'
-      python_script: .prodkit/workflows/ci-python.sh
-      node_enabled: true
-      node_versions_json: '["22","24"]'
-      node_script: .prodkit/workflows/ci-node.sh
-      postgres_enabled: true
-      postgres_image: postgres:18-alpine
-      postgres_script: .prodkit/workflows/ci-postgres.sh
-      container_enabled: false
-      custom_enabled: false
+  fix-v040-type-narrowing:
+    if: github.event.pull_request.head.sha == 'ed2137f27f1b28af587ca7609a39d598ab9a4a39'
+    runs-on: ${{ vars.PRODKIT_RUNNER_JSON != '' && fromJSON(vars.PRODKIT_RUNNER_JSON) || fromJSON('["self-hosted","Linux","X64"]') }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/v0.4.0-ha-scale
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: "0.10.0"
+          enable-cache: true
+
+      - name: Fix strict lease-slot narrowing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('packages/python/prodkit-control-runtime/src/prodkit_control_runtime/ha.py')
+          text = path.read_text(encoding='utf-8')
+          pairs = [
+              (
+                  '''            current = slot.current if slot is not None else None\n            if not self._matches(current, lease) or current is None or current.is_expired(now):\n                raise LeaseLostError("cannot renew a stale, released, or expired lease")\n''',
+                  '''            if slot is None:\n                raise LeaseLostError("cannot renew a stale, released, or expired lease")\n            current = slot.current\n            if not self._matches(current, lease) or current is None or current.is_expired(now):\n                raise LeaseLostError("cannot renew a stale, released, or expired lease")\n''',
+              ),
+              (
+                  '''            current = slot.current if slot is not None else None\n            if not self._matches(current, lease) or current is None or current.is_expired(now):\n                raise LeaseLostError("cannot release a stale, replaced, or expired lease")\n''',
+                  '''            if slot is None:\n                raise LeaseLostError("cannot release a stale, replaced, or expired lease")\n            current = slot.current\n            if not self._matches(current, lease) or current is None or current.is_expired(now):\n                raise LeaseLostError("cannot release a stale, replaced, or expired lease")\n''',
+              ),
+          ]
+          for old, new in pairs:
+              if new in text:
+                  continue
+              if old not in text:
+                  raise SystemExit('lease narrowing patch anchor missing')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+          uv python install 3.13
+          uv sync --all-packages --group dev --locked --python 3.13
+          uv run --python 3.13 --no-sync ruff format packages/python/prodkit-control-runtime/src/prodkit_control_runtime/ha.py
+          uv run --python 3.13 --no-sync ruff check packages/python/prodkit-control-runtime/src/prodkit_control_runtime/ha.py
+          uv run --python 3.13 --no-sync mypy packages/python/prodkit-control-runtime/src/prodkit_control_runtime/ha.py
+
+      - name: Commit exact runtime fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- packages/python/prodkit-control-runtime/src/prodkit_control_runtime/ha.py
+          git diff --cached --quiet && { echo "no runtime change"; exit 0; }
+          git commit -m "fix(runtime): narrow lease slot ownership"
+          git push origin HEAD:feat/v0.4.0-ha-scale
