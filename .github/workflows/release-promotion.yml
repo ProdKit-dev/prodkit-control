@@ -16,7 +16,7 @@ jobs:
     permissions:
       actions: write
       contents: read
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-promote.yml@45e4dacd65c736588e0c7e2d3cdcb1cb0d11045e
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-promote.yml@89eec1f6bcd4e45fb67c9fa99122ea6feba9d4bc
     with:
       source_sha: ${{ github.event.workflow_run.head_sha }}
       runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]' }}
