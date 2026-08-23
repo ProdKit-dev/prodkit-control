@@ -7,13 +7,14 @@ import re
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 CENTRAL_REPOSITORY = "ProdKit-dev/prodkit-workflows"
-CENTRAL_SHA = "45e4dacd65c736588e0c7e2d3cdcb1cb0d11045e"
+CENTRAL_SHA = "89eec1f6bcd4e45fb67c9fa99122ea6feba9d4bc"
 
 EXPECTED = {
     "ci.yml": "reusable-ci-compact.yml",
     "security.yml": "reusable-security-compact.yml",
     "codeql.yml": "reusable-codeql.yml",
     "branch-cleanup.yml": "reusable-branch-cleanup.yml",
+    "post-gate-branch-cleanup.yml": "reusable-gated-branch-cleanup.yml",
     "trusted-release-proof.yml": "reusable-release-proof.yml",
     "release-promotion.yml": "reusable-release-promote.yml",
     "release.yml": "reusable-release.yml",
@@ -96,15 +97,16 @@ def main() -> None:
     cleanup = texts["branch-cleanup.yml"]
     require(cleanup, "workflow_dispatch:", workflow="branch-cleanup.yml")
     require(cleanup, "branches_json:", workflow="branch-cleanup.yml")
+    require(cleanup, "expected_default_sha:", workflow="branch-cleanup.yml")
     require(cleanup, "dry_run:", workflow="branch-cleanup.yml")
     require(cleanup, "default: true", workflow="branch-cleanup.yml")
     require(cleanup, "contents: write", workflow="branch-cleanup.yml")
     require(cleanup, "pull-requests: read", workflow="branch-cleanup.yml")
-    require(
-        cleanup,
-        "expected_default_sha: ${{ github.sha }}",
-        workflow="branch-cleanup.yml",
+    expected_default_sha_contract = (
+        "expected_default_sha: ${{ inputs.expected_default_sha != '' && "
+        "inputs.expected_default_sha || github.sha }}"
     )
+    require(cleanup, expected_default_sha_contract, workflow="branch-cleanup.yml")
     require(
         cleanup,
         "runner_json: ${{ vars.PRODKIT_RUNNER_JSON",
@@ -116,8 +118,67 @@ def main() -> None:
         workflow="branch-cleanup.yml",
     )
     reject(cleanup, "ubuntu-latest", workflow="branch-cleanup.yml")
-    for forbidden_trigger in ("issue_comment:", "schedule:", "pull_request_target:"):
+    for forbidden_trigger in (
+        "workflow_run:",
+        "pull_request:",
+        "push:",
+        "issue_comment:",
+        "schedule:",
+        "pull_request_target:",
+    ):
         reject(cleanup, forbidden_trigger, workflow="branch-cleanup.yml")
+
+    post_gate_cleanup = texts["post-gate-branch-cleanup.yml"]
+    require(post_gate_cleanup, "workflow_run:", workflow="post-gate-branch-cleanup.yml")
+    require(
+        post_gate_cleanup,
+        'workflows: ["CI", "Security", "CodeQL"]',
+        workflow="post-gate-branch-cleanup.yml",
+    )
+    require(post_gate_cleanup, "types: [completed]", workflow="post-gate-branch-cleanup.yml")
+    require(post_gate_cleanup, "branches: [main]", workflow="post-gate-branch-cleanup.yml")
+    require(
+        post_gate_cleanup,
+        "github.event.workflow_run.event == 'push'",
+        workflow="post-gate-branch-cleanup.yml",
+    )
+    require(
+        post_gate_cleanup,
+        "PRODKIT_GATED_CLEANUP_BRANCHES_JSON",
+        workflow="post-gate-branch-cleanup.yml",
+    )
+    require(
+        post_gate_cleanup,
+        "PRODKIT_GATED_CLEANUP_GATES_JSON",
+        workflow="post-gate-branch-cleanup.yml",
+    )
+    require(
+        post_gate_cleanup,
+        '"name":"CodeQL","path":".github/workflows/codeql.yml"',
+        workflow="post-gate-branch-cleanup.yml",
+    )
+    require(
+        post_gate_cleanup,
+        "expected_default_sha: ${{ github.event.workflow_run.head_sha }}",
+        workflow="post-gate-branch-cleanup.yml",
+    )
+    require(
+        post_gate_cleanup,
+        "cleanup_workflow_file: branch-cleanup.yml",
+        workflow="post-gate-branch-cleanup.yml",
+    )
+    require(post_gate_cleanup, "actions: write", workflow="post-gate-branch-cleanup.yml")
+    require(
+        post_gate_cleanup,
+        "runner_json: ${{ vars.PRODKIT_RUNNER_JSON",
+        workflow="post-gate-branch-cleanup.yml",
+    )
+    require(
+        post_gate_cleanup,
+        '["self-hosted","Linux","X64"]',
+        workflow="post-gate-branch-cleanup.yml",
+    )
+    reject(post_gate_cleanup, "contents: write", workflow="post-gate-branch-cleanup.yml")
 
     proof = texts["trusted-release-proof.yml"]
     require(
@@ -179,22 +240,57 @@ def main() -> None:
     require(release, 'python_version: "3.13"', workflow="release.yml")
     require(release, 'node_version: "24"', workflow="release.yml")
     require(release, 'pnpm_version: "10.15.0"', workflow="release.yml")
+    require(
+        release,
+        "reusable-release-verification-dispatch.yml@",
+        workflow="release.yml",
+    )
+    for required in (
+        "verification-dispatch:",
+        "needs: release",
+        "actions: write",
+        "source_sha: ${{ github.sha }}",
+        "version: ${{ inputs.version }}",
+        "release_run_id: ${{ github.run_id }}",
+        "verification_workflow_file: release-verification.yml",
+        "runner_json: ${{ vars.PRODKIT_RUNNER_JSON",
+        '["self-hosted","Linux","X64"]',
+    ):
+        require(release, required, workflow="release.yml")
 
     verification = texts["release-verification.yml"]
-    require(verification, "workflow_run:", workflow="release-verification.yml")
-    require(verification, 'workflows: ["Release"]', workflow="release-verification.yml")
-    require(verification, "types: [completed]", workflow="release-verification.yml")
     require(
         verification,
-        "github.event.workflow_run.conclusion == 'success'",
+        "run-name: Release Verification — ${{ github.sha }}",
+        workflow="release-verification.yml",
+    )
+    require(verification, "workflow_dispatch:", workflow="release-verification.yml")
+    require(verification, "release_run_id:", workflow="release-verification.yml")
+    require(
+        verification,
+        "source_sha: ${{ github.sha }}",
         workflow="release-verification.yml",
     )
     require(
         verification,
-        "source_sha: ${{ github.event.workflow_run.head_sha }}",
+        "release_run_id: ${{ inputs.release_run_id }}",
         workflow="release-verification.yml",
     )
+    require(
+        verification,
+        "runner_json: ${{ vars.PRODKIT_RUNNER_JSON",
+        workflow="release-verification.yml",
+    )
+    require(
+        verification,
+        '["self-hosted","Linux","X64"]',
+        workflow="release-verification.yml",
+    )
+    require(verification, "manifest_path: .prodkit/release.json", workflow="release-verification.yml")
     require(verification, "release_workflow_file: release.yml", workflow="release-verification.yml")
+    reject(verification, "workflow_run:", workflow="release-verification.yml")
+    reject(verification, "actions: write", workflow="release-verification.yml")
+    reject(verification, "contents: write", workflow="release-verification.yml")
 
     metadata = texts["release-metadata.yml"]
     require(
@@ -230,10 +326,10 @@ def main() -> None:
     )
 
     print(
-        "workflow alignment contract satisfied: prodkit-workflows v0.1.1, "
-        "explicit branch cleanup, direct compact gates, completed-proof promotion, "
-        "proof-once payload reuse, independent verification, "
-        f"exact central pin {CENTRAL_SHA}"
+        "workflow alignment contract satisfied: prodkit-workflows v0.1.3, "
+        "exact-SHA branch cleanup, dormant post-gate cleanup authorization, direct compact gates, "
+        "completed-proof promotion, proof-once payload reuse, release verification dispatch, "
+        f"independent verification, exact central pin {CENTRAL_SHA}"
     )
 
 
