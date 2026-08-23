@@ -19,6 +19,9 @@ from .credentials import HTTPCredentialLeaseProvider as HTTPCredentialLeaseProvi
 from .executors import DigestEffectVerifier as DigestEffectVerifier
 from .executors import DryRunExecutor as DryRunExecutor
 from .executors import ExecutorRegistry as ExecutorRegistry
+from .governance import InMemoryGovernanceStore as InMemoryGovernanceStore
+from .governance import RetentionDeletionAdapter as RetentionDeletionAdapter
+from .governance import legal_hold_release_digest as legal_hold_release_digest
 from .ha import CapacityAdmissionController as CapacityAdmissionController
 from .ha import InMemoryDurableWorkQueue as InMemoryDurableWorkQueue
 from .ha import InMemoryLeaseStore as InMemoryLeaseStore
