@@ -214,7 +214,7 @@ class EvidenceBundleVerifier:
             raise IntegrityViolationError("evidence bundle event counts are invalid")
         if sum(cast(dict[str, int], counts).values()) != event_count:
             raise IntegrityViolationError("evidence bundle event counts do not match event count")
-        return run_id, cast(str | None, tenant_id)
+        return run_id, tenant_id
 
     @staticmethod
     def _validate_events(
