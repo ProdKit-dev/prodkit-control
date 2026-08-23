@@ -29,6 +29,9 @@ from .memory import (
 )
 from .policy import ConjunctivePolicyEngine as ConjunctivePolicyEngine
 from .policy import DefaultPolicyEngine as DefaultPolicyEngine
+from .portable import PortableEvidencePackageBuilder as PortableEvidencePackageBuilder
+from .portable import PortableEvidencePackageVerifier as PortableEvidencePackageVerifier
+from .portable import portable_package_sha256 as portable_package_sha256
 from .projectors import RunProjection as RunProjection
 from .projectors import project_run as project_run
 from .reconciliation import InMemoryReconciliationStore as InMemoryReconciliationStore
