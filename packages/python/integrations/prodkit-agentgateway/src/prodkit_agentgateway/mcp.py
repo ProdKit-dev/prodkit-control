@@ -8,6 +8,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from prodkit_control_core import ActionSpec, ActionTarget, EffectClass, RiskClass
 
 MCP_PROTOCOL_REVISION = "2025-11-25"
+_RESERVED_CONTEXT_PREFIX = "interop."
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,18 +108,30 @@ class MCPActionAdapter:
         if not resource_id:
             raise ValueError("MCP tool call resolved to an empty resource id")
 
+        supplied_context = dict(additional_policy_context or {})
+        reserved = tuple(
+            sorted(key for key in supplied_context if key.startswith(_RESERVED_CONTEXT_PREFIX))
+        )
+        if reserved:
+            raise ValueError(
+                "additional MCP policy context cannot override reserved interoperability keys: "
+                + ", ".join(reserved)
+            )
+        policy_context: dict[str, str | int | float | bool | None] = supplied_context
+        policy_context.update(
+            {
+                "interop.protocol": "mcp",
+                "interop.protocol_revision": self._protocol_revision,
+                "interop.server_id": call.server_id,
+                "interop.tool_name": call.tool_name,
+                "interop.call_id": call.call_id,
+            }
+        )
+
         action_id = uuid5(
             NAMESPACE_URL,
             f"prodkit:mcp:{tenant_id}:{call.server_id}:{call.call_id}:{call.tool_name}",
         )
-        policy_context: dict[str, str | int | float | bool | None] = {
-            "interop.protocol": "mcp",
-            "interop.protocol_revision": self._protocol_revision,
-            "interop.server_id": call.server_id,
-            "interop.tool_name": call.tool_name,
-            "interop.call_id": call.call_id,
-        }
-        policy_context.update(additional_policy_context or {})
         return ActionSpec(
             action_id=action_id,
             run_id=run_id,
