@@ -183,10 +183,24 @@ BEGIN
      OR NEW.proposed_at IS DISTINCT FROM OLD.proposed_at THEN
     RAISE EXCEPTION 'governance change identity and proposal are immutable';
   END IF;
-  IF OLD.status = 'proposed' AND NEW.status IN ('approved', 'rejected', 'cancelled') THEN
+  IF (NEW.document - ARRAY['status','approved_at','approved_by','applied_at'])
+     IS DISTINCT FROM
+     (OLD.document - ARRAY['status','approved_at','approved_by','applied_at']) THEN
+    RAISE EXCEPTION 'governance change proposal document is immutable';
+  END IF;
+  IF OLD.status = 'proposed' AND NEW.status = 'approved'
+     AND NEW.approved_at IS NOT NULL AND NEW.applied_at IS NULL THEN
     RETURN NEW;
   END IF;
-  IF OLD.status = 'approved' AND NEW.status IN ('applied', 'cancelled') THEN
+  IF OLD.status = 'proposed' AND NEW.status IN ('rejected', 'cancelled')
+     AND NEW.applied_at IS NULL THEN
+    RETURN NEW;
+  END IF;
+  IF OLD.status = 'approved' AND NEW.status = 'applied'
+     AND NEW.approved_at IS NOT NULL AND NEW.applied_at IS NOT NULL THEN
+    RETURN NEW;
+  END IF;
+  IF OLD.status = 'approved' AND NEW.status = 'cancelled' AND NEW.applied_at IS NULL THEN
     RETURN NEW;
   END IF;
   IF OLD.status = NEW.status
@@ -206,6 +220,11 @@ BEGIN
      OR NEW.hold_id IS DISTINCT FROM OLD.hold_id
      OR NEW.placed_at IS DISTINCT FROM OLD.placed_at THEN
     RAISE EXCEPTION 'legal hold identity and placement are immutable';
+  END IF;
+  IF (NEW.document - ARRAY['status','released_at','released_by','release_change_request_id'])
+     IS DISTINCT FROM
+     (OLD.document - ARRAY['status','released_at','released_by','release_change_request_id']) THEN
+    RAISE EXCEPTION 'legal hold scope and placement document are immutable';
   END IF;
   IF OLD.status = 'active' AND NEW.status = 'released' AND NEW.released_at IS NOT NULL THEN
     RETURN NEW;
@@ -228,6 +247,9 @@ BEGIN
      OR NEW.change_request_id IS DISTINCT FROM OLD.change_request_id THEN
     RAISE EXCEPTION 'trust-root identity and policy are immutable';
   END IF;
+  IF (NEW.document - 'retired_at') IS DISTINCT FROM (OLD.document - 'retired_at') THEN
+    RAISE EXCEPTION 'trust-root policy document is immutable';
+  END IF;
   IF OLD.retired_at IS NULL AND NEW.retired_at IS NOT NULL AND NEW.retired_at > OLD.activated_at THEN
     RETURN NEW;
   END IF;
@@ -236,6 +258,21 @@ BEGIN
     RETURN NEW;
   END IF;
   RAISE EXCEPTION 'trust-root retirement is the only permitted mutation';
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION prodkit_block_tenant_deletion_with_governance_hold()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.status IN ('deletion_scheduled', 'deleted')
+     AND EXISTS (
+       SELECT 1
+       FROM governance_legal_holds
+       WHERE tenant_id = NEW.tenant_id AND status = 'active'
+     ) THEN
+    RAISE EXCEPTION 'tenant deletion is blocked by active governance legal hold';
+  END IF;
+  RETURN NEW;
 END;
 $$;
 
@@ -253,6 +290,11 @@ DROP TRIGGER IF EXISTS governance_trust_root_retirement ON governance_trust_root
 CREATE TRIGGER governance_trust_root_retirement
 BEFORE UPDATE ON governance_trust_roots
 FOR EACH ROW EXECUTE FUNCTION prodkit_validate_trust_root_retirement();
+
+DROP TRIGGER IF EXISTS tenant_lifecycle_governance_hold_guard ON tenant_lifecycle;
+CREATE TRIGGER tenant_lifecycle_governance_hold_guard
+BEFORE INSERT OR UPDATE ON tenant_lifecycle
+FOR EACH ROW EXECUTE FUNCTION prodkit_block_tenant_deletion_with_governance_hold();
 
 DO $$
 DECLARE
