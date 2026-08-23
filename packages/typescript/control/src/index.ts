@@ -9,6 +9,17 @@ export type ReconciliationOutcome =
   | "state_mismatch"
   | "unverifiable";
 
+export type ActorKind = "human" | "agent" | "service" | "workflow" | "executor";
+
+export interface ActorRef {
+  readonly kind: ActorKind;
+  readonly id: string;
+  readonly display_name?: string | null;
+  readonly tenant_id: string;
+  readonly workload_identity?: string | null;
+  readonly attributes: Readonly<Record<string, string>>;
+}
+
 export type LineageNodeKind =
   | "specification_revision"
   | "decision_set"
@@ -153,7 +164,7 @@ export interface QueueSnapshot {
   readonly schema_name: "prodkit.queue-snapshot";
   readonly schema_version: "1.0.0";
   readonly queue: string;
-  readonly tenant_id?: string | null;
+  readonly tenant_id: string;
   readonly queued: number;
   readonly leased: number;
   readonly dead_letter: number;
@@ -173,4 +184,102 @@ export interface CapacityEnvelope {
   readonly qualification_concurrency: number;
   readonly qualification_work_items: number;
   readonly qualification_soak_seconds: number;
+}
+
+export type ContentStorageMode = "none" | "hash_only" | "redacted" | "full";
+
+export interface ArtifactRef {
+  readonly tenant_id: string;
+  readonly artifact_id: string;
+  readonly media_type: string;
+  readonly sha256: string;
+  readonly size_bytes: number;
+  readonly storage_mode: ContentStorageMode;
+  readonly location?: string | null;
+  readonly encrypted: boolean;
+  readonly redacted: boolean;
+  readonly redaction_version?: string | null;
+  readonly retention_until?: string | null;
+  readonly classification: string;
+}
+
+export type TenantAccessMode = "tenant" | "support";
+export type TenantCapability =
+  | "read"
+  | "write"
+  | "execute"
+  | "approve"
+  | "export"
+  | "delete"
+  | "legal_hold"
+  | "configure";
+
+export interface TenantAccessContext {
+  readonly schema_name: "prodkit.tenant-access-context";
+  readonly schema_version: "1.0.0";
+  readonly tenant_id: string;
+  readonly actor: ActorRef;
+  readonly mode: TenantAccessMode;
+  readonly capabilities: readonly TenantCapability[];
+  readonly elevation_id?: string | null;
+  readonly reason?: string | null;
+  readonly ticket_reference?: string | null;
+  readonly issued_at: string;
+  readonly expires_at?: string | null;
+}
+
+export interface SupportElevationGrant {
+  readonly schema_name: "prodkit.support-elevation-grant";
+  readonly schema_version: "1.0.0";
+  readonly grant_id: string;
+  readonly target_tenant_id: string;
+  readonly operator: ActorRef;
+  readonly issued_by: ActorRef;
+  readonly capabilities: readonly TenantCapability[];
+  readonly reason: string;
+  readonly ticket_reference: string;
+  readonly issued_at: string;
+  readonly expires_at: string;
+  readonly revoked_at?: string | null;
+}
+
+export interface TenantIsolationProfile {
+  readonly schema_name: "prodkit.tenant-isolation-profile";
+  readonly schema_version: "1.0.0";
+  readonly tenant_id: string;
+  readonly policy_profile: string;
+  readonly signing_profile: string;
+  readonly retention_profile: string;
+  readonly executor_profile: string;
+  readonly storage_partition: string;
+  readonly cache_namespace: string;
+  readonly allow_support_access: boolean;
+  readonly attributes: Readonly<Record<string, string>>;
+}
+
+export type TenantLifecycleStatus = "active" | "deletion_scheduled" | "deleted";
+
+export interface TenantLifecycleRecord {
+  readonly schema_name: "prodkit.tenant-lifecycle";
+  readonly schema_version: "1.0.0";
+  readonly tenant_id: string;
+  readonly status: TenantLifecycleStatus;
+  readonly legal_hold: boolean;
+  readonly deletion_not_before?: string | null;
+  readonly updated_at: string;
+  readonly updated_by: ActorRef;
+  readonly elevation_id?: string | null;
+}
+
+export interface TenantExportManifest {
+  readonly schema_name: "prodkit.tenant-export-manifest";
+  readonly schema_version: "1.0.0";
+  readonly export_id: string;
+  readonly tenant_id: string;
+  readonly created_at: string;
+  readonly created_by: ActorRef;
+  readonly elevation_id?: string | null;
+  readonly record_counts: Readonly<Record<string, number>>;
+  readonly content_digests: readonly string[];
+  readonly legal_hold_preserved: boolean;
 }
