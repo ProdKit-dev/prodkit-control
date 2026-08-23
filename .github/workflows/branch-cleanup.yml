@@ -12,6 +12,11 @@ on:
         required: true
         default: true
         type: boolean
+      expected_default_sha:
+        description: Optional exact default-branch SHA reviewed by an upstream gate
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -21,9 +26,9 @@ jobs:
     permissions:
       contents: write
       pull-requests: read
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-branch-cleanup.yml@45e4dacd65c736588e0c7e2d3cdcb1cb0d11045e
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-branch-cleanup.yml@89eec1f6bcd4e45fb67c9fa99122ea6feba9d4bc
     with:
       branches_json: ${{ inputs.branches_json }}
-      expected_default_sha: ${{ github.sha }}
+      expected_default_sha: ${{ inputs.expected_default_sha != '' && inputs.expected_default_sha || github.sha }}
       dry_run: ${{ inputs.dry_run }}
       runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]' }}
