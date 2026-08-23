@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
 from uuid import UUID, uuid4
 
 from prodkit_control_core import (
@@ -24,11 +23,13 @@ from prodkit_control_core import (
     LegalHoldStatus,
     RetentionCandidate,
     RetentionDecision,
+    RetentionDeletionAdapter,
     RetentionDisposition,
     RetentionExecutionRecord,
     RetentionPolicy,
     SignedCheckpoint,
     TenantAccessContext,
+    TenantAccessMode,
     TenantCapability,
     TrustRootHistory,
     TrustRootPolicy,
@@ -36,17 +37,6 @@ from prodkit_control_core import (
 )
 
 from .attestations import OfflineAssuranceVerifier
-
-
-class RetentionDeletionAdapter(Protocol):
-    """Provider-neutral deletion adapter; governance decides, adapters delete."""
-
-    async def delete(
-        self,
-        *,
-        context: TenantAccessContext,
-        candidate: RetentionCandidate,
-    ) -> str: ...
 
 
 def legal_hold_release_digest(*, tenant_id: str, hold_id: UUID) -> str:
@@ -60,7 +50,17 @@ def legal_hold_release_digest(*, tenant_id: str, hold_id: UUID) -> str:
 
 
 class InMemoryGovernanceStore:
-    """Standalone governance, retention, trust-root, transfer, and audit control plane."""
+    """Standalone governance, retention, trust-root, transfer, and audit control plane.
+
+    The standalone store cannot independently revalidate a support elevation against the live
+    tenant-control grant registry, so every governance operation requires ordinary tenant mode.
+    Production deployments that need audited support reads use ``PostgresGovernanceStore``, which
+    revalidates support opt-in, grant state, actor identity, expiry, and capability on every use.
+
+    Retention execution holds the tenant governance lock while a bounded deletion adapter runs.
+    Legal-hold and retention-policy mutations take the same lock, giving hold placement and
+    deletion one deterministic serial order instead of a check-then-delete race.
+    """
 
     def __init__(self) -> None:
         self._changes: dict[tuple[str, UUID], GovernanceChangeRequest] = {}
@@ -98,7 +98,7 @@ class InMemoryGovernanceStore:
             reason=reason,
             ticket_reference=ticket_reference,
             proposed_at=now,
-            proposed_by=context.audited_actor(),
+            proposed_by=context.actor,
         )
         async with self._lock:
             self._changes[(context.tenant_id, request.request_id)] = request
@@ -107,7 +107,7 @@ class InMemoryGovernanceStore:
                     event_id=uuid4(),
                     tenant_id=context.tenant_id,
                     event_type=GovernanceAuditEventType.CHANGE_PROPOSED,
-                    actor=context.audited_actor(),
+                    actor=context.actor,
                     occurred_at=now,
                     request_id=request.request_id,
                     target_type=target_type,
@@ -145,7 +145,7 @@ class InMemoryGovernanceStore:
                 request_id=request_id,
                 tenant_id=context.tenant_id,
                 decision=decision,
-                actor=context.audited_actor(),
+                actor=context.actor,
                 occurred_at=now,
                 reason=reason,
             )
@@ -158,7 +158,7 @@ class InMemoryGovernanceStore:
                     update={
                         "status": GovernanceChangeStatus.APPROVED,
                         "approved_at": now,
-                        "approved_by": context.audited_actor(),
+                        "approved_by": context.actor,
                     }
                 )
                 event_type = GovernanceAuditEventType.CHANGE_APPROVED
@@ -168,7 +168,7 @@ class InMemoryGovernanceStore:
                     event_id=uuid4(),
                     tenant_id=context.tenant_id,
                     event_type=event_type,
-                    actor=context.audited_actor(),
+                    actor=context.actor,
                     occurred_at=now,
                     request_id=request_id,
                     target_type=request.target_type,
@@ -214,7 +214,7 @@ class InMemoryGovernanceStore:
                     event_id=uuid4(),
                     tenant_id=context.tenant_id,
                     event_type=GovernanceAuditEventType.CHANGE_APPLIED,
-                    actor=context.audited_actor(),
+                    actor=context.actor,
                     occurred_at=now,
                     request_id=request_id,
                     target_type=GovernanceTargetType.RETENTION_POLICY,
@@ -237,12 +237,7 @@ class InMemoryGovernanceStore:
         self._require(context, TenantCapability.READ)
         now = at or datetime.now(UTC)
         async with self._lock:
-            eligible = tuple(
-                policy
-                for policy in self._retention.get(context.tenant_id, ())
-                if policy.effective_at <= now
-            )
-            return eligible[-1] if eligible else None
+            return self._effective_policy_locked(context.tenant_id, now)
 
     async def place_legal_hold(
         self,
@@ -265,7 +260,7 @@ class InMemoryGovernanceStore:
                     event_id=uuid4(),
                     tenant_id=context.tenant_id,
                     event_type=GovernanceAuditEventType.LEGAL_HOLD_PLACED,
-                    actor=context.audited_actor(),
+                    actor=context.actor,
                     occurred_at=hold.placed_at,
                     target_id=str(hold.hold_id),
                     reason=hold.reason,
@@ -282,6 +277,7 @@ class InMemoryGovernanceStore:
         reason: str,
         ticket_reference: str,
     ) -> GovernanceChangeRequest:
+        self._require(context, TenantCapability.CONFIGURE)
         async with self._lock:
             hold = self._holds.get((context.tenant_id, hold_id))
             if hold is None or hold.status is not LegalHoldStatus.ACTIVE:
@@ -313,10 +309,7 @@ class InMemoryGovernanceStore:
             hold = self._holds.get(key)
             if hold is None or hold.status is not LegalHoldStatus.ACTIVE:
                 raise KeyError(hold_id)
-            digest = legal_hold_release_digest(
-                tenant_id=context.tenant_id,
-                hold_id=hold_id,
-            )
+            digest = legal_hold_release_digest(tenant_id=context.tenant_id, hold_id=hold_id)
             request = self._approved_request_locked(
                 tenant_id=context.tenant_id,
                 request_id=request_id,
@@ -329,7 +322,7 @@ class InMemoryGovernanceStore:
                 update={
                     "status": LegalHoldStatus.RELEASED,
                     "released_at": now,
-                    "released_by": context.audited_actor(),
+                    "released_by": context.actor,
                     "release_change_request_id": request_id,
                 }
             )
@@ -340,7 +333,7 @@ class InMemoryGovernanceStore:
                     event_id=uuid4(),
                     tenant_id=context.tenant_id,
                     event_type=GovernanceAuditEventType.LEGAL_HOLD_RELEASED,
-                    actor=context.audited_actor(),
+                    actor=context.actor,
                     occurred_at=now,
                     request_id=request_id,
                     target_type=GovernanceTargetType.LEGAL_HOLD_RELEASE,
@@ -360,33 +353,14 @@ class InMemoryGovernanceStore:
         at: datetime | None = None,
     ) -> tuple[RetentionDecision, ...]:
         self._require(context, TenantCapability.READ)
-        now = at or datetime.now(UTC)
+        decision_at = at or datetime.now(UTC)
         async with self._lock:
-            policy = self._effective_policy_locked(context.tenant_id, now)
-            if policy is None:
-                raise AuthorizationDeniedError("no effective retention policy is configured")
-            holds = tuple(
-                hold
-                for (tenant_id, _), hold in self._holds.items()
-                if tenant_id == context.tenant_id and hold.status is LegalHoldStatus.ACTIVE
+            decisions = self._retention_decisions_locked(
+                tenant_id=context.tenant_id,
+                candidates=candidates,
+                at=decision_at,
             )
-            decisions = tuple(
-                self._decision_for(policy=policy, holds=holds, candidate=candidate, at=now)
-                for candidate in candidates
-            )
-            for decision in decisions:
-                self._append_audit(
-                    GovernanceAuditEvent(
-                        event_id=uuid4(),
-                        tenant_id=context.tenant_id,
-                        event_type=GovernanceAuditEventType.RETENTION_EVALUATED,
-                        actor=context.audited_actor(),
-                        occurred_at=now,
-                        target_id=f"{decision.resource_type}:{decision.resource_id}",
-                        reason=decision.reason,
-                        attributes={"disposition": decision.disposition.value},
-                    )
-                )
+            self._audit_decisions_locked(context=context, decisions=decisions, occurred_at=decision_at)
             return decisions
 
     async def execute_retention(
@@ -398,44 +372,54 @@ class InMemoryGovernanceStore:
         at: datetime | None = None,
     ) -> tuple[RetentionExecutionRecord, ...]:
         self._require(context, TenantCapability.DELETE)
-        now = at or datetime.now(UTC)
-        decisions = await self.evaluate_retention(context=context, candidates=candidates, at=now)
-        candidate_by_key = {
-            (candidate.resource_type, candidate.resource_id): candidate for candidate in candidates
-        }
-        records: list[RetentionExecutionRecord] = []
-        for decision in decisions:
-            if decision.disposition is not RetentionDisposition.DELETE:
-                continue
-            candidate = candidate_by_key[(decision.resource_type, decision.resource_id)]
-            deletion_reference = await adapter.delete(context=context, candidate=candidate)
-            record = RetentionExecutionRecord(
-                execution_id=uuid4(),
+        self._require(context, TenantCapability.READ)
+        decision_at = at or datetime.now(UTC)
+        async with self._lock:
+            decisions = self._retention_decisions_locked(
                 tenant_id=context.tenant_id,
-                resource_type=candidate.resource_type,
-                resource_id=candidate.resource_id,
-                executed_at=now,
-                executed_by=context.audited_actor(),
-                policy_id=decision.policy_id,
-                policy_revision=decision.policy_revision,
-                content_sha256=candidate.content_sha256,
-                deletion_reference=deletion_reference,
+                candidates=candidates,
+                at=decision_at,
             )
-            records.append(record)
-            async with self._lock:
+            self._audit_decisions_locked(context=context, decisions=decisions, occurred_at=decision_at)
+            candidate_by_key = {
+                (candidate.resource_type, candidate.resource_id): candidate for candidate in candidates
+            }
+            records: list[RetentionExecutionRecord] = []
+            for decision in decisions:
+                if decision.disposition is not RetentionDisposition.DELETE:
+                    continue
+                candidate = candidate_by_key[(decision.resource_type, decision.resource_id)]
+                deletion_reference = await adapter.delete(
+                    context=context,
+                    candidate=candidate,
+                    decision=decision,
+                )
+                record = RetentionExecutionRecord(
+                    execution_id=uuid4(),
+                    tenant_id=context.tenant_id,
+                    resource_type=candidate.resource_type,
+                    resource_id=candidate.resource_id,
+                    executed_at=decision_at,
+                    executed_by=context.actor,
+                    policy_id=decision.policy_id,
+                    policy_revision=decision.policy_revision,
+                    content_sha256=candidate.content_sha256,
+                    deletion_reference=deletion_reference,
+                )
+                records.append(record)
                 self._append_audit(
                     GovernanceAuditEvent(
                         event_id=uuid4(),
                         tenant_id=context.tenant_id,
                         event_type=GovernanceAuditEventType.RETENTION_DELETION_EXECUTED,
-                        actor=context.audited_actor(),
-                        occurred_at=now,
+                        actor=context.actor,
+                        occurred_at=decision_at,
                         target_id=f"{candidate.resource_type}:{candidate.resource_id}",
                         reason=decision.reason,
                         attributes={"deletion_reference": deletion_reference},
                     )
                 )
-        return tuple(records)
+            return tuple(records)
 
     async def bootstrap_trust_root(
         self,
@@ -467,7 +451,24 @@ class InMemoryGovernanceStore:
                 change_request_id=request_id,
             )
             self._trust_roots[context.tenant_id] = [root]
-            self._mark_applied_locked(request, at=datetime.now(UTC))
+            now = datetime.now(UTC)
+            self._mark_applied_locked(request, at=now)
+            self._append_audit(
+                GovernanceAuditEvent(
+                    event_id=uuid4(),
+                    tenant_id=context.tenant_id,
+                    event_type=GovernanceAuditEventType.TRUST_ROOT_ACTIVATED,
+                    actor=context.actor,
+                    occurred_at=now,
+                    request_id=request_id,
+                    target_type=GovernanceTargetType.TRUST_ROOT_POLICY,
+                    target_id=policy.policy_id,
+                    after_digest=digest,
+                    reason=request.reason,
+                    ticket_reference=request.ticket_reference,
+                    attributes={"revision": "1"},
+                )
+            )
             return root
 
     async def rotate_trust_root(
@@ -491,37 +492,37 @@ class InMemoryGovernanceStore:
                 raise ValueError("trust-root rotation requires an initialized trust root")
             if current.revision != plan.from_revision or plan.to_revision != current.revision + 1:
                 raise ValueError("key rotation revisions do not match current trust root")
-            before_digest = current.policy_sha256
             request = self._approved_request_locked(
                 tenant_id=context.tenant_id,
                 request_id=plan.change_request_id,
                 target_type=GovernanceTargetType.TRUST_ROOT_POLICY,
                 target_id=policy.policy_id,
                 proposed_digest=digest,
-                current_digest=before_digest,
+                current_digest=current.policy_sha256,
             )
             roots[-1] = current.model_copy(update={"retired_at": plan.overlap_until})
-            next_root = GovernedTrustRoot(
-                tenant_id=context.tenant_id,
-                revision=plan.to_revision,
-                policy=policy,
-                policy_sha256=digest,
-                activated_at=plan.activate_at,
-                change_request_id=plan.change_request_id,
+            roots.append(
+                GovernedTrustRoot(
+                    tenant_id=context.tenant_id,
+                    revision=plan.to_revision,
+                    policy=policy,
+                    policy_sha256=digest,
+                    activated_at=plan.activate_at,
+                    change_request_id=plan.change_request_id,
+                )
             )
-            roots.append(next_root)
             self._mark_applied_locked(request, at=now)
             self._append_audit(
                 GovernanceAuditEvent(
                     event_id=uuid4(),
                     tenant_id=context.tenant_id,
                     event_type=GovernanceAuditEventType.TRUST_ROOT_ACTIVATED,
-                    actor=context.audited_actor(),
+                    actor=context.actor,
                     occurred_at=now,
                     request_id=plan.change_request_id,
                     target_type=GovernanceTargetType.TRUST_ROOT_POLICY,
                     target_id=policy.policy_id,
-                    before_digest=before_digest,
+                    before_digest=current.policy_sha256,
                     after_digest=digest,
                     reason=request.reason,
                     ticket_reference=request.ticket_reference,
@@ -534,15 +535,13 @@ class InMemoryGovernanceStore:
             )
             return TrustRootHistory(tenant_id=context.tenant_id, roots=tuple(roots))
 
-    async def trust_root_history(
-        self,
-        *,
-        context: TenantAccessContext,
-    ) -> TrustRootHistory:
+    async def trust_root_history(self, *, context: TenantAccessContext) -> TrustRootHistory:
         self._require(context, TenantCapability.READ)
         async with self._lock:
-            roots = tuple(self._trust_roots.get(context.tenant_id, ()))
-            return TrustRootHistory(tenant_id=context.tenant_id, roots=roots)
+            return TrustRootHistory(
+                tenant_id=context.tenant_id,
+                roots=tuple(self._trust_roots.get(context.tenant_id, ())),
+            )
 
     @staticmethod
     def verify_checkpoint_history(
@@ -571,7 +570,7 @@ class InMemoryGovernanceStore:
             transfer_id=uuid4(),
             tenant_id=context.tenant_id,
             created_at=now,
-            created_by=context.audited_actor(),
+            created_by=context.actor,
             source_control_version=source_control_version,
             source_schema_version=source_schema_version,
             archive_sha256=archive_sha256,
@@ -586,7 +585,7 @@ class InMemoryGovernanceStore:
                     event_id=uuid4(),
                     tenant_id=context.tenant_id,
                     event_type=GovernanceAuditEventType.EVIDENCE_EXPORT_CREATED,
-                    actor=context.audited_actor(),
+                    actor=context.actor,
                     occurred_at=now,
                     target_id=str(manifest.transfer_id),
                     after_digest=sha256_hex(manifest),
@@ -616,7 +615,7 @@ class InMemoryGovernanceStore:
             transfer_id=manifest.transfer_id,
             tenant_id=context.tenant_id,
             imported_at=now,
-            imported_by=context.audited_actor(),
+            imported_by=context.actor,
             source_control_version=manifest.source_control_version,
             source_schema_version=manifest.source_schema_version,
             archive_sha256=archive_sha256,
@@ -628,7 +627,7 @@ class InMemoryGovernanceStore:
                     event_id=uuid4(),
                     tenant_id=context.tenant_id,
                     event_type=GovernanceAuditEventType.EVIDENCE_IMPORT_VERIFIED,
-                    actor=context.audited_actor(),
+                    actor=context.actor,
                     occurred_at=now,
                     target_id=str(receipt.import_id),
                     after_digest=sha256_hex(receipt),
@@ -646,6 +645,47 @@ class InMemoryGovernanceStore:
         self._require(context, TenantCapability.READ)
         async with self._lock:
             return tuple(self._audit.get(context.tenant_id, ()))
+
+    def _retention_decisions_locked(
+        self,
+        *,
+        tenant_id: str,
+        candidates: tuple[RetentionCandidate, ...],
+        at: datetime,
+    ) -> tuple[RetentionDecision, ...]:
+        policy = self._effective_policy_locked(tenant_id, at)
+        if policy is None:
+            raise AuthorizationDeniedError("no effective retention policy is configured")
+        holds = tuple(
+            hold
+            for (hold_tenant, _), hold in self._holds.items()
+            if hold_tenant == tenant_id and hold.status is LegalHoldStatus.ACTIVE
+        )
+        return tuple(
+            self._decision_for(policy=policy, holds=holds, candidate=candidate, at=at)
+            for candidate in candidates
+        )
+
+    def _audit_decisions_locked(
+        self,
+        *,
+        context: TenantAccessContext,
+        decisions: tuple[RetentionDecision, ...],
+        occurred_at: datetime,
+    ) -> None:
+        for decision in decisions:
+            self._append_audit(
+                GovernanceAuditEvent(
+                    event_id=uuid4(),
+                    tenant_id=context.tenant_id,
+                    event_type=GovernanceAuditEventType.RETENTION_EVALUATED,
+                    actor=context.actor,
+                    occurred_at=occurred_at,
+                    target_id=f"{decision.resource_type}:{decision.resource_id}",
+                    reason=decision.reason,
+                    attributes={"disposition": decision.disposition.value},
+                )
+            )
 
     def _effective_policy_locked(self, tenant_id: str, at: datetime) -> RetentionPolicy | None:
         eligible = tuple(
@@ -779,6 +819,10 @@ class InMemoryGovernanceStore:
 
     @staticmethod
     def _require(context: TenantAccessContext, capability: TenantCapability) -> None:
+        if context.mode is not TenantAccessMode.TENANT:
+            raise AuthorizationDeniedError(
+                "standalone governance cannot use support elevation without live grant revalidation"
+            )
         try:
             context.require(capability)
         except PermissionError as exc:
