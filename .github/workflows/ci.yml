@@ -15,59 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  finalize-v050:
-    name: finalize v0.5.0 candidate
-    if: ${{ github.event_name == 'pull_request' && github.head_ref == 'release/v0.5.0-multi-tenant-isolation' && github.actor != 'github-actions[bot]' }}
-    runs-on: [self-hosted, Linux, X64]
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout exact release branch
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-          persist-credentials: true
-      - name: Set up uv
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
-        with:
-          version: '0.10.0'
-          enable-cache: false
-      - name: Normalize exact v0.5.0 source
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/finalize_v050.py
-          python3 scripts/fix_v050_lint.py
-          uv python install 3.13
-          uv lock --python 3.13
-          uv sync --all-packages --group dev --locked --python 3.13
-          uv run --python 3.13 --no-sync python scripts/export_schemas.py
-          uv run --python 3.13 --no-sync ruff format .
-          uv run --python 3.13 --no-sync ruff check --fix .
-          uv run --python 3.13 --no-sync ruff format --check .
-          uv run --python 3.13 --no-sync ruff check .
-          python3 scripts/release_check.py --version 0.5.0
-          git config user.name 'prodkit-release-bot'
-          git config user.email 'prodkit-release-bot@users.noreply.github.com'
-          git add -- \
-            pyproject.toml uv.lock CHANGELOG.md ROADMAP.md \
-            packages tests schemas \
-            scripts/export_schemas.py scripts/ci_ha_scale.py scripts/ci_postgres.py \
-            scripts/ci_tenant_isolation_postgres.py \
-            docs/releases/v0.5.0.md docs/operations/tenant-isolation.md \
-            docs/security/tenant-isolation-review-v0.5.0.md
-          git diff --cached --check
-          if git diff --cached --quiet; then
-            echo 'v0.5.0 source already normalized'
-            exit 0
-          fi
-          git commit -m 'chore: finalize v0.5.0 release candidate'
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
-
   ci:
     name: ci
-    if: ${{ github.event_name != 'pull_request' || github.actor == 'github-actions[bot]' }}
     uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci-compact.yml@89eec1f6bcd4e45fb67c9fa99122ea6feba9d4bc
     with:
       runner_json: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '"ubuntu-latest"' || (vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
