@@ -435,4 +435,5 @@ class TenantCacheNamespace:
         if not tenant_id.strip() or not namespace.strip() or not key.strip():
             raise ValueError("tenant cache key components must be non-blank")
         tenant_partition = sha256_hex({"tenant_id": tenant_id})
-        return f"prodkit:{tenant_partition}:{namespace}:{key}"
+        key_partition = sha256_hex({"key": key})
+        return f"prodkit:{tenant_partition}:{namespace}:{key_partition}"

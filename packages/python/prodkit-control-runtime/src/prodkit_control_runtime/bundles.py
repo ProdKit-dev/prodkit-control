@@ -24,6 +24,7 @@ _MAX_TOTAL_BYTES = 128 * 1024 * 1024
 _ALLOWED_MEMBERS = frozenset({"manifest.json", "events.jsonl", "lineage.json"})
 _MANIFEST_SCHEMA_NAME = "prodkit.evidence-bundle-manifest"
 _MANIFEST_SCHEMA_VERSION = "1.1.0"
+_SUPPORTED_MANIFEST_SCHEMA_VERSIONS = frozenset({"1.0.0", _MANIFEST_SCHEMA_VERSION})
 
 
 def evidence_bundle_sha256(path: Path) -> str:
@@ -107,7 +108,7 @@ class EvidenceBundleVerifier:
         manifest = self._load_manifest(manifest_bytes)
         run_id, manifest_tenant_id = self._validate_manifest(manifest, events_bytes, lineage_bytes)
         event_tenant_id = self._validate_events(manifest, run_id, events_bytes)
-        if event_tenant_id != manifest_tenant_id:
+        if manifest_tenant_id is not None and event_tenant_id != manifest_tenant_id:
             raise IntegrityViolationError("evidence bundle tenant does not match events")
         self._validate_lineage(manifest, run_id, event_tenant_id, lineage_bytes)
         return cast(dict[str, object], manifest)
@@ -154,10 +155,11 @@ class EvidenceBundleVerifier:
         manifest: dict[str, Any],
         events_bytes: bytes,
         lineage_bytes: bytes | None,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str | None]:
         if manifest.get("schema_name") != _MANIFEST_SCHEMA_NAME:
             raise IntegrityViolationError("evidence bundle manifest schema name is unsupported")
-        if manifest.get("schema_version") != _MANIFEST_SCHEMA_VERSION:
+        schema_version = manifest.get("schema_version")
+        if schema_version not in _SUPPORTED_MANIFEST_SCHEMA_VERSIONS:
             raise IntegrityViolationError("evidence bundle manifest schema version is unsupported")
 
         run_id_raw = manifest.get("run_id")
@@ -170,7 +172,10 @@ class EvidenceBundleVerifier:
         if run_id != run_id_raw:
             raise IntegrityViolationError("evidence bundle manifest run id is not canonical")
         tenant_id = manifest.get("tenant_id")
-        if not isinstance(tenant_id, str) or not tenant_id.strip():
+        if schema_version == _MANIFEST_SCHEMA_VERSION:
+            if not isinstance(tenant_id, str) or not tenant_id.strip():
+                raise IntegrityViolationError("evidence bundle manifest tenant is invalid")
+        elif tenant_id is not None and (not isinstance(tenant_id, str) or not tenant_id.strip()):
             raise IntegrityViolationError("evidence bundle manifest tenant is invalid")
 
         event_count = _manifest_count(manifest, "event_count", minimum=1)
@@ -209,7 +214,7 @@ class EvidenceBundleVerifier:
             raise IntegrityViolationError("evidence bundle event counts are invalid")
         if sum(cast(dict[str, int], counts).values()) != event_count:
             raise IntegrityViolationError("evidence bundle event counts do not match event count")
-        return run_id, tenant_id
+        return run_id, cast(str | None, tenant_id)
 
     @staticmethod
     def _validate_events(
