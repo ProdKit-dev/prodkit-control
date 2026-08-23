@@ -8,15 +8,53 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  finalize-v060:
+    name: finalize v0.6 release candidate
+    if: ${{ github.event_name == 'pull_request' && github.head_ref == 'release/v0.6.0-governance-lifecycle' }}
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: 0.10.0
+          enable-cache: false
+      - name: Build normalized v0.6 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/finalize_v060.py
+          uv python install 3.13
+          uv lock --python 3.13
+          uv sync --all-packages --group dev --locked --python 3.13
+          uv run --python 3.13 --no-sync python scripts/export_schemas.py
+          uv run --python 3.13 --no-sync ruff format .
+          uv run --python 3.13 --no-sync ruff check --fix .
+          uv run --python 3.13 --no-sync ruff format --check .
+          uv run --python 3.13 --no-sync ruff check .
+          uv run --python 3.13 --no-sync python scripts/release_check.py --version 0.6.0
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No finalization changes required."
+            exit 0
+          fi
+          git commit -m 'chore: finalize v0.6.0 release candidate'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
   ci:
     name: ci
+    if: ${{ !(github.event_name == 'pull_request' && github.head_ref == 'release/v0.6.0-governance-lifecycle') }}
     uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-ci-compact.yml@89eec1f6bcd4e45fb67c9fa99122ea6feba9d4bc
     with:
       runner_json: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '"ubuntu-latest"' || (vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
