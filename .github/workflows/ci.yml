@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 permissions:
-  actions: read
+  actions: write
   contents: read
 
 jobs:
@@ -15,67 +15,62 @@ jobs:
     timeout-minutes: 5
     env:
       TARGET_SHA: be19defdafe9ecb6552f722c1fd344f3d9d07a27
-      RELEASE_RUN_ID: "32657765488"
+      VERIFICATION_RUN_ID: "32658414309"
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
     steps:
-      - name: Verify v0.4.0 release and independent verification
+      - name: Dispatch canonical v0.4.0 cleanup dry-run
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json
           import os
+          import urllib.error
           import urllib.request
 
           repo = os.environ['REPOSITORY']
           sha = os.environ['TARGET_SHA']
-          release_run_id = int(os.environ['RELEASE_RUN_ID'])
+          verification_run_id = os.environ['VERIFICATION_RUN_ID']
           token = os.environ['GH_TOKEN']
-          url = f'https://api.github.com/repos/{repo}/actions/runs?per_page=100'
-          request = urllib.request.Request(
-              url,
-              headers={
-                  'Authorization': f'Bearer {token}',
-                  'Accept': 'application/vnd.github+json',
-                  'X-GitHub-Api-Version': '2022-11-28',
-                  'User-Agent': 'prodkit-control-v040-finalizer',
+          root = f'https://api.github.com/repos/{repo}'
+          headers = {
+              'Authorization': f'Bearer {token}',
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+              'User-Agent': 'prodkit-control-v040-cleanup-dry-run',
+          }
+
+          def api(method, path, payload=None):
+              raw = None if payload is None else json.dumps(payload).encode()
+              req = urllib.request.Request(
+                  root + path,
+                  data=raw,
+                  method=method,
+                  headers={**headers, **({'Content-Type': 'application/json'} if raw else {})},
+              )
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  body = response.read()
+                  return None if not body else json.loads(body)
+
+          main = api('GET', '/git/ref/heads/main')
+          if main['object']['sha'] != sha:
+              raise SystemExit(f'main moved: {main["object"]["sha"]} != {sha}')
+          verification = api('GET', f'/actions/runs/{verification_run_id}')
+          if verification.get('path') != '.github/workflows/release-verification.yml':
+              raise SystemExit('verification run is not canonical Release Verification')
+          if verification.get('head_sha') != sha or verification.get('conclusion') != 'success':
+              raise SystemExit('exact-source independent verification is not successful')
+
+          branches = ['feat/v0.4.0-ha-scale', 'ops/v0.4.0-main-gate-inspector']
+          payload = {
+              'ref': 'main',
+              'inputs': {
+                  'branches_json': json.dumps(branches, separators=(',', ':')),
+                  'dry_run': 'true',
+                  'expected_default_sha': sha,
               },
-          )
-          with urllib.request.urlopen(request, timeout=30) as response:
-              runs = json.load(response)['workflow_runs']
-
-          release_candidates = [
-              run for run in runs
-              if run.get('path') == '.github/workflows/release.yml'
-              and run.get('event') == 'workflow_dispatch'
-              and run.get('head_sha') == sha
-          ]
-          verification_candidates = [
-              run for run in runs
-              if run.get('path') == '.github/workflows/release-verification.yml'
-              and run.get('event') == 'workflow_dispatch'
-          ]
-          release_candidates.sort(key=lambda item: item['id'], reverse=True)
-          verification_candidates.sort(key=lambda item: item['id'], reverse=True)
-          print('V040_RELEASES=' + json.dumps([
-              {'id': r['id'], 'head_sha': r['head_sha'], 'status': r['status'], 'conclusion': r['conclusion'], 'html_url': r['html_url']}
-              for r in release_candidates[:5]
-          ], sort_keys=True))
-          print('V040_VERIFICATIONS=' + json.dumps([
-              {'id': r['id'], 'head_sha': r['head_sha'], 'head_branch': r['head_branch'], 'status': r['status'], 'conclusion': r['conclusion'], 'html_url': r['html_url']}
-              for r in verification_candidates[:10]
-          ], sort_keys=True))
-
-          release = next((r for r in release_candidates if int(r['id']) == release_run_id), None)
-          if not release or release['status'] != 'completed' or release['conclusion'] != 'success':
-              raise SystemExit(f'exact Release not successful: {release}')
-
-          exact_verifications = [r for r in verification_candidates if r.get('head_sha') == sha]
-          if not exact_verifications:
-              raise SystemExit('exact-source Release Verification not found yet')
-          verification = exact_verifications[0]
-          if verification['status'] != 'completed' or verification['conclusion'] != 'success':
-              raise SystemExit(f'exact-source Release Verification not successful yet: {verification}')
-          print('V040_VERIFIED_RUN_ID=' + str(verification['id']))
+          }
+          api('POST', '/actions/workflows/branch-cleanup.yml/dispatches', payload)
+          print('V040_CLEANUP_DRY_RUN_DISPATCHED=' + json.dumps(branches))
           PY
