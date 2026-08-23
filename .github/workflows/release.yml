@@ -23,7 +23,7 @@ permissions:
 jobs:
   release:
     name: release
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@45e4dacd65c736588e0c7e2d3cdcb1cb0d11045e
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@89eec1f6bcd4e45fb67c9fa99122ea6feba9d4bc
     with:
       version: ${{ inputs.version }}
       target_sha: ${{ github.sha }}
@@ -44,3 +44,20 @@ jobs:
       # SHA256SUMS, release metadata, and SPDX SBOM remain mandatory.
       attest: false
       environment: release
+
+  verification-dispatch:
+    name: dispatch verification
+    needs: release
+    permissions:
+      actions: write
+      contents: read
+    # v0.1.3's immutable dispatcher has a documented expression-interpolation defect.
+    # Pin only this reusable to the minimal upstream recovery commit; every other
+    # lifecycle reusable remains on the immutable v0.1.3 release source.
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-verification-dispatch.yml@237d54ed3e9ffe6baa58196aa13cfa1b610298aa
+    with:
+      source_sha: ${{ github.sha }}
+      version: ${{ inputs.version }}
+      release_run_id: ${{ github.run_id }}
+      runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]' }}
+      verification_workflow_file: release-verification.yml

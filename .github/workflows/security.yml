@@ -19,7 +19,7 @@ concurrency:
 jobs:
   security:
     name: security
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-security-compact.yml@45e4dacd65c736588e0c7e2d3cdcb1cb0d11045e
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-security-compact.yml@89eec1f6bcd4e45fb67c9fa99122ea6feba9d4bc
     with:
       runner_json: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '"ubuntu-latest"' || (vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
       secret_scan_enabled: true
