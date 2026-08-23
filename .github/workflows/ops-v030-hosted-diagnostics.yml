@@ -1,0 +1,68 @@
+name: Ops v0.3.0 Hosted Diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  diagnose:
+    if: ${{ github.event.pull_request.head.ref == 'ops/v0.3.0-finalize' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_SHA: 34061e89321c111c55d2fdd8bb60e235fd25e47d
+    steps:
+      - name: Inspect exact release verification and runner queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.parse, urllib.request
+          repo = os.environ['GITHUB_REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          target = os.environ['TARGET_SHA']
+          root = f'https://api.github.com/repos/{repo}'
+          headers = {
+              'Authorization': f'Bearer {token}',
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+              'User-Agent': 'prodkit-control-v030-hosted-diagnostics',
+          }
+          def get(path):
+              req = urllib.request.Request(root + path, headers=headers)
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  return json.loads(r.read())
+          main = get('/commits/main')
+          print('MAIN', main.get('sha'), flush=True)
+          if main.get('sha') != target:
+              raise SystemExit('main moved')
+          q = urllib.parse.urlencode({'head_sha': target, 'event': 'workflow_dispatch', 'per_page': 100})
+          runs = get('/actions/runs?' + q).get('workflow_runs', [])
+          rows = [
+              {
+                  'id': r.get('id'), 'name': r.get('name'), 'path': r.get('path'),
+                  'status': r.get('status'), 'conclusion': r.get('conclusion'),
+                  'event': r.get('event'), 'head_sha': r.get('head_sha'),
+                  'created_at': r.get('created_at'), 'updated_at': r.get('updated_at'),
+              }
+              for r in runs
+              if r.get('path') in {
+                  '.github/workflows/release-verification.yml',
+                  '.github/workflows/release.yml',
+                  '.github/workflows/trusted-release-proof.yml',
+                  '.github/workflows/branch-cleanup.yml',
+              }
+          ]
+          rows.sort(key=lambda x: int(x['id'] or 0), reverse=True)
+          print('EXACT_LIFECYCLE_RUNS ' + json.dumps(rows, sort_keys=True), flush=True)
+          verification = [r for r in rows if r['path'] == '.github/workflows/release-verification.yml']
+          if verification:
+              print('LATEST_VERIFICATION ' + json.dumps(verification[0], sort_keys=True), flush=True)
+          else:
+              print('LATEST_VERIFICATION missing', flush=True)
+          PY
