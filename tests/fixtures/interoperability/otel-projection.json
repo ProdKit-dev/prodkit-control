@@ -1,0 +1,10 @@
+{
+  "attributes": {
+    "prodkit.event.type": "execution.completed",
+    "prodkit.event.sequence": 7,
+    "prodkit.tenant.id": "tenant-fixture",
+    "error.type": "TimeoutError"
+  },
+  "status": "ERROR",
+  "authoritative": false
+}

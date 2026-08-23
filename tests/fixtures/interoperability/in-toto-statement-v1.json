@@ -1,0 +1,19 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {
+      "name": "evidence.zip",
+      "digest": {"sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+    }
+  ],
+  "predicateType": "https://schemas.prodkit.dev/control/evidence/v1",
+  "predicate": {
+    "schema_name": "prodkit.control-evidence-attestation",
+    "schema_version": "1.0.0",
+    "run_id": "11111111-1111-4111-8111-111111111111",
+    "tenant_id": "tenant-fixture",
+    "bundle_manifest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "final_event_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "canonicalization": "prodkit-json-v1"
+  }
+}

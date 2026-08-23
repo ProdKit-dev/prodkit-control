@@ -1,0 +1,9 @@
+{
+  "jsonrpc": "2.0",
+  "id": "fixture-call-1",
+  "method": "tools/call",
+  "params": {
+    "name": "prodkit.file.write",
+    "arguments": {"path": "README.md", "content": "fixture"}
+  }
+}

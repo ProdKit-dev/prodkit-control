@@ -1,0 +1,27 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {
+      "name": "artifact.whl",
+      "digest": {"sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}
+    }
+  ],
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://schemas.prodkit.dev/build/python-wheel/v1",
+      "externalParameters": {"ref": "refs/tags/v0.3.0"},
+      "internalParameters": {},
+      "resolvedDependencies": []
+    },
+    "runDetails": {
+      "builder": {
+        "id": "https://prodkit.dev/builders/release",
+        "version": {"prodkit-control": "0.3.0"},
+        "builderDependencies": []
+      },
+      "metadata": {"invocationId": "fixture-build-1"},
+      "byproducts": []
+    }
+  }
+}
