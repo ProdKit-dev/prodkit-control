@@ -2,6 +2,10 @@
 
 Architecture Decision Records (ADRs) capture decisions that materially affect ProdKit Control's trust model, canonical contracts, compatibility, deployment profiles, or expensive-to-reverse architecture.
 
+## Accepted decisions
+
+- [ADR 0001: Fenced recoverable work without expiring action idempotency](0001-fenced-recoverable-work.md)
+
 ## When an ADR is required
 
 Create an ADR for changes to one or more of:
