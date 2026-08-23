@@ -1,6 +1,6 @@
 [project]
 name = "prodkit-control-postgres"
-version = "0.4.0"
+version = "0.5.0"
 description = "Append-only PostgreSQL event-ledger and lineage adapter for ProdKit Control."
 requires-python = ">=3.12,<3.15"
 license = { text = "Apache-2.0" }

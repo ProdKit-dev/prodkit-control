@@ -50,7 +50,11 @@ class TenantAccessContext(ContractModel):
         if self.mode is TenantAccessMode.TENANT:
             if self.actor.tenant_id != self.tenant_id:
                 raise ValueError("ordinary tenant access cannot cross tenant boundaries")
-            if self.elevation_id is not None or self.reason is not None or self.ticket_reference is not None:
+            if (
+                self.elevation_id is not None
+                or self.reason is not None
+                or self.ticket_reference is not None
+            ):
                 raise ValueError("ordinary tenant access cannot carry support-elevation metadata")
         else:
             if self.elevation_id is None or not self.reason or not self.ticket_reference:
@@ -154,7 +158,9 @@ class TenantLifecycleRecord(ContractModel):
         support_marker = self.updated_by.attributes.get("prodkit.support_elevation")
         if self.updated_by.tenant_id != self.tenant_id:
             if self.elevation_id is None or support_marker != str(self.elevation_id):
-                raise ValueError("cross-tenant lifecycle mutation requires recorded support elevation")
+                raise ValueError(
+                    "cross-tenant lifecycle mutation requires recorded support elevation"
+                )
         elif self.elevation_id is not None and support_marker != str(self.elevation_id):
             raise ValueError("lifecycle elevation identity does not match the audited actor")
         if self.legal_hold and self.status is TenantLifecycleStatus.DELETED:

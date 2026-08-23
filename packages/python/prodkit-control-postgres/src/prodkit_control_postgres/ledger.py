@@ -99,7 +99,9 @@ class PostgresEventLedger:
         events = await self.list_run_events(tenant_id=tenant_id, run_id=run_id)
         for expected_sequence, event in enumerate(events, start=1):
             if event.tenant_id != tenant_id:
-                raise IntegrityViolationError("tenant-scoped ledger returned a foreign-tenant event")
+                raise IntegrityViolationError(
+                    "tenant-scoped ledger returned a foreign-tenant event"
+                )
             if event.sequence != expected_sequence:
                 raise IntegrityViolationError("run event sequence is not contiguous")
             if event.integrity.previous_event_hash != previous:

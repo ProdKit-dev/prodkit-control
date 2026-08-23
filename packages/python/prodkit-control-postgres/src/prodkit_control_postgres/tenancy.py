@@ -43,7 +43,9 @@ class PostgresTenantControlStore:
         context: TenantAccessContext,
     ) -> None:
         if context.mode is not TenantAccessMode.TENANT:
-            raise AuthorizationDeniedError("support elevation cannot change tenant isolation policy")
+            raise AuthorizationDeniedError(
+                "support elevation cannot change tenant isolation policy"
+            )
         self._require_context(context, TenantCapability.CONFIGURE)
         if context.tenant_id != profile.tenant_id:
             raise AuthorizationDeniedError("tenant profile mutation crossed tenant boundary")
@@ -545,20 +547,15 @@ class PostgresTenantControlStore:
         *,
         for_update: bool = False,
     ) -> TenantIsolationProfile | None:
-        suffix = " FOR UPDATE" if for_update else ""
-        row = (
-            (
-                await session.execute(
-                    text(
-                        "SELECT document FROM tenant_isolation_profiles "
-                        "WHERE tenant_id = :tenant_id" + suffix
-                    ),
-                    {"tenant_id": tenant_id},
-                )
+        statement = (
+            text(
+                "SELECT document FROM tenant_isolation_profiles "
+                "WHERE tenant_id = :tenant_id FOR UPDATE"
             )
-            .mappings()
-            .first()
+            if for_update
+            else text("SELECT document FROM tenant_isolation_profiles WHERE tenant_id = :tenant_id")
         )
+        row = (await session.execute(statement, {"tenant_id": tenant_id})).mappings().first()
         return TenantIsolationProfile.model_validate(row["document"]) if row is not None else None
 
     async def _grant(
@@ -569,14 +566,21 @@ class PostgresTenantControlStore:
         *,
         for_update: bool = False,
     ) -> SupportElevationGrant | None:
-        suffix = " FOR UPDATE" if for_update else ""
+        statement = (
+            text(
+                "SELECT document FROM support_elevation_grants "
+                "WHERE tenant_id = :tenant_id AND grant_id = :grant_id FOR UPDATE"
+            )
+            if for_update
+            else text(
+                "SELECT document FROM support_elevation_grants "
+                "WHERE tenant_id = :tenant_id AND grant_id = :grant_id"
+            )
+        )
         row = (
             (
                 await session.execute(
-                    text(
-                        "SELECT document FROM support_elevation_grants "
-                        "WHERE tenant_id = :tenant_id AND grant_id = :grant_id" + suffix
-                    ),
+                    statement,
                     {"tenant_id": tenant_id, "grant_id": grant_id},
                 )
             )
@@ -592,20 +596,12 @@ class PostgresTenantControlStore:
         *,
         for_update: bool = False,
     ) -> TenantLifecycleRecord | None:
-        suffix = " FOR UPDATE" if for_update else ""
-        row = (
-            (
-                await session.execute(
-                    text(
-                        "SELECT document FROM tenant_lifecycle "
-                        "WHERE tenant_id = :tenant_id" + suffix
-                    ),
-                    {"tenant_id": tenant_id},
-                )
-            )
-            .mappings()
-            .first()
+        statement = (
+            text("SELECT document FROM tenant_lifecycle WHERE tenant_id = :tenant_id FOR UPDATE")
+            if for_update
+            else text("SELECT document FROM tenant_lifecycle WHERE tenant_id = :tenant_id")
         )
+        row = (await session.execute(statement, {"tenant_id": tenant_id})).mappings().first()
         return TenantLifecycleRecord.model_validate(row["document"]) if row is not None else None
 
     async def _save_lifecycle(

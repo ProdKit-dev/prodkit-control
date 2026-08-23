@@ -41,9 +41,7 @@ async def test_encrypted_artifact_round_trip_and_redaction(tmp_path) -> None:
         redact=True,
     )
     assert redacted.storage_mode is ContentStorageMode.REDACTED
-    envelope = json.loads(
-        (await store.get(tenant_id="tenant-a", artifact=redacted)).decode()
-    )
+    envelope = json.loads((await store.get(tenant_id="tenant-a", artifact=redacted)).decode())
     assert envelope["redacted"] is True
     assert envelope["redaction_version"] == "runtime-redaction-v1"
     assert envelope["original_sha256"]

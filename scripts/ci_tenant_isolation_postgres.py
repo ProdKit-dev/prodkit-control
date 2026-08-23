@@ -174,8 +174,7 @@ async def _exercise(sessions: async_sessionmaker[AsyncSession]) -> None:
         try:
             await session.execute(
                 text(
-                    "UPDATE tenant_lifecycle SET tenant_id = :foreign "
-                    "WHERE tenant_id = :tenant_id"
+                    "UPDATE tenant_lifecycle SET tenant_id = :foreign WHERE tenant_id = :tenant_id"
                 ),
                 {"tenant_id": tenant_a.tenant_id, "foreign": "tenant-control-foreign"},
             )

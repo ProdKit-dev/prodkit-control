@@ -1,0 +1,177 @@
+{
+  "$defs": {
+    "ActorKind": {
+      "enum": [
+        "human",
+        "agent",
+        "service",
+        "workflow",
+        "executor"
+      ],
+      "title": "ActorKind",
+      "type": "string"
+    },
+    "ActorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Attributes",
+          "type": "object"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ActorKind"
+        },
+        "tenant_id": {
+          "minLength": 1,
+          "title": "Tenant Id",
+          "type": "string"
+        },
+        "workload_identity": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workload Identity"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "tenant_id"
+      ],
+      "title": "ActorRef",
+      "type": "object"
+    },
+    "TenantAuditEventType": {
+      "enum": [
+        "support_elevation_issued",
+        "support_elevation_used",
+        "support_elevation_revoked",
+        "export_created",
+        "deletion_scheduled",
+        "deletion_completed",
+        "legal_hold_placed",
+        "legal_hold_released",
+        "configuration_changed"
+      ],
+      "title": "TenantAuditEventType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "actor": {
+      "$ref": "#/$defs/ActorRef"
+    },
+    "attributes": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Attributes",
+      "type": "object"
+    },
+    "audit_id": {
+      "format": "uuid",
+      "title": "Audit Id",
+      "type": "string"
+    },
+    "elevation_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Elevation Id"
+    },
+    "event_type": {
+      "$ref": "#/$defs/TenantAuditEventType"
+    },
+    "occurred_at": {
+      "format": "date-time",
+      "title": "Occurred At",
+      "type": "string"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason"
+    },
+    "schema_name": {
+      "default": "prodkit.tenant-audit-event",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "tenant_id": {
+      "minLength": 1,
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "ticket_reference": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ticket Reference"
+    }
+  },
+  "required": [
+    "audit_id",
+    "tenant_id",
+    "event_type",
+    "actor",
+    "occurred_at"
+  ],
+  "title": "TenantAuditEvent",
+  "type": "object"
+}

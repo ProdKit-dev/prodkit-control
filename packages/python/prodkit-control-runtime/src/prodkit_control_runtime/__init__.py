@@ -48,4 +48,4 @@ from .reconciliation import ReconciliationStore as ReconciliationStore
 from .tenancy import InMemoryTenantControlStore as InMemoryTenantControlStore
 from .tenancy import TenantCacheNamespace as TenantCacheNamespace
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"

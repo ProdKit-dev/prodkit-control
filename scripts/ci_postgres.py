@@ -195,12 +195,10 @@ async def _exercise_durable_stores() -> None:
         assert recovered == uncertain
         assert await attempts.get(tenant_id=foreign_tenant, attempt_id=attempt_id) is None
         assert (
-            await attempts.latest_for_action(tenant_id=tenant_id, action_id=action_id)
-            == uncertain
+            await attempts.latest_for_action(tenant_id=tenant_id, action_id=action_id) == uncertain
         )
         assert (
-            await attempts.latest_for_action(tenant_id=foreign_tenant, action_id=action_id)
-            is None
+            await attempts.latest_for_action(tenant_id=foreign_tenant, action_id=action_id) is None
         )
 
         result = ExecutionResult(

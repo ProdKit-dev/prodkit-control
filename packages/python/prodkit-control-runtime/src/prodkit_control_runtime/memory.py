@@ -75,7 +75,9 @@ class InMemoryEventLedger:
                     f"run {run_id} expected sequence {expected_sequence}, got {event.sequence}"
                 )
             if event.tenant_id != tenant_id:
-                raise IntegrityViolationError("tenant-scoped ledger returned a foreign-tenant event")
+                raise IntegrityViolationError(
+                    "tenant-scoped ledger returned a foreign-tenant event"
+                )
             if event.integrity.previous_event_hash != previous:
                 raise IntegrityViolationError(
                     f"run {run_id} sequence {event.sequence} has invalid previous hash"
@@ -93,9 +95,7 @@ class InMemoryEventLedger:
             previous = event.integrity.event_hash
             expected_sequence += 1
 
-    def replace_for_test(
-        self, tenant_id: str, run_id: UUID, events: list[ControlEvent]
-    ) -> None:
+    def replace_for_test(self, tenant_id: str, run_id: UUID, events: list[ControlEvent]) -> None:
         """Testing hook used to prove tamper detection without weakening runtime reads."""
 
         self._events[(tenant_id, run_id)] = list(events)

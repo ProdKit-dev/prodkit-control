@@ -227,7 +227,7 @@ def create_app(
     app = FastAPI(
         title="ProdKit Control",
         lifespan=lifespan,
-        version="0.4.0",
+        version="0.5.0",
         description=(
             "Provider-neutral intent-to-production lineage, action control, verification, "
             "reconciliation, and evidence API."
@@ -307,9 +307,7 @@ def create_app(
         services: Services,
     ) -> list[ControlEvent]:
         await _scoped_run(services, run_id, principal.tenant_id)
-        return await services.ledger.list_run_events(
-            tenant_id=principal.tenant_id, run_id=run_id
-        )
+        return await services.ledger.list_run_events(tenant_id=principal.tenant_id, run_id=run_id)
 
     @app.post("/v1/runs/{run_id}/actions:execute")
     async def execute_action(
@@ -425,9 +423,7 @@ def create_app(
         if node.run_id != run_id or node.tenant_id != principal.tenant_id:
             raise HTTPException(status_code=422, detail="lineage node scope does not match run")
         await services.lineage.record_node(node)
-        graph = await services.lineage.get_graph(
-            tenant_id=principal.tenant_id, run_id=run_id
-        )
+        graph = await services.lineage.get_graph(tenant_id=principal.tenant_id, run_id=run_id)
         await services.coordinator.bind_lineage(
             run_id,
             tenant_id=principal.tenant_id,
@@ -474,9 +470,7 @@ def create_app(
             )
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        graph = await services.lineage.get_graph(
-            tenant_id=principal.tenant_id, run_id=run_id
-        )
+        graph = await services.lineage.get_graph(tenant_id=principal.tenant_id, run_id=run_id)
         await services.coordinator.bind_lineage(
             run_id,
             tenant_id=principal.tenant_id,
@@ -508,9 +502,7 @@ def create_app(
     ) -> LineageGraph:
         await _scoped_run(services, run_id, principal.tenant_id)
         try:
-            return await services.lineage.get_graph(
-                tenant_id=principal.tenant_id, run_id=run_id
-            )
+            return await services.lineage.get_graph(tenant_id=principal.tenant_id, run_id=run_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="lineage graph not found") from exc
 
@@ -526,9 +518,7 @@ def create_app(
     ) -> ProductionLineageAssessment:
         run = await _scoped_run(services, run_id, principal.tenant_id)
         try:
-            graph = await services.lineage.get_graph(
-                tenant_id=principal.tenant_id, run_id=run_id
-            )
+            graph = await services.lineage.get_graph(tenant_id=principal.tenant_id, run_id=run_id)
             assessment = services.lineage_policy.assess(graph, request.observation_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="lineage graph not found") from exc

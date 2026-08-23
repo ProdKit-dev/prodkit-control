@@ -35,9 +35,7 @@ class InMemoryExecutionAttemptStore:
             self._records[identity] = attempt
             self._latest_by_action[(attempt.tenant_id, attempt.action_id)] = attempt.attempt_id
 
-    async def get(
-        self, *, tenant_id: str, attempt_id: UUID
-    ) -> ExecutionAttemptRecord | None:
+    async def get(self, *, tenant_id: str, attempt_id: UUID) -> ExecutionAttemptRecord | None:
         async with self._lock:
             return self._records.get((tenant_id, attempt_id))
 

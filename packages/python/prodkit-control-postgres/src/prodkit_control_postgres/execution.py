@@ -132,9 +132,7 @@ class PostgresExecutionAttemptStore:
             current.finished_at = attempt.finished_at
             current.document = attempt.model_dump(mode="json")
 
-    async def get(
-        self, *, tenant_id: str, attempt_id: UUID
-    ) -> ExecutionAttemptRecord | None:
+    async def get(self, *, tenant_id: str, attempt_id: UUID) -> ExecutionAttemptRecord | None:
         async with self._sessions() as session:
             row = await session.scalar(
                 select(ExecutionAttemptRow).where(

@@ -196,6 +196,8 @@ Operate the control plane safely under concurrency, failover, and sustained prod
 
 ## v0.5.0 — Multi-tenant enterprise isolation
 
+**Status:** Implemented in v0.5.0. Independent-review claim language remains gated on a recorded external tenant-isolation review.
+
 ### Goal
 
 Make tenant and organization isolation an independently verifiable property rather than a convention.

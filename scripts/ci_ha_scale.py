@@ -113,9 +113,7 @@ async def _qualify_queue_load() -> None:
     succeeded = 0
     active = 0
     for index in range(tenant_count):
-        snapshot = await queue.snapshot(
-            queue="qualification", tenant_id=f"tenant-{index}"
-        )
+        snapshot = await queue.snapshot(queue="qualification", tenant_id=f"tenant-{index}")
         succeeded += snapshot.succeeded
         active += snapshot.active_depth
     if succeeded != envelope.qualification_work_items or active != 0:

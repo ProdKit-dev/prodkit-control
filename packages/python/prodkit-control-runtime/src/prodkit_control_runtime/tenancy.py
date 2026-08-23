@@ -44,7 +44,9 @@ class InMemoryTenantControlStore:
         context: TenantAccessContext,
     ) -> None:
         if context.mode is not TenantAccessMode.TENANT:
-            raise AuthorizationDeniedError("support elevation cannot change tenant isolation policy")
+            raise AuthorizationDeniedError(
+                "support elevation cannot change tenant isolation policy"
+            )
         context.require(TenantCapability.CONFIGURE)
         if context.tenant_id != profile.tenant_id:
             raise AuthorizationDeniedError("tenant profile mutation crossed tenant boundary")

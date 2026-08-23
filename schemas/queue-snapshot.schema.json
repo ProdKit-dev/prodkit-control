@@ -1,5 +1,6 @@
 {
   "additionalProperties": false,
+  "description": "Tenant-local queue state; aggregate cross-tenant views require a privileged admin API.",
   "properties": {
     "captured_at": {
       "format": "date-time",
@@ -42,21 +43,14 @@
       "type": "integer"
     },
     "tenant_id": {
-      "anyOf": [
-        {
-          "minLength": 1,
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Tenant Id"
+      "minLength": 1,
+      "title": "Tenant Id",
+      "type": "string"
     }
   },
   "required": [
     "queue",
+    "tenant_id",
     "queued",
     "leased",
     "dead_letter",

@@ -133,15 +133,20 @@
           "type": "string"
         },
         "size_bytes": {
-          "minimum": 0,
           "title": "Size Bytes",
           "type": "integer"
         },
         "storage_mode": {
           "$ref": "#/$defs/ContentStorageMode"
+        },
+        "tenant_id": {
+          "minLength": 1,
+          "title": "Tenant Id",
+          "type": "string"
         }
       },
       "required": [
+        "tenant_id",
         "artifact_id",
         "media_type",
         "sha256",

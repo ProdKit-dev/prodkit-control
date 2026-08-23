@@ -1,0 +1,170 @@
+{
+  "$defs": {
+    "ActorKind": {
+      "enum": [
+        "human",
+        "agent",
+        "service",
+        "workflow",
+        "executor"
+      ],
+      "title": "ActorKind",
+      "type": "string"
+    },
+    "ActorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Attributes",
+          "type": "object"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ActorKind"
+        },
+        "tenant_id": {
+          "minLength": 1,
+          "title": "Tenant Id",
+          "type": "string"
+        },
+        "workload_identity": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workload Identity"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "tenant_id"
+      ],
+      "title": "ActorRef",
+      "type": "object"
+    },
+    "TenantCapability": {
+      "enum": [
+        "read",
+        "write",
+        "execute",
+        "approve",
+        "export",
+        "delete",
+        "legal_hold",
+        "configure"
+      ],
+      "title": "TenantCapability",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Time-bounded, capability-bounded support access to one target tenant.",
+  "properties": {
+    "capabilities": {
+      "items": {
+        "$ref": "#/$defs/TenantCapability"
+      },
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+    },
+    "grant_id": {
+      "format": "uuid",
+      "title": "Grant Id",
+      "type": "string"
+    },
+    "issued_at": {
+      "format": "date-time",
+      "title": "Issued At",
+      "type": "string"
+    },
+    "issued_by": {
+      "$ref": "#/$defs/ActorRef"
+    },
+    "operator": {
+      "$ref": "#/$defs/ActorRef"
+    },
+    "reason": {
+      "minLength": 1,
+      "title": "Reason",
+      "type": "string"
+    },
+    "revoked_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Revoked At"
+    },
+    "schema_name": {
+      "default": "prodkit.support-elevation-grant",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "target_tenant_id": {
+      "minLength": 1,
+      "title": "Target Tenant Id",
+      "type": "string"
+    },
+    "ticket_reference": {
+      "minLength": 1,
+      "title": "Ticket Reference",
+      "type": "string"
+    }
+  },
+  "required": [
+    "grant_id",
+    "target_tenant_id",
+    "operator",
+    "issued_by",
+    "capabilities",
+    "reason",
+    "ticket_reference",
+    "issued_at",
+    "expires_at"
+  ],
+  "title": "SupportElevationGrant",
+  "type": "object"
+}

@@ -33,7 +33,9 @@ class PostgresLineageStore:
             )
             if existing is not None:
                 if existing.tenant_id != node.tenant_id or existing.document != document:
-                    raise IntegrityViolationError("a lineage node id cannot cross tenants or be rewritten")
+                    raise IntegrityViolationError(
+                        "a lineage node id cannot cross tenants or be rewritten"
+                    )
                 return
             session.add(
                 LineageNodeRow(
@@ -66,7 +68,7 @@ class PostgresLineageStore:
                 if existing.document != relation.model_dump(mode="json"):
                     raise IntegrityViolationError("a lineage relation cannot be rewritten")
                 return
-            validated = LineageGraph(
+            LineageGraph(
                 run_id=graph.run_id,
                 tenant_id=graph.tenant_id,
                 nodes=graph.nodes,
@@ -96,9 +98,7 @@ class PostgresLineageStore:
         )
 
     @staticmethod
-    async def _get_graph(
-        session: AsyncSession, tenant_id: str, run_id: UUID
-    ) -> LineageGraph:
+    async def _get_graph(session: AsyncSession, tenant_id: str, run_id: UUID) -> LineageGraph:
         node_rows = (
             await session.scalars(
                 select(LineageNodeRow)

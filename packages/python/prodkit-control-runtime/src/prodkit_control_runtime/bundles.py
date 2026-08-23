@@ -58,9 +58,7 @@ class EvidenceBundleBuilder:
         events_path = destination / "events.jsonl"
         events_bytes = b"\n".join(canonical_json_bytes(event) for event in events) + b"\n"
         events_path.write_bytes(events_bytes)
-        if lineage is not None and (
-            lineage.run_id != run_id or lineage.tenant_id != tenant_id
-        ):
+        if lineage is not None and (lineage.run_id != run_id or lineage.tenant_id != tenant_id):
             raise ValueError("lineage graph and evidence bundle scope must match")
         files = {"events.jsonl": sha256_hex(events_bytes)}
         lineage_bytes = canonical_json_bytes(lineage) if lineage is not None else None
@@ -107,9 +105,7 @@ class EvidenceBundleVerifier:
 
         manifest_bytes, events_bytes, lineage_bytes = self._read_archive(archive)
         manifest = self._load_manifest(manifest_bytes)
-        run_id, manifest_tenant_id = self._validate_manifest(
-            manifest, events_bytes, lineage_bytes
-        )
+        run_id, manifest_tenant_id = self._validate_manifest(manifest, events_bytes, lineage_bytes)
         event_tenant_id = self._validate_events(manifest, run_id, events_bytes)
         if event_tenant_id != manifest_tenant_id:
             raise IntegrityViolationError("evidence bundle tenant does not match events")
