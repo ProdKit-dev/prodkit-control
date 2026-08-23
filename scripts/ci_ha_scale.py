@@ -230,7 +230,7 @@ async def main() -> None:
                 "qualification_work_items": envelope.qualification_work_items,
                 "qualification_soak_seconds": envelope.qualification_soak_seconds,
                 "soak_operations": soak_operations,
-                "tenant_partitions": tenant_count if False else 32,
+                "tenant_partitions": 32,
                 "elapsed_seconds": round(monotonic() - started, 3),
             },
             sort_keys=True,
