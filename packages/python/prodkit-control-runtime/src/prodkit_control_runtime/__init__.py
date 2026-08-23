@@ -1,5 +1,7 @@
 """Runtime services for the ProdKit control plane."""
 
+from prodkit_control_core import RetentionDeletionAdapter as RetentionDeletionAdapter
+
 from .approvals import HTTPApprovalProvider as HTTPApprovalProvider
 from .artifacts import EncryptedFilesystemArtifactStore as EncryptedFilesystemArtifactStore
 from .attestations import Ed25519CheckpointSigner as Ed25519CheckpointSigner
@@ -20,7 +22,6 @@ from .executors import DigestEffectVerifier as DigestEffectVerifier
 from .executors import DryRunExecutor as DryRunExecutor
 from .executors import ExecutorRegistry as ExecutorRegistry
 from .governance import InMemoryGovernanceStore as InMemoryGovernanceStore
-from .governance import RetentionDeletionAdapter as RetentionDeletionAdapter
 from .governance import legal_hold_release_digest as legal_hold_release_digest
 from .ha import CapacityAdmissionController as CapacityAdmissionController
 from .ha import InMemoryDurableWorkQueue as InMemoryDurableWorkQueue
@@ -50,5 +51,6 @@ from .reconciliation import ReconciliationSource as ReconciliationSource
 from .reconciliation import ReconciliationStore as ReconciliationStore
 from .tenancy import InMemoryTenantControlStore as InMemoryTenantControlStore
 from .tenancy import TenantCacheNamespace as TenantCacheNamespace
+from .transfers import GovernanceEvidenceTransferVerifier as GovernanceEvidenceTransferVerifier
 
 __version__ = "0.5.0"
