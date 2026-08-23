@@ -100,7 +100,9 @@ class InMemoryLeaseStore:
         async with self._lock:
             now = self._clock()
             slot = self._slots.get((lease.tenant_id, lease.resource_key))
-            current = slot.current if slot is not None else None
+            if slot is None:
+                raise LeaseLostError("cannot renew a stale, released, or expired lease")
+            current = slot.current
             if not self._matches(current, lease) or current is None or current.is_expired(now):
                 raise LeaseLostError("cannot renew a stale, released, or expired lease")
             renewed = current.model_copy(
@@ -113,7 +115,9 @@ class InMemoryLeaseStore:
         async with self._lock:
             now = self._clock()
             slot = self._slots.get((lease.tenant_id, lease.resource_key))
-            current = slot.current if slot is not None else None
+            if slot is None:
+                raise LeaseLostError("cannot release a stale, replaced, or expired lease")
+            current = slot.current
             if not self._matches(current, lease) or current is None or current.is_expired(now):
                 raise LeaseLostError("cannot release a stale, replaced, or expired lease")
             slot.current = None
