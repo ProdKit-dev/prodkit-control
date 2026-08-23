@@ -15,7 +15,7 @@ concurrency:
 jobs:
   finalize:
     if: github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Checkout exact branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -25,187 +25,13 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
         with:
-          version: '0.8.17'
-      - name: Finalize release source
+          version: '0.10.0'
+          enable-cache: false
+      - name: Normalize v0.5.0 candidate
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import json
-          import re
-
-          VERSION = "0.5.0"
-
-          for path in [Path("pyproject.toml"), *sorted(Path("packages/python").glob("**/pyproject.toml"))]:
-              text = path.read_text(encoding="utf-8")
-              text = re.sub(r'(?m)^version = "0\.4\.0"$', f'version = "{VERSION}"', text)
-              path.write_text(text, encoding="utf-8")
-
-          for path in sorted(Path("packages/typescript").glob("**/package.json")):
-              data = json.loads(path.read_text(encoding="utf-8"))
-              if data.get("version") == "0.4.0":
-                  data["version"] = VERSION
-                  path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-
-          for path in sorted(Path("packages/python").glob("**/__init__.py")):
-              text = path.read_text(encoding="utf-8")
-              if '__version__ = "0.4.0"' in text:
-                  path.write_text(text.replace('__version__ = "0.4.0"', f'__version__ = "{VERSION}"'), encoding="utf-8")
-
-          app = Path("packages/python/prodkit-control-fastapi/src/prodkit_control_fastapi/app.py")
-          text = app.read_text(encoding="utf-8").replace('version="0.4.0"', f'version="{VERSION}"')
-          app.write_text(text, encoding="utf-8")
-
-          export = Path("scripts/export_schemas.py")
-          text = export.read_text(encoding="utf-8")
-          text = text.replace(
-              "    StateObservation,\n    TrustRootPolicy,",
-              "    StateObservation,\n    SupportElevationGrant,\n    TenantAccessContext,\n    TenantAuditEvent,\n    TenantExportManifest,\n    TenantIsolationProfile,\n    TenantLifecycleRecord,\n    TrustRootPolicy,",
-          )
-          text = text.replace(
-              '    "state-observation.schema.json": StateObservation,\n',
-              '    "state-observation.schema.json": StateObservation,\n'
-              '    "support-elevation-grant.schema.json": SupportElevationGrant,\n'
-              '    "tenant-access-context.schema.json": TenantAccessContext,\n'
-              '    "tenant-audit-event.schema.json": TenantAuditEvent,\n'
-              '    "tenant-export-manifest.schema.json": TenantExportManifest,\n'
-              '    "tenant-isolation-profile.schema.json": TenantIsolationProfile,\n'
-              '    "tenant-lifecycle-record.schema.json": TenantLifecycleRecord,\n',
-          )
-          export.write_text(text, encoding="utf-8")
-
-          changelog = Path("CHANGELOG.md")
-          text = changelog.read_text(encoding="utf-8")
-          if "## [0.5.0] - 2026-08-23" not in text:
-              section = '''## [0.5.0] - 2026-08-23
-
-### Added
-
-- Canonical tenant access, isolation profile, support-elevation, lifecycle, export, and audit contracts with Python, TypeScript, and JSON Schema surfaces.
-- Durable PostgreSQL tenant-control state for isolation profiles, audited support grants, legal hold/deletion lifecycle, export manifests, and tenant administration audit evidence.
-- Tenant-bound evidence bundles, artifact references and encryption authentication context, cache namespaces, execution attempts, lineage, events, runs, and durable work acquisition.
-- Systematic known-foreign-ID negative tests plus PostgreSQL 18 qualification for tenant partitions, live support-grant revocation, lifecycle precedence, append-only audit/export evidence, and immutable tenant ownership.
-
-### Changed
-
-- Repository/service/storage APIs require explicit tenant scope instead of relying on caller convention or globally unique UUIDs.
-- Durable queues and snapshots require a concrete tenant; cross-tenant operational aggregation is reserved for an explicitly privileged administrative surface.
-- PostgreSQL schema version 6 adds tenant-first indexes, composite ownership constraints, immutable tenant ownership, and durable tenant-governance tables.
-- Support elevation is opt-in, time-bounded, capability-bounded, reason/ticket-bound, revalidated on every use, and cannot change the tenant isolation policy that authorizes support access.
-
-### Security
-
-- Known valid foreign identifiers resolve as tenant-local not-found/empty results rather than exposing another tenant's resource existence.
-- AES-GCM artifact authentication binds the tenant identity so a valid encrypted artifact cannot be replayed under another tenant reference.
-- Support grant revocation, expiry, operator identity, current tenant opt-in, reason/ticket binding, and exact capability are checked at privileged-use time.
-- Tenant audit events and export manifests are append-only in PostgreSQL; mutable tenant-owned rows cannot be reassigned to another tenant.
-
-### Release scope
-
-`v0.5.0` is the multi-tenant enterprise-isolation engineering milestone. The implementation and automated adversarial qualification may be used as the supported tenant-isolation control profile, but the repository does not claim that v0.5.0 has received an independent tenant-isolation security review. Any wording such as “independently reviewed enterprise isolation” remains blocked until an external review is completed and recorded.
-
-'''
-              changelog.write_text(text.replace("## [Unreleased]\n\n", "## [Unreleased]\n\n" + section), encoding="utf-8")
-
-          roadmap = Path("ROADMAP.md")
-          text = roadmap.read_text(encoding="utf-8")
-          marker = "## v0.5.0 — Multi-tenant enterprise isolation\n\n"
-          status = "**Status:** Implemented in v0.5.0. Independent-review claim language remains gated on a recorded external tenant-isolation review.\n\n"
-          if marker in text and status not in text:
-              text = text.replace(marker, marker + status)
-          roadmap.write_text(text, encoding="utf-8")
-          PY
-
-          mkdir -p docs/releases docs/operations docs/security
-          cat > docs/releases/v0.5.0.md <<'EOF'
-          # ProdKit Control v0.5.0
-
-          ProdKit Control v0.5.0 makes tenant isolation an enforced control-plane property across identity, repositories, persistence, jobs, events, caches, artifacts, support access, and tenant lifecycle state.
-
-          ## Isolation boundary
-
-          Tenant identity is derived from authenticated principal context at ingress and is mandatory at repository and durable-store boundaries. Known foreign identifiers are not sufficient to access or mutate another tenant's runs, events, lineage, attempts, artifacts, reconciliation state, tasks, lifecycle records, or audit evidence.
-
-          The standalone profile preserves the same contracts in process-local implementations for development, testing, and embedded deployments. The supported durable profile persists control state in PostgreSQL 18 and uses database-enforced tenant ownership in addition to application predicates.
-
-          ## Durable tenant control
-
-          PostgreSQL schema version 6 adds tenant-local isolation profiles, support elevation grants, lifecycle state, append-only administration audit evidence, and append-only export manifests. Isolation profiles select tenant-specific policy, signing, retention, executor, storage partition, and cache namespace behavior without coupling ProdKit Control to one provider.
-
-          Support elevation is tenant opt-in, short-lived, exact-capability scoped, ticket/reason bound, and revalidated against current durable state on every use. Revocation, expiry, tenant opt-out, operator mismatch, or capability mismatch fails closed. Support elevation cannot modify the tenant isolation profile that controls whether support access is enabled.
-
-          ## Lifecycle semantics
-
-          Tenant export produces a durable manifest and audit record. Legal hold takes precedence over scheduled deletion. Deletion is explicit and time-gated. Tenant audit and export evidence cannot be updated or deleted through the PostgreSQL schema, and mutable tenant-owned rows cannot be reassigned to another tenant.
-
-          ## Qualification
-
-          The v0.5 qualification suite covers known foreign run/action/attempt identifiers, tenant-scoped event and lineage reads, tenant-partitioned durable work acquisition and snapshots, artifact tenant binding, cache namespace separation, support opt-in/revocation/capability checks, legal-hold precedence, export/audit isolation, PostgreSQL tenant ownership constraints, append-only tenant audit evidence, and normal CI/Security/CodeQL gates.
-
-          ## Claim boundary
-
-          This release implements and qualifies the v0.5 multi-tenant isolation engineering profile. It does **not** claim that the profile has been independently security reviewed. The roadmap gate requiring an independent tenant-isolation security review applies before language such as “independently reviewed enterprise isolation” may be used. The review packet in `docs/security/tenant-isolation-review-v0.5.0.md` is intended for that external review.
-
-          ## Release gates
-
-          Release publication requires the exact prepared candidate to pass Python 3.12/3.13/3.14, Node.js 22/24, PostgreSQL 18 qualification, Security, CodeQL, Trusted Release Proof, immutable release publication, and independent published-asset verification.
-          EOF
-
-          cat > docs/operations/tenant-isolation.md <<'EOF'
-          # Tenant isolation operations
-
-          ## Supported profiles
-
-          The standalone profile uses the same tenant-scoped contracts and is suitable for development, embedded operation, and deterministic qualification. The durable multi-tenant profile requires PostgreSQL schema version 6 and the `PostgresTenantControlStore`; tenant-governance state must not be replaced with process-local storage in a horizontally scaled production deployment.
-
-          ## Tenant identity
-
-          Production ingress must derive tenant identity from an authenticated principal resolver. Tenant IDs supplied only by an untrusted request body or header are not authoritative. Every repository, event, lineage, attempt, artifact, task, reconciliation, and tenant-control operation carries explicit tenant scope.
-
-          ## Storage and caches
-
-          Keep tenant identity in database predicates and ownership constraints even when object IDs are globally unique. Artifact storage partitions by tenant and binds tenant identity into AES-GCM authenticated data. Cache keys must use `TenantCacheNamespace`; do not concatenate raw user-controlled tenant values into shared cache keys.
-
-          ## Support elevation
-
-          A tenant must explicitly enable support access in its isolation profile. A trusted support authority may then issue a grant to a trusted support operator for one tenant, a short TTL, an exact capability set, a reason, and a ticket reference. Every privileged operation revalidates the live grant and current tenant opt-in. Revoke the grant when work finishes; tenant opt-out also immediately invalidates use.
-
-          Support elevation must not be used to modify the target tenant's isolation profile. Broader platform administration should use a separate explicit privileged control surface rather than omitting tenant predicates.
-
-          ## Export, legal hold, and deletion
-
-          Export creates a tenant-bound manifest and audit evidence. Legal hold blocks deletion scheduling; placing a hold cancels an existing deletion schedule. Deletion requires an explicit future not-before time and a second transition after that time. Downstream object stores and providers must implement equivalent tenant-local retention/deletion behavior before claiming end-to-end deletion completion.
-
-          ## Migration
-
-          Migration 0006 is additive for the v0.5 release candidate. Apply it before starting v0.5 replicas. v0.5 replicas fail schema compatibility if the database is not exactly at schema version 6. After all v0.5 replicas are ready, drain older replicas. Do not attempt to move rows between tenants by rewriting `tenant_id`; database triggers reject tenant ownership reassignment.
-          EOF
-
-          cat > docs/security/tenant-isolation-review-v0.5.0.md <<'EOF'
-          # v0.5.0 tenant-isolation security review packet
-
-          **Review status:** external independent review not yet recorded.
-
-          This document defines the review target; it is not itself an independent security review and must not be cited as one.
-
-          ## Review target
-
-          Review the exact v0.5.0 candidate for authenticated tenant derivation, mandatory repository predicates, PostgreSQL composite ownership constraints, tenant immutability, event/lineage/task/cache/artifact isolation, support-elevation authorization and revocation, tenant-specific configuration, export/deletion/legal-hold semantics, and audit evidence integrity.
-
-          ## Adversarial cases
-
-          The reviewer should attempt access with known valid foreign run, event, lineage, action, execution-attempt, job, support-grant, export, and audit identifiers; cross-tenant artifact reference substitution; tenant/cache namespace confusion; forged or stale support contexts; support grant use after revocation/expiry/tenant opt-out; support self-enablement; legal-hold bypass; tenant reassignment in SQL; and mutation/deletion of append-only audit/export evidence.
-
-          ## Evidence to inspect
-
-          Inspect the exact-candidate CI, Security, CodeQL, PostgreSQL 18 tenant qualification, Trusted Release Proof, migration 0006, tenant-control store implementations, canonical schemas, release assets, and release verification output. Findings should identify severity, affected boundary, reproducibility, and whether release claim language must change.
-
-          ## Claim gate
-
-          Until an external reviewer and review artifact are recorded, ProdKit Control may describe v0.5.0 as implementing and automatically qualifying its multi-tenant isolation profile, but not as independently reviewed, certified, audited, or externally validated.
-          EOF
-
+          python3 scripts/finalize_v050.py
           uv python install 3.13
           uv lock --python 3.13
           uv sync --all-packages --group dev --locked --python 3.13
@@ -215,13 +41,8 @@ jobs:
           uv run --python 3.13 --no-sync ruff format --check .
           uv run --python 3.13 --no-sync ruff check .
           python3 scripts/release_check.py --version 0.5.0
-
-          git config user.name "prodkit-release-bot"
-          git config user.email "prodkit-release-bot@users.noreply.github.com"
+          git config user.name 'prodkit-release-bot'
+          git config user.email 'prodkit-release-bot@users.noreply.github.com'
           git add -A
-          if git diff --cached --quiet; then
-            echo "candidate already finalized"
-            exit 0
-          fi
-          git commit -m "chore: finalize v0.5.0 release candidate"
+          git commit -m 'chore: finalize v0.5.0 release candidate'
           git push origin HEAD:release/v0.5.0-multi-tenant-isolation
