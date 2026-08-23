@@ -4,7 +4,7 @@ import json
 import zipfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -86,10 +86,7 @@ def test_offline_assurance_verifies_v02_bundle_with_v03_checkpoint(tmp_path: Pat
     archive, manifest, manifest_bytes = _minimal_archive(tmp_path)
     archive_digest = evidence_bundle_sha256(archive)
     now = datetime.now(UTC)
-    run_id = uuid4()
     # The fixture is intentionally a v0.2-era evidence-bundle schema. Reuse its canonical run id.
-    from uuid import UUID
-
     run_id = UUID(str(manifest["run_id"]))
     builder = PortableAttestationBuilder()
     statement = builder.evidence_statement(
@@ -141,8 +138,6 @@ def test_checkpoint_tampering_and_post_revocation_signing_fail_closed(tmp_path: 
     archive, manifest, _ = _minimal_archive(tmp_path)
     archive_digest = evidence_bundle_sha256(archive)
     now = datetime.now(UTC)
-    from uuid import UUID
-
     run_id = UUID(str(manifest["run_id"]))
     signer = Ed25519CheckpointSigner.generate(key_id="rotating-key", signer_id="release-service")
     key = signer.trusted_key(
