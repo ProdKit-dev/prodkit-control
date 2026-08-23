@@ -293,7 +293,9 @@ def main() -> None:
         '["self-hosted","Linux","X64"]',
         workflow="release-verification.yml",
     )
-    require(verification, "manifest_path: .prodkit/release.json", workflow="release-verification.yml")
+    require(
+        verification, "manifest_path: .prodkit/release.json", workflow="release-verification.yml"
+    )
     require(verification, "release_workflow_file: release.yml", workflow="release-verification.yml")
     reject(verification, "workflow_run:", workflow="release-verification.yml")
     reject(verification, "actions: write", workflow="release-verification.yml")
