@@ -38,6 +38,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/finalize_v050.py
+          python3 scripts/fix_v050_lint.py
           uv python install 3.13
           uv lock --python 3.13
           uv sync --all-packages --group dev --locked --python 3.13
