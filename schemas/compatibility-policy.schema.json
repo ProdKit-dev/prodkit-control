@@ -1,0 +1,132 @@
+{
+  "$defs": {
+    "DeprecationWindow": {
+      "additionalProperties": false,
+      "properties": {
+        "announced_at": {
+          "format": "date-time",
+          "title": "Announced At",
+          "type": "string"
+        },
+        "deprecated_in_version": {
+          "minLength": 1,
+          "title": "Deprecated In Version",
+          "type": "string"
+        },
+        "removal_not_before_version": {
+          "minLength": 1,
+          "title": "Removal Not Before Version",
+          "type": "string"
+        },
+        "replacement": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Replacement"
+        },
+        "surface": {
+          "minLength": 1,
+          "title": "Surface",
+          "type": "string"
+        }
+      },
+      "required": [
+        "surface",
+        "deprecated_in_version",
+        "removal_not_before_version",
+        "announced_at"
+      ],
+      "title": "DeprecationWindow",
+      "type": "object"
+    },
+    "MigrationPath": {
+      "additionalProperties": false,
+      "properties": {
+        "from_schema_version": {
+          "minimum": 1,
+          "title": "From Schema Version",
+          "type": "integer"
+        },
+        "minimum_control_version": {
+          "minLength": 1,
+          "title": "Minimum Control Version",
+          "type": "string"
+        },
+        "requires_backup": {
+          "default": true,
+          "title": "Requires Backup",
+          "type": "boolean"
+        },
+        "reversible": {
+          "default": false,
+          "title": "Reversible",
+          "type": "boolean"
+        },
+        "to_schema_version": {
+          "minimum": 2,
+          "title": "To Schema Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "from_schema_version",
+        "to_schema_version",
+        "minimum_control_version"
+      ],
+      "title": "MigrationPath",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "current_schema_version": {
+      "minimum": 1,
+      "title": "Current Schema Version",
+      "type": "integer"
+    },
+    "deprecations": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DeprecationWindow"
+      },
+      "title": "Deprecations",
+      "type": "array"
+    },
+    "migration_paths": {
+      "items": {
+        "$ref": "#/$defs/MigrationPath"
+      },
+      "title": "Migration Paths",
+      "type": "array"
+    },
+    "minimum_supported_schema_version": {
+      "minimum": 1,
+      "title": "Minimum Supported Schema Version",
+      "type": "integer"
+    },
+    "schema_name": {
+      "default": "prodkit.compatibility-policy",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "current_schema_version",
+    "minimum_supported_schema_version",
+    "migration_paths"
+  ],
+  "title": "CompatibilityPolicy",
+  "type": "object"
+}

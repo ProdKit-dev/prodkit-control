@@ -6,6 +6,36 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-24
+
+### Added
+
+- Canonical governance, retention, legal-hold, trust-root lifecycle, evidence-transfer, compatibility, migration, and deprecation contracts with Python, TypeScript, and JSON Schema surfaces.
+- Standalone and PostgreSQL governance stores with digest-bound change requests, append-only approval/audit evidence, independent approval for high/critical changes, and tenant-scoped policy history.
+- Versioned retention policies with deterministic retain/delete decisions, scoped legal holds, bounded deletion adapters, and durable retention-execution receipts.
+- Governed trust-root history and key-rotation plans that preserve historical checkpoint verification across explicit activation/retirement windows.
+- Independently anchored evidence transfer verification plus durable import/export receipts.
+- PostgreSQL schema 7 and qualification for supported schema 5 -> 7 and schema 6 -> 7 upgrades with durable-row preservation.
+
+### Changed
+
+- Governance mutations are ordinary-tenant authority only; support elevation cannot propose, approve, apply, release, delete, or rotate governance state.
+- Retention deletion and legal-hold/policy mutation serialize on the same tenant governance lock, eliminating hold-vs-delete check/use races in the supported store profiles.
+- Active scoped governance legal holds also block tenant lifecycle deletion at the database boundary.
+- The supported direct database upgrade window for v0.6.0 is schema 5 or schema 6 to schema 7; older schemas must first follow the previously supported sequential upgrade path.
+
+### Security
+
+- High/critical configuration changes require a distinct approver identity and are bound to the exact proposed digest and optional expected-current digest.
+- Governance approvals, policy revisions, evidence transfers/imports, retention executions, audit events, and migration evidence are append-only in PostgreSQL.
+- Legal-hold release and trust-root retirement are constrained state transitions; raw database updates cannot silently rewrite immutable proposal, hold-scope, or trust-policy documents.
+- Portable evidence import requires independent trust anchoring and produces verification evidence tied to exact package, manifest, tenant, schema, and trust-anchor digests.
+
+### Release scope
+
+`v0.6.0` implements the governance, retention, and lifecycle engineering milestone. Disaster recovery, RPO/RTO validation, restore exercises, and regional recovery remain v0.7.0 scope. The unrecorded independent v0.5 tenant-isolation review remains a separate claim-language gate.
+
+
 ## [0.5.0] - 2026-08-23
 
 ### Added

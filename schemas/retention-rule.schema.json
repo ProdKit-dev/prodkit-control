@@ -1,0 +1,39 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "deletion_allowed": {
+      "default": true,
+      "title": "Deletion Allowed",
+      "type": "boolean"
+    },
+    "deletion_grace_seconds": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Deletion Grace Seconds",
+      "type": "integer"
+    },
+    "resource_type": {
+      "minLength": 1,
+      "title": "Resource Type",
+      "type": "string"
+    },
+    "retain_for_seconds": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Retain For Seconds"
+    }
+  },
+  "required": [
+    "resource_type"
+  ],
+  "title": "RetentionRule",
+  "type": "object"
+}

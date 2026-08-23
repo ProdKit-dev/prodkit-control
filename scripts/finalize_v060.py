@@ -17,7 +17,10 @@ def replace_once(path: Path, old: str, new: str) -> None:
 
 
 # Keep released migrations immutable. Repair schema-specific trigger discovery only in new schema 7.
-migration = ROOT / "packages/python/prodkit-control-postgres/src/prodkit_control_postgres/migrations/0007_governance_lifecycle.sql"
+migration = (
+    ROOT
+    / "packages/python/prodkit-control-postgres/src/prodkit_control_postgres/migrations/0007_governance_lifecycle.sql"
+)
 text = migration.read_text(encoding="utf-8")
 old_trigger_check = "SELECT 1 FROM pg_trigger WHERE tgname = trigger_name AND NOT tgisinternal"
 new_trigger_check = (
@@ -32,7 +35,10 @@ if count != 2:
 migration.write_text(text.replace(old_trigger_check, new_trigger_check), encoding="utf-8")
 
 # Normalize every first-party Python package and workspace version.
-python_projects = [ROOT / "pyproject.toml", *sorted((ROOT / "packages/python").glob("**/pyproject.toml"))]
+python_projects = [
+    ROOT / "pyproject.toml",
+    *sorted((ROOT / "packages/python").glob("**/pyproject.toml")),
+]
 changed_projects = 0
 for path in python_projects:
     text = path.read_text(encoding="utf-8")
@@ -52,7 +58,9 @@ for path in sorted((ROOT / "packages/python").glob("**/__init__.py")):
         path.write_text(text.replace(marker, f'__version__ = "{NEW}"', 1), encoding="utf-8")
         changed_modules += 1
 if changed_modules < 15:
-    raise SystemExit(f"unexpected Python __version__ surface: changed only {changed_modules} modules")
+    raise SystemExit(
+        f"unexpected Python __version__ surface: changed only {changed_modules} modules"
+    )
 
 # FastAPI metadata is part of the release contract.
 app = ROOT / "packages/python/prodkit-control-fastapi/src/prodkit_control_fastapi/app.py"
@@ -65,7 +73,9 @@ if len(ts_packages) != 4:
 for path in ts_packages:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if payload.get("version") != OLD:
-        raise SystemExit(f"unexpected version in {path.relative_to(ROOT)}: {payload.get('version')!r}")
+        raise SystemExit(
+            f"unexpected version in {path.relative_to(ROOT)}: {payload.get('version')!r}"
+        )
     payload["version"] = NEW
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -74,7 +84,7 @@ ts_index = ROOT / "packages/typescript/control/src/index.ts"
 ts_text = ts_index.read_text(encoding="utf-8")
 if "export type GovernanceRisk =" in ts_text:
     raise SystemExit("TypeScript governance contracts already exist unexpectedly")
-ts_governance = r'''
+ts_governance = r"""
 
 export type GovernanceRisk = "low" | "medium" | "high" | "critical";
 export type GovernanceTargetType =
@@ -357,7 +367,7 @@ export interface GovernanceAuditEvent {
   readonly ticket_reference?: string | null;
   readonly attributes: Readonly<Record<string, string>>;
 }
-'''
+"""
 ts_index.write_text(ts_text.rstrip() + ts_governance + "\n", encoding="utf-8")
 
 # Changelog release entry.
@@ -365,7 +375,7 @@ changelog = ROOT / "CHANGELOG.md"
 changelog_text = changelog.read_text(encoding="utf-8")
 if f"## [{NEW}]" in changelog_text:
     raise SystemExit("v0.6.0 changelog section already exists unexpectedly")
-entry = f'''## [{NEW}] - {DATE}
+entry = f"""## [{NEW}] - {DATE}
 
 ### Added
 
@@ -393,7 +403,7 @@ entry = f'''## [{NEW}] - {DATE}
 ### Release scope
 
 `v0.6.0` implements the governance, retention, and lifecycle engineering milestone. Disaster recovery, RPO/RTO validation, restore exercises, and regional recovery remain v0.7.0 scope. The unrecorded independent v0.5 tenant-isolation review remains a separate claim-language gate.
-'''
+"""
 changelog.write_text(
     changelog_text.replace("## [Unreleased]\n", "## [Unreleased]\n\n" + entry + "\n", 1),
     encoding="utf-8",
@@ -415,13 +425,13 @@ roadmap.write_text(roadmap_text.replace(needle, replacement, 1), encoding="utf-8
 release_notes = ROOT / "docs/releases/v0.6.0.md"
 release_notes.parent.mkdir(parents=True, exist_ok=True)
 release_notes.write_text(
-    '''# ProdKit Control v0.6.0\n\n## Milestone\n\n`v0.6.0` is the governance, retention, and lifecycle milestone. It turns long-lived evidence and high-risk administrative changes into typed, versioned, auditable control-plane state rather than operator convention.\n\n## Production boundary\n\n- High/critical governance changes require independent approval bound to the proposed digest.\n- Retention evaluation is tenant scoped and legal hold takes precedence over deletion.\n- Retention deletion is serialized with legal-hold/policy mutation in the supported standalone and PostgreSQL profiles.\n- Governance audit, approval, policy revision, transfer/import, retention-execution, and migration evidence is append-only in PostgreSQL.\n- Trust-root revisions retain historical verification windows across rotation.\n- Evidence import is accepted only after independently anchored portable-package verification.\n- Schema 7 is the v0.6 runtime schema. Directly qualified upgrade starts are schema 5 and schema 6.\n\n## Release qualification\n\nThe exact release candidate must pass Python 3.12/3.13/3.14, Node 22/24, PostgreSQL 18, schema drift, strict typing, unit/integration tests, migration-path qualification, Security, CodeQL, trusted release proof, publication, and independent release verification.\n\n## Compatibility\n\nA v0.6 runtime fails closed against a database schema other than schema 7. Upgrade is sequential and additive. The release qualifies 5 -> 6 -> 7 and 6 -> 7. Deployments older than schema 5 must first use the earlier supported upgrade sequence. Downgrade is not claimed as a supported data migration path; forward-fix or pre-migration restore is the operator recovery model.\n\n## Claim boundaries\n\nThis release does not claim v0.7 disaster-recovery/RPO/RTO assurance. It also does not convert the still-unrecorded independent v0.5 tenant-isolation review into a completed review.\n''',
+    """# ProdKit Control v0.6.0\n\n## Milestone\n\n`v0.6.0` is the governance, retention, and lifecycle milestone. It turns long-lived evidence and high-risk administrative changes into typed, versioned, auditable control-plane state rather than operator convention.\n\n## Production boundary\n\n- High/critical governance changes require independent approval bound to the proposed digest.\n- Retention evaluation is tenant scoped and legal hold takes precedence over deletion.\n- Retention deletion is serialized with legal-hold/policy mutation in the supported standalone and PostgreSQL profiles.\n- Governance audit, approval, policy revision, transfer/import, retention-execution, and migration evidence is append-only in PostgreSQL.\n- Trust-root revisions retain historical verification windows across rotation.\n- Evidence import is accepted only after independently anchored portable-package verification.\n- Schema 7 is the v0.6 runtime schema. Directly qualified upgrade starts are schema 5 and schema 6.\n\n## Release qualification\n\nThe exact release candidate must pass Python 3.12/3.13/3.14, Node 22/24, PostgreSQL 18, schema drift, strict typing, unit/integration tests, migration-path qualification, Security, CodeQL, trusted release proof, publication, and independent release verification.\n\n## Compatibility\n\nA v0.6 runtime fails closed against a database schema other than schema 7. Upgrade is sequential and additive. The release qualifies 5 -> 6 -> 7 and 6 -> 7. Deployments older than schema 5 must first use the earlier supported upgrade sequence. Downgrade is not claimed as a supported data migration path; forward-fix or pre-migration restore is the operator recovery model.\n\n## Claim boundaries\n\nThis release does not claim v0.7 disaster-recovery/RPO/RTO assurance. It also does not convert the still-unrecorded independent v0.5 tenant-isolation review into a completed review.\n""",
     encoding="utf-8",
 )
 
 upgrade_doc = ROOT / "docs/operations/upgrade-compatibility-v0.6.0.md"
 upgrade_doc.parent.mkdir(parents=True, exist_ok=True)
 upgrade_doc.write_text(
-    '''# v0.6.0 upgrade and compatibility policy\n\nProdKit Control v0.6.0 requires PostgreSQL schema **7** at runtime and fails closed when the schema is ahead or behind.\n\n## Supported direct starts\n\n- Schema 6 (v0.5) -> schema 7.\n- Schema 5 (v0.4) -> schema 6 -> schema 7.\n\nBoth paths are exercised against PostgreSQL 18 in CI and must preserve pre-existing run ownership/state. Older schemas are outside the v0.6 direct-upgrade window and must first follow the earlier sequential upgrade path.\n\n## Procedure\n\n1. Stop or drain writers using the existing rolling-shutdown procedure.\n2. Take a deployment-appropriate database backup and record its immutable reference.\n3. Apply migrations sequentially; never skip a numbered migration.\n4. Confirm `prodkit_schema_metadata.version = 7`.\n5. Run application startup compatibility checks before admitting traffic.\n6. Verify governance tables, existing tenant/run ownership, and append-only migration evidence.\n7. Resume writers only after health/readiness and reconciliation checks pass.\n\n## Rollback and deprecation\n\nSchema downgrade is not supported. If migration cannot be forward-fixed, restore the pre-migration backup using the operator's database recovery procedure. Public surface deprecations must be represented by `DeprecationWindow` with an announced version, a removal-not-before version, and an optional replacement. A deprecated surface cannot be treated as removed before its declared window.\n\nDisaster-recovery proof, scheduled restore exercises, and RPO/RTO guarantees remain v0.7 scope.\n''',
+    """# v0.6.0 upgrade and compatibility policy\n\nProdKit Control v0.6.0 requires PostgreSQL schema **7** at runtime and fails closed when the schema is ahead or behind.\n\n## Supported direct starts\n\n- Schema 6 (v0.5) -> schema 7.\n- Schema 5 (v0.4) -> schema 6 -> schema 7.\n\nBoth paths are exercised against PostgreSQL 18 in CI and must preserve pre-existing run ownership/state. Older schemas are outside the v0.6 direct-upgrade window and must first follow the earlier sequential upgrade path.\n\n## Procedure\n\n1. Stop or drain writers using the existing rolling-shutdown procedure.\n2. Take a deployment-appropriate database backup and record its immutable reference.\n3. Apply migrations sequentially; never skip a numbered migration.\n4. Confirm `prodkit_schema_metadata.version = 7`.\n5. Run application startup compatibility checks before admitting traffic.\n6. Verify governance tables, existing tenant/run ownership, and append-only migration evidence.\n7. Resume writers only after health/readiness and reconciliation checks pass.\n\n## Rollback and deprecation\n\nSchema downgrade is not supported. If migration cannot be forward-fixed, restore the pre-migration backup using the operator's database recovery procedure. Public surface deprecations must be represented by `DeprecationWindow` with an announced version, a removal-not-before version, and an optional replacement. A deprecated surface cannot be treated as removed before its declared window.\n\nDisaster-recovery proof, scheduled restore exercises, and RPO/RTO guarantees remain v0.7 scope.\n""",
     encoding="utf-8",
 )

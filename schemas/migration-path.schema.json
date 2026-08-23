@@ -1,0 +1,37 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "from_schema_version": {
+      "minimum": 1,
+      "title": "From Schema Version",
+      "type": "integer"
+    },
+    "minimum_control_version": {
+      "minLength": 1,
+      "title": "Minimum Control Version",
+      "type": "string"
+    },
+    "requires_backup": {
+      "default": true,
+      "title": "Requires Backup",
+      "type": "boolean"
+    },
+    "reversible": {
+      "default": false,
+      "title": "Reversible",
+      "type": "boolean"
+    },
+    "to_schema_version": {
+      "minimum": 2,
+      "title": "To Schema Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "from_schema_version",
+    "to_schema_version",
+    "minimum_control_version"
+  ],
+  "title": "MigrationPath",
+  "type": "object"
+}

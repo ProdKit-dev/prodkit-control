@@ -1,0 +1,141 @@
+{
+  "$defs": {
+    "ActorKind": {
+      "enum": [
+        "human",
+        "agent",
+        "service",
+        "workflow",
+        "executor"
+      ],
+      "title": "ActorKind",
+      "type": "string"
+    },
+    "ActorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Attributes",
+          "type": "object"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ActorKind"
+        },
+        "tenant_id": {
+          "minLength": 1,
+          "title": "Tenant Id",
+          "type": "string"
+        },
+        "workload_identity": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workload Identity"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "tenant_id"
+      ],
+      "title": "ActorRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "archive_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Archive Sha256",
+      "type": "string"
+    },
+    "import_id": {
+      "format": "uuid",
+      "title": "Import Id",
+      "type": "string"
+    },
+    "imported_at": {
+      "format": "date-time",
+      "title": "Imported At",
+      "type": "string"
+    },
+    "imported_by": {
+      "$ref": "#/$defs/ActorRef"
+    },
+    "schema_name": {
+      "default": "prodkit.evidence-import-receipt",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_control_version": {
+      "minLength": 1,
+      "title": "Source Control Version",
+      "type": "string"
+    },
+    "source_schema_version": {
+      "minimum": 1,
+      "title": "Source Schema Version",
+      "type": "integer"
+    },
+    "tenant_id": {
+      "minLength": 1,
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "transfer_id": {
+      "format": "uuid",
+      "title": "Transfer Id",
+      "type": "string"
+    },
+    "verified": {
+      "default": true,
+      "title": "Verified",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "import_id",
+    "transfer_id",
+    "tenant_id",
+    "imported_at",
+    "imported_by",
+    "source_control_version",
+    "source_schema_version",
+    "archive_sha256"
+  ],
+  "title": "EvidenceImportReceipt",
+  "type": "object"
+}

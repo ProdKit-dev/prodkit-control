@@ -3,4 +3,4 @@
 from .executor import ConstrainedGitHubExecutor, GitHubExecutorConfig
 
 __all__ = ("ConstrainedGitHubExecutor", "GitHubExecutorConfig")
-__version__ = "0.5.0"
+__version__ = "0.6.0"

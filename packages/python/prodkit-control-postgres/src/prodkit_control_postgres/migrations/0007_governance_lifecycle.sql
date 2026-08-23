@@ -315,7 +315,7 @@ BEGIN
   LOOP
     trigger_name := table_name || '_tenant_immutable';
     IF NOT EXISTS (
-      SELECT 1 FROM pg_trigger WHERE tgname = trigger_name AND NOT tgisinternal
+      SELECT 1 FROM pg_trigger WHERE tgname = trigger_name AND tgrelid = to_regclass(table_name) AND NOT tgisinternal
     ) THEN
       EXECUTE format(
         'CREATE TRIGGER %I BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION prodkit_reject_tenant_change()',
@@ -343,7 +343,7 @@ BEGIN
   LOOP
     trigger_name := table_name || '_append_only';
     IF NOT EXISTS (
-      SELECT 1 FROM pg_trigger WHERE tgname = trigger_name AND NOT tgisinternal
+      SELECT 1 FROM pg_trigger WHERE tgname = trigger_name AND tgrelid = to_regclass(table_name) AND NOT tgisinternal
     ) THEN
       EXECUTE format(
         'CREATE TRIGGER %I BEFORE UPDATE OR DELETE ON %I FOR EACH ROW EXECUTE FUNCTION prodkit_reject_append_only_mutation()',
