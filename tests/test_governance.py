@@ -17,10 +17,12 @@ from prodkit_control_core import (
     LegalHold,
     MigrationPath,
     RetentionCandidate,
+    RetentionDecision,
     RetentionDisposition,
     RetentionPolicy,
     RetentionRule,
     TenantAccessContext,
+    TenantAccessMode,
     TenantCapability,
     TrustRootPolicy,
     sha256_hex,
@@ -56,8 +58,10 @@ class _DeletionAdapter:
         *,
         context: TenantAccessContext,
         candidate: RetentionCandidate,
+        decision: RetentionDecision,
     ) -> str:
-        assert context.tenant_id == candidate.tenant_id
+        assert context.tenant_id == candidate.tenant_id == decision.tenant_id
+        assert decision.disposition is RetentionDisposition.DELETE
         self.deleted.append((candidate.resource_type, candidate.resource_id))
         return f"deleted:{candidate.resource_type}:{candidate.resource_id}"
 
@@ -101,6 +105,25 @@ async def test_high_risk_governance_change_requires_independent_approval() -> No
             decision=GovernanceApprovalDecision.APPROVE,
             reason="self approval must fail",
         )
+
+
+@pytest.mark.asyncio
+async def test_standalone_governance_fails_closed_for_support_contexts() -> None:
+    store = InMemoryGovernanceStore()
+    now = datetime.now(UTC)
+    support = TenantAccessContext(
+        tenant_id="tenant-a",
+        actor=_actor("platform", "support-1"),
+        mode=TenantAccessMode.SUPPORT,
+        capabilities=(TenantCapability.READ,),
+        elevation_id=uuid4(),
+        reason="support investigation",
+        ticket_reference="SUP-1",
+        issued_at=now,
+        expires_at=now + timedelta(minutes=5),
+    )
+    with pytest.raises(AuthorizationDeniedError, match="live grant revalidation"):
+        await store.list_audit(context=support)
 
 
 @pytest.mark.asyncio
