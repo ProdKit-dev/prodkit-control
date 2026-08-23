@@ -136,3 +136,5 @@ jobs:
           fi
           git commit -m "release: prepare v0.4.0 candidate"
           git push origin HEAD:feat/v0.4.0-ha-scale
+
+# one-shot branch preparation
