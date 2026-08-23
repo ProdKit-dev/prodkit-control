@@ -2,6 +2,12 @@
 
 from .approvals import HTTPApprovalProvider as HTTPApprovalProvider
 from .artifacts import EncryptedFilesystemArtifactStore as EncryptedFilesystemArtifactStore
+from .attestations import Ed25519CheckpointSigner as Ed25519CheckpointSigner
+from .attestations import OfflineAssuranceVerifier as OfflineAssuranceVerifier
+from .attestations import PortableAttestationBuilder as PortableAttestationBuilder
+from .attestations import attestation_bytes as attestation_bytes
+from .attestations import attestation_sha256 as attestation_sha256
+from .attestations import checkpoint_sha256 as checkpoint_sha256
 from .attempts import InMemoryExecutionAttemptStore as InMemoryExecutionAttemptStore
 from .broker import ActionBroker as ActionBroker
 from .broker import BrokerOutcome as BrokerOutcome
