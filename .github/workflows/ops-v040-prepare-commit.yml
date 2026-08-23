@@ -1,0 +1,92 @@
+name: Ops v0.4.0 Prepare Commit
+
+on:
+  push:
+    branches: [feat/v0.4.0-ha-scale]
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ${{ vars.PRODKIT_RUNNER_JSON != '' && fromJSON(vars.PRODKIT_RUNNER_JSON) || fromJSON('["self-hosted","Linux","X64"]') }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/v0.4.0-ha-scale
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Normalize and commit candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          def replace(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'candidate parity anchor missing in {path}: {old[:80]!r}')
+              target.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          runtime = 'packages/python/prodkit-control-runtime/src/prodkit_control_runtime/ha.py'
+          replace(
+              runtime,
+              '                if existing.kind != item.kind or existing.payload != item.payload:\n',
+              '                if (\n'
+              '                    existing.kind != item.kind\n'
+              '                    or existing.payload != item.payload\n'
+              '                    or existing.max_attempts != item.max_attempts\n'
+              '                ):\n',
+          )
+          test_ha = 'tests/test_ha.py'
+          replace(
+              test_ha,
+              '    DurableWorkItem,\n    LeaseLostError,\n',
+              '    DurableWorkItem,\n    DuplicateActionError,\n    LeaseLostError,\n',
+          )
+          replace(
+              test_ha,
+              '    assert await queue.enqueue(first) == first\n    assert await queue.enqueue(first) == first\n    await queue.enqueue(second)\n',
+              '    assert await queue.enqueue(first) == first\n'
+              '    assert await queue.enqueue(first) == first\n'
+              '    conflicting_retry_policy = first.model_copy(\n'
+              '        update={"max_attempts": first.max_attempts + 1}\n'
+              '    )\n'
+              '    with pytest.raises(DuplicateActionError):\n'
+              '        await queue.enqueue(conflicting_retry_policy)\n'
+              '    await queue.enqueue(second)\n',
+          )
+
+          source = Path('.github/workflows/ops-v040-build.yml')
+          lines = source.read_text(encoding='utf-8').splitlines()
+          index = next(i for i, line in enumerate(lines) if line.strip() == 'run: |')
+          indent = len(lines[index]) - len(lines[index].lstrip())
+          index += 1
+          body: list[str] = []
+          while index < len(lines):
+              current = lines[index]
+              current_indent = len(current) - len(current.lstrip()) if current.strip() else indent + 2
+              if current.strip() and current_indent <= indent:
+                  break
+              body.append(current[indent + 2 :] if len(current) >= indent + 2 else '')
+              index += 1
+          block = '\n'.join(body) + '\n'
+          print('=== normalizing v0.4.0 candidate ===', flush=True)
+          subprocess.run(['bash', '-c', 'set -euo pipefail\n' + block], check=True)
+          PY
+
+          rm -f \
+            .github/workflows/ops-v040-build.yml \
+            .github/workflows/ops-v040-pr-runner.yml \
+            .github/workflows/ops-v040-prepare-commit.yml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "release: prepare v0.4.0 candidate"
+          git push origin HEAD:feat/v0.4.0-ha-scale
