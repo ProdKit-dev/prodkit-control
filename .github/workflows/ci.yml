@@ -7,6 +7,7 @@ on:
 permissions:
   actions: write
   contents: read
+  pull-requests: write
 
 jobs:
   finalize-v040:
@@ -15,30 +16,29 @@ jobs:
     timeout-minutes: 5
     env:
       TARGET_SHA: be19defdafe9ecb6552f722c1fd344f3d9d07a27
-      VERIFICATION_RUN_ID: "32658414309"
+      DRY_RUN_DISPATCHER_RUN_ID: "32658961656"
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
     steps:
-      - name: Dispatch canonical v0.4.0 cleanup dry-run
+      - name: Verify dry-run, close finalizer PR, and dispatch real cleanup
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json
           import os
-          import urllib.error
           import urllib.request
 
           repo = os.environ['REPOSITORY']
           sha = os.environ['TARGET_SHA']
-          verification_run_id = os.environ['VERIFICATION_RUN_ID']
+          dispatcher_run_id = int(os.environ['DRY_RUN_DISPATCHER_RUN_ID'])
           token = os.environ['GH_TOKEN']
           root = f'https://api.github.com/repos/{repo}'
           headers = {
               'Authorization': f'Bearer {token}',
               'Accept': 'application/vnd.github+json',
               'X-GitHub-Api-Version': '2022-11-28',
-              'User-Agent': 'prodkit-control-v040-cleanup-dry-run',
+              'User-Agent': 'prodkit-control-v040-cleanup-finalizer',
           }
 
           def api(method, path, payload=None):
@@ -56,21 +56,49 @@ jobs:
           main = api('GET', '/git/ref/heads/main')
           if main['object']['sha'] != sha:
               raise SystemExit(f'main moved: {main["object"]["sha"]} != {sha}')
-          verification = api('GET', f'/actions/runs/{verification_run_id}')
-          if verification.get('path') != '.github/workflows/release-verification.yml':
-              raise SystemExit('verification run is not canonical Release Verification')
-          if verification.get('head_sha') != sha or verification.get('conclusion') != 'success':
-              raise SystemExit('exact-source independent verification is not successful')
 
-          branches = ['feat/v0.4.0-ha-scale', 'ops/v0.4.0-main-gate-inspector']
-          payload = {
+          runs = api('GET', '/actions/runs?per_page=100')['workflow_runs']
+          cleanup_runs = [
+              run for run in runs
+              if run.get('path') == '.github/workflows/branch-cleanup.yml'
+              and run.get('event') == 'workflow_dispatch'
+              and run.get('head_sha') == sha
+              and int(run['id']) > dispatcher_run_id
+          ]
+          cleanup_runs.sort(key=lambda item: int(item['id']), reverse=True)
+          if not cleanup_runs:
+              raise SystemExit('canonical cleanup dry-run has not materialized yet')
+          dry_run = cleanup_runs[0]
+          print('V040_CLEANUP_DRY_RUN=' + json.dumps({
+              'id': dry_run['id'],
+              'status': dry_run['status'],
+              'conclusion': dry_run['conclusion'],
+              'html_url': dry_run['html_url'],
+          }, sort_keys=True))
+          if dry_run['status'] != 'completed' or dry_run['conclusion'] != 'success':
+              raise SystemExit(f'canonical cleanup dry-run not successful: {dry_run}')
+
+          pr = api('GET', '/pulls/46')
+          if pr.get('merged'):
+              raise SystemExit('refusing cleanup: disposable PR #46 was unexpectedly merged')
+          if pr.get('state') != 'closed':
+              closed = api('PATCH', '/pulls/46', {'state': 'closed'})
+              if closed.get('state') != 'closed' or closed.get('merged'):
+                  raise SystemExit('failed to close disposable PR #46 safely')
+          print('V040_FINALIZER_PR_CLOSED=true')
+
+          branches = [
+              'feat/v0.4.0-ha-scale',
+              'ops/v0.4.0-main-gate-inspector',
+              'ops/v0.4.0-finalize',
+          ]
+          api('POST', '/actions/workflows/branch-cleanup.yml/dispatches', {
               'ref': 'main',
               'inputs': {
                   'branches_json': json.dumps(branches, separators=(',', ':')),
-                  'dry_run': 'true',
+                  'dry_run': 'false',
                   'expected_default_sha': sha,
               },
-          }
-          api('POST', '/actions/workflows/branch-cleanup.yml/dispatches', payload)
-          print('V040_CLEANUP_DRY_RUN_DISPATCHED=' + json.dumps(branches))
+          })
+          print('V040_REAL_CLEANUP_DISPATCHED=' + json.dumps(branches))
           PY
