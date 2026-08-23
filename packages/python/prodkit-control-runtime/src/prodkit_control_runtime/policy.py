@@ -77,7 +77,10 @@ class ConjunctivePolicyEngine:
         self._revision = revision
 
     async def evaluate(self, action: ActionSpec) -> PolicyDecision:
-        decisions = tuple([await engine.evaluate(action) for engine in self._engines])
+        collected: list[PolicyDecision] = []
+        for engine in self._engines:
+            collected.append(await engine.evaluate(action))
+        decisions = tuple(collected)
         for decision in decisions:
             if decision.action_id != action.action_id or decision.action_digest != action.digest:
                 raise IntegrityViolationError("policy adapter returned a decision for another action")
