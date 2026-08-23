@@ -15,4 +15,5 @@ from .providers import *
 from .reconciliation import *
 from .runs import *
 from .tenancy import *
+from .transfers import *
 from .verification import *
