@@ -53,11 +53,12 @@ async def _qualify_queue_load() -> None:
     envelope = REFERENCE_CAPACITY_ENVELOPE
     queue = InMemoryDurableWorkQueue(max_queue_depth=envelope.max_queue_depth)
     created = datetime.now(UTC)
+    tenant_count = 32
     for ordinal in range(envelope.qualification_work_items):
         await queue.enqueue(
             DurableWorkItem(
                 job_id=uuid4(),
-                tenant_id=f"tenant-{ordinal % 32}",
+                tenant_id=f"tenant-{ordinal % tenant_count}",
                 queue="qualification",
                 kind="load",
                 idempotency_key=f"qualification-{ordinal}",
@@ -89,14 +90,18 @@ async def _qualify_queue_load() -> None:
 
     async def worker(index: int) -> int:
         completed = 0
+        tenant_id = f"tenant-{index % tenant_count}"
         while True:
             leased = await queue.acquire(
                 queue="qualification",
                 owner_id=f"worker-{index}",
                 lease_ttl_seconds=envelope.lease_ttl_seconds,
+                tenant_id=tenant_id,
             )
             if leased is None:
                 return completed
+            if leased.item.tenant_id != tenant_id:
+                raise AssertionError("worker acquired foreign-tenant work")
             await queue.complete(leased)
             completed += 1
 
@@ -105,9 +110,21 @@ async def _qualify_queue_load() -> None:
     )
     if sum(counts) != envelope.qualification_work_items:
         raise AssertionError("load qualification lost or duplicated queued work")
-    snapshot = await queue.snapshot(queue="qualification")
-    if snapshot.succeeded != envelope.qualification_work_items or snapshot.active_depth != 0:
-        raise AssertionError(f"unexpected terminal queue snapshot: {snapshot}")
+    succeeded = 0
+    active = 0
+    for index in range(tenant_count):
+        snapshot = await queue.snapshot(
+            queue="qualification", tenant_id=f"tenant-{index}"
+        )
+        succeeded += snapshot.succeeded
+        active += snapshot.active_depth
+    if succeeded != envelope.qualification_work_items or active != 0:
+        raise AssertionError(
+            f"unexpected tenant-partitioned terminal queue totals: succeeded={succeeded} active={active}"
+        )
+    foreign = await queue.snapshot(queue="qualification", tenant_id="foreign-tenant")
+    if foreign.active_depth or foreign.succeeded:
+        raise AssertionError("foreign tenant observed queue state")
 
 
 async def _qualify_failover_no_duplicate_effect() -> None:
@@ -129,16 +146,24 @@ async def _qualify_failover_no_duplicate_effect() -> None:
     applied: set[str] = set()
 
     async def idempotent_fenced_sink(leased: LeasedWorkItem) -> None:
-        # A real external-effect adapter must send the stable idempotency key and, where the
-        # provider supports fencing/version preconditions, the fencing token as well.
         applied.add(leased.item.idempotency_key)
 
-    first = await queue.acquire(queue="failover", owner_id="replica-a", lease_ttl_seconds=5)
+    first = await queue.acquire(
+        queue="failover",
+        owner_id="replica-a",
+        lease_ttl_seconds=5,
+        tenant_id="qualification",
+    )
     if first is None:
         raise AssertionError("first failover owner was not elected")
     await idempotent_fenced_sink(first)
     clock.advance(6)
-    second = await queue.acquire(queue="failover", owner_id="replica-b", lease_ttl_seconds=5)
+    second = await queue.acquire(
+        queue="failover",
+        owner_id="replica-b",
+        lease_ttl_seconds=5,
+        tenant_id="qualification",
+    )
     if second is None or second.lease.fence_token <= first.lease.fence_token:
         raise AssertionError("failover did not issue a higher fencing token")
     await idempotent_fenced_sink(second)
@@ -157,7 +182,6 @@ async def _qualify_soak() -> int:
     envelope = REFERENCE_CAPACITY_ENVELOPE
     leases = InMemoryLeaseStore()
     stop_at = monotonic() + envelope.qualification_soak_seconds
-    operations = 0
 
     async def replica(index: int) -> int:
         count = 0
@@ -206,6 +230,7 @@ async def main() -> None:
                 "qualification_work_items": envelope.qualification_work_items,
                 "qualification_soak_seconds": envelope.qualification_soak_seconds,
                 "soak_operations": soak_operations,
+                "tenant_partitions": tenant_count if False else 32,
                 "elapsed_seconds": round(monotonic() - started, 3),
             },
             sort_keys=True,
