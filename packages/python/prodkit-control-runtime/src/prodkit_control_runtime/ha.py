@@ -30,13 +30,13 @@ WorkHandler = Callable[[LeasedWorkItem], Awaitable[None]]
 
 REFERENCE_CAPACITY_ENVELOPE = CapacityEnvelope(
     profile_id="reference-ha",
-    max_queue_depth=10_000,
-    max_in_flight=256,
-    max_per_tenant_in_flight=64,
+    max_queue_depth=1_000,
+    max_in_flight=128,
+    max_per_tenant_in_flight=32,
     lease_ttl_seconds=30.0,
     shutdown_grace_seconds=30.0,
-    qualification_concurrency=256,
-    qualification_work_items=10_000,
+    qualification_concurrency=128,
+    qualification_work_items=1_000,
     qualification_soak_seconds=10.0,
 )
 
@@ -103,7 +103,9 @@ class InMemoryLeaseStore:
             current = slot.current if slot is not None else None
             if not self._matches(current, lease) or current is None or current.is_expired(now):
                 raise LeaseLostError("cannot renew a stale, released, or expired lease")
-            renewed = current.model_copy(update={"expires_at": now + timedelta(seconds=ttl_seconds)})
+            renewed = current.model_copy(
+                update={"expires_at": now + timedelta(seconds=ttl_seconds)}
+            )
             slot.current = renewed
             return renewed
 
@@ -164,7 +166,11 @@ class InMemoryDurableWorkQueue:
             existing_id = self._identities.get(identity)
             if existing_id is not None:
                 existing = self._items[existing_id]
-                if existing.kind != item.kind or existing.payload != item.payload:
+                if (
+                    existing.kind != item.kind
+                    or existing.payload != item.payload
+                    or existing.max_attempts != item.max_attempts
+                ):
                     raise DuplicateActionError(
                         "durable work idempotency key already belongs to different work"
                     )

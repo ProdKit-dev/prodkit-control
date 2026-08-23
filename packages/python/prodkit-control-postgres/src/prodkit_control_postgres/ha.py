@@ -56,9 +56,7 @@ class WorkLeaseRow(Base):
 class DurableWorkItemRow(Base):
     __tablename__ = "durable_work_items"
     __table_args__ = (
-        UniqueConstraint(
-            "tenant_id", "queue", "idempotency_key", name="uq_durable_work_identity"
-        ),
+        UniqueConstraint("tenant_id", "queue", "idempotency_key", name="uq_durable_work_identity"),
         CheckConstraint("attempt >= 0", name="ck_durable_work_attempt"),
         CheckConstraint(
             "max_attempts >= 1 AND max_attempts <= 1000",
@@ -90,8 +88,12 @@ class DurableWorkItemRow(Base):
     lease_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     lease_owner_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
     lease_fence_token: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
-    lease_acquired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_acquired_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -195,7 +197,12 @@ class PostgresLeaseStore:
         async with self._sessions() as session:
             now = await _database_now(session)
             row = await session.get(WorkLeaseRow, (lease.tenant_id, lease.resource_key))
-            return self._matches(row, lease) and row is not None and row.expires_at is not None and row.expires_at > now
+            return (
+                self._matches(row, lease)
+                and row is not None
+                and row.expires_at is not None
+                and row.expires_at > now
+            )
 
     @staticmethod
     def _validate_inputs(
@@ -291,9 +298,7 @@ class PostgresDurableWorkQueue:
                 .select_from(DurableWorkItemRow)
                 .where(
                     DurableWorkItemRow.queue == item.queue,
-                    DurableWorkItemRow.state.in_(
-                        (WorkState.QUEUED.value, WorkState.LEASED.value)
-                    ),
+                    DurableWorkItemRow.state.in_((WorkState.QUEUED.value, WorkState.LEASED.value)),
                 )
             )
             if int(active or 0) >= self._max_queue_depth:
@@ -418,7 +423,9 @@ class PostgresDurableWorkQueue:
             )
             if tenant_id is not None:
                 statement = statement.where(DurableWorkItemRow.tenant_id == tenant_id)
-            counts = {str(state): int(count) for state, count in (await session.execute(statement)).all()}
+            counts = {
+                str(state): int(count) for state, count in (await session.execute(statement)).all()
+            }
             return QueueSnapshot(
                 queue=queue,
                 tenant_id=tenant_id,

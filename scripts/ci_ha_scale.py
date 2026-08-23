@@ -7,7 +7,12 @@ from datetime import UTC, datetime, timedelta
 from time import monotonic
 from uuid import uuid4
 
-from prodkit_control_core import DurableWorkItem, LeaseLostError, QueueOverloadedError
+from prodkit_control_core import (
+    DurableWorkItem,
+    LeaseLostError,
+    LeasedWorkItem,
+    QueueOverloadedError,
+)
 from prodkit_control_runtime import (
     InMemoryDurableWorkQueue,
     InMemoryLeaseStore,
@@ -123,7 +128,7 @@ async def _qualify_failover_no_duplicate_effect() -> None:
 
     applied: set[str] = set()
 
-    async def idempotent_fenced_sink(leased) -> None:  # type: ignore[no-untyped-def]
+    async def idempotent_fenced_sink(leased: LeasedWorkItem) -> None:
         # A real external-effect adapter must send the stable idempotency key and, where the
         # provider supports fencing/version preconditions, the fencing token as well.
         applied.add(leased.item.idempotency_key)

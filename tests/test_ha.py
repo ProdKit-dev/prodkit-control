@@ -11,7 +11,9 @@ from prodkit_control_core import (
     CapacityEnvelope,
     CapacityExceededError,
     DurableWorkItem,
+    DuplicateActionError,
     LeaseLostError,
+    LeasedWorkItem,
     QueueOverloadedError,
     RuntimeDrainingError,
     WorkState,
@@ -104,6 +106,9 @@ async def test_bounded_queue_is_idempotent_and_rejects_overload() -> None:
     second = _item(clock, key="two", ordinal=2)
     assert await queue.enqueue(first) == first
     assert await queue.enqueue(first) == first
+    conflicting_retry_policy = first.model_copy(update={"max_attempts": first.max_attempts + 1})
+    with pytest.raises(DuplicateActionError):
+        await queue.enqueue(conflicting_retry_policy)
     await queue.enqueue(second)
 
     with pytest.raises(QueueOverloadedError):
@@ -123,7 +128,7 @@ async def test_failover_rejects_stale_worker_and_does_not_duplicate_effect() -> 
     effects: dict[str, int] = {}
     latest_fence: dict[str, int] = {}
 
-    async def apply_external_effect(leased) -> None:  # type: ignore[no-untyped-def]
+    async def apply_external_effect(leased: LeasedWorkItem) -> None:
         key = leased.item.idempotency_key
         fence = leased.lease.fence_token
         if key in effects:

@@ -1,0 +1,211 @@
+{
+  "$defs": {
+    "DurableWorkItem": {
+      "additionalProperties": false,
+      "description": "Provider-neutral durable scheduler item with explicit retry/dead-letter state.",
+      "properties": {
+        "attempt": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "available_at": {
+          "format": "date-time",
+          "title": "Available At",
+          "type": "string"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "idempotency_key": {
+          "minLength": 1,
+          "title": "Idempotency Key",
+          "type": "string"
+        },
+        "job_id": {
+          "format": "uuid",
+          "title": "Job Id",
+          "type": "string"
+        },
+        "kind": {
+          "minLength": 1,
+          "title": "Kind",
+          "type": "string"
+        },
+        "last_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Error"
+        },
+        "max_attempts": {
+          "default": 3,
+          "maximum": 1000,
+          "minimum": 1,
+          "title": "Max Attempts",
+          "type": "integer"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "queue": {
+          "minLength": 1,
+          "title": "Queue",
+          "type": "string"
+        },
+        "schema_name": {
+          "default": "prodkit.durable-work-item",
+          "title": "Schema Name",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/WorkState",
+          "default": "queued"
+        },
+        "tenant_id": {
+          "minLength": 1,
+          "title": "Tenant Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "tenant_id",
+        "queue",
+        "kind",
+        "idempotency_key",
+        "created_at",
+        "available_at"
+      ],
+      "title": "DurableWorkItem",
+      "type": "object"
+    },
+    "FencedLease": {
+      "additionalProperties": false,
+      "description": "Exclusive time-bounded ownership carrying a monotonically increasing fencing token.",
+      "properties": {
+        "acquired_at": {
+          "format": "date-time",
+          "title": "Acquired At",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "fence_token": {
+          "minimum": 1,
+          "title": "Fence Token",
+          "type": "integer"
+        },
+        "lease_id": {
+          "format": "uuid",
+          "title": "Lease Id",
+          "type": "string"
+        },
+        "owner_id": {
+          "minLength": 1,
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "resource_key": {
+          "minLength": 1,
+          "title": "Resource Key",
+          "type": "string"
+        },
+        "schema_name": {
+          "default": "prodkit.fenced-lease",
+          "title": "Schema Name",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "tenant_id": {
+          "minLength": 1,
+          "title": "Tenant Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "lease_id",
+        "tenant_id",
+        "resource_key",
+        "owner_id",
+        "fence_token",
+        "acquired_at",
+        "expires_at"
+      ],
+      "title": "FencedLease",
+      "type": "object"
+    },
+    "WorkState": {
+      "enum": [
+        "queued",
+        "leased",
+        "succeeded",
+        "dead_letter"
+      ],
+      "title": "WorkState",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Work item plus the exact fencing lease required for a state transition.",
+  "properties": {
+    "item": {
+      "$ref": "#/$defs/DurableWorkItem"
+    },
+    "lease": {
+      "$ref": "#/$defs/FencedLease"
+    },
+    "schema_name": {
+      "default": "prodkit.leased-work-item",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "item",
+    "lease"
+  ],
+  "title": "LeasedWorkItem",
+  "type": "object"
+}

@@ -7,7 +7,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import asyncpg
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from prodkit_control_core import (
     ActorKind,
@@ -280,7 +280,7 @@ async def _exercise_durable_stores() -> None:
 
 
 async def _exercise_ha_stores(
-    sessions: async_sessionmaker,
+    sessions: async_sessionmaker[AsyncSession],
     tenant_id: str,
 ) -> None:
     leases = PostgresLeaseStore(sessions)

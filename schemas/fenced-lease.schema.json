@@ -1,0 +1,62 @@
+{
+  "additionalProperties": false,
+  "description": "Exclusive time-bounded ownership carrying a monotonically increasing fencing token.",
+  "properties": {
+    "acquired_at": {
+      "format": "date-time",
+      "title": "Acquired At",
+      "type": "string"
+    },
+    "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+    },
+    "fence_token": {
+      "minimum": 1,
+      "title": "Fence Token",
+      "type": "integer"
+    },
+    "lease_id": {
+      "format": "uuid",
+      "title": "Lease Id",
+      "type": "string"
+    },
+    "owner_id": {
+      "minLength": 1,
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "resource_key": {
+      "minLength": 1,
+      "title": "Resource Key",
+      "type": "string"
+    },
+    "schema_name": {
+      "default": "prodkit.fenced-lease",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "tenant_id": {
+      "minLength": 1,
+      "title": "Tenant Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "lease_id",
+    "tenant_id",
+    "resource_key",
+    "owner_id",
+    "fence_token",
+    "acquired_at",
+    "expires_at"
+  ],
+  "title": "FencedLease",
+  "type": "object"
+}

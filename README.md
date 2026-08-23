@@ -13,20 +13,18 @@ ProdKit Control is designed to be advanced, general-purpose, provider-neutral, a
 
 ## Project status and maturity
 
-`v0.0.0` is the **canonical engineering foundation**. It establishes the contracts and boundaries from which the production control plane is being built; it is not a claim that the full enterprise deployment profile is already complete.
+`v0.4.0` is the **high-availability and scale milestone**. The repository now includes the canonical foundation, hardened execution, delivery-chain reconciliation, portable assurance, and a qualified HA scheduler/control-plane layer. Enterprise assurance remains maturity-gated; later roadmap milestones cover disaster recovery, stronger tenant isolation, legal hold, compliance packs, and independent security review.
 
-| Capability | v0.0.0 status | Target |
+| Capability | v0.4.0 status | Next target |
 | --- | --- | --- |
-| Canonical contracts and typed lineage | Implemented foundation | Stable core |
-| Deterministic hashing and hash-chained ledger | Implemented foundation | Durable + externally anchored |
-| Policy/approval binding and action broker lifecycle | Implemented foundation | Hardened production services |
-| Evidence bundles and verification | Implemented foundation | Signed, retention-locked archives |
-| FastAPI, CLI, Python/TypeScript package boundaries | Implemented foundation | Supported compatibility policy |
-| PostgreSQL and infrastructure adapters | Boundary/reference level | Production wiring and migrations |
-| Production executors | Extension boundaries/reference implementations | Isolated, credential-leased workers |
-| External reconciliation | Contracts/extension boundaries | Continuous independent reconciliation |
-| Multi-tenant enterprise isolation | Architectural requirement | Verified production control |
-| HA, DR, legal hold, key rotation, independent security review | Roadmap | 1.0 production assurance profile |
+| Canonical contracts, typed lineage, hash-chained evidence | Implemented | Compatibility hardening |
+| Durable action execution and uncertainty handling | Implemented | Broader executor qualification |
+| Delivery-chain reconciliation | Implemented | Additional provider coverage |
+| Portable attestations and offline verification | Implemented | Enterprise trust/retention profiles |
+| HA fencing, durable bounded work, backpressure, graceful drain | Implemented and qualified | DR / regional recovery |
+| Python/TypeScript canonical surfaces | Implemented | Compatibility policy expansion |
+| Multi-tenant enterprise isolation | Architectural + tenant-scoped controls | Dedicated isolation verification milestone |
+| DR, legal hold, compliance packs, independent security review | Roadmap | 1.0 production assurance profile |
 
 Before enabling production actions, read [Guarantees and non-guarantees](docs/architecture/guarantees.md), [Secure deployment](docs/security/secure-deployment.md), and [the roadmap](ROADMAP.md).
 
@@ -122,7 +120,7 @@ flowchart TB
     Lineage --> Projectors
 ```
 
-The diagram is the **target control-plane architecture**. `v0.0.0` implements the canonical foundation and reference boundaries; later roadmap gates harden durable storage, authenticated service wiring, isolated executors, reconciliation, signing, HA/DR, and enterprise isolation.
+The diagram is the control-plane architecture through `v0.4.0`: durable execution, reconciliation, portable assurance, and HA scheduling are implemented behind provider-neutral ports. Later roadmap gates focus on DR, stronger enterprise isolation, governance/compliance packs, and independent assurance.
 
 See the [architecture overview](docs/architecture/overview.md) for the canonical layer model, trust boundaries, data ownership, invariants, and end-to-end flows.
 
@@ -314,9 +312,11 @@ Compatibility with a standard means the data model and adapter boundary are desi
 - [Action and approval model](docs/architecture/action-approval.md)
 - [Guarantees and non-guarantees](docs/architecture/guarantees.md)
 - [Observability](docs/architecture/observability.md)
+- [High availability and scale](docs/architecture/high-availability.md)
 - [Threat model](docs/security/threat-model.md)
 - [Secure deployment](docs/security/secure-deployment.md)
 - [Operations runbook](docs/operations/runbook.md)
+- [Capacity and overload envelope](docs/operations/capacity.md)
 - [Releases and versioning](docs/releases/README.md)
 - [Roadmap](ROADMAP.md)
 

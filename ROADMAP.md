@@ -170,6 +170,8 @@ Make the evidence chain portable across organizations and existing supply-chain/
 
 ## v0.4.0 — High availability and scale
 
+**Status:** Implemented in v0.4.0; release remains subject to the exact-candidate gates below.
+
 ### Goal
 
 Operate the control plane safely under concurrency, failover, and sustained production load.
