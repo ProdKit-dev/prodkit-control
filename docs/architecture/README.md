@@ -15,14 +15,16 @@ This directory defines the architectural contract for ProdKit Control. Start wit
 9. [Failure and recovery](failure-recovery.md) — crash, uncertainty, retry, reconciliation, and recovery semantics.
 10. [Observability](observability.md) — operational telemetry, correlation, SLOs, and its boundary from canonical evidence.
 11. [Portable attestations and assurance](attestations.md) — in-toto/SLSA interoperability, signed checkpoints, trust roots, retention locks, portable packages, and offline verification.
-12. [Guarantees and non-guarantees](guarantees.md) — safe claim language and assurance prerequisites.
-13. [Architecture Decision Records](decisions/README.md) — decision criteria, lifecycle, naming, and [ADR template](decisions/0000-template.md).
+12. [High availability and scale](high-availability.md) — stateless replicas, fenced ownership, durable bounded work, failover safety, and graceful draining.
+13. [Guarantees and non-guarantees](guarantees.md) — safe claim language and assurance prerequisites.
+14. [Architecture Decision Records](decisions/README.md) — decision criteria, lifecycle, naming, and [ADR template](decisions/0000-template.md).
 
 Security and operations continue in:
 
 - [Threat model](../security/threat-model.md)
 - [Secure deployment](../security/secure-deployment.md)
 - [Operations runbook](../operations/runbook.md)
+- [Capacity and overload envelope](../operations/capacity.md)
 - [Roadmap](../../ROADMAP.md)
 
 ## Architecture doctrine
