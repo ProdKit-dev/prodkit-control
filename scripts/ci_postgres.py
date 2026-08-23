@@ -74,6 +74,7 @@ async def _apply_migrations() -> None:
             "0004_delivery_chain_reconciliation.sql",
             "0005_high_availability.sql",
             "0006_tenant_isolation.sql",
+            "0007_governance_lifecycle.sql",
         ]:
             raise AssertionError("unexpected PostgreSQL migration set")
         for migration in migrations:
@@ -81,8 +82,8 @@ async def _apply_migrations() -> None:
         version = await connection.fetchval(
             "SELECT version FROM prodkit_schema_metadata WHERE singleton = TRUE"
         )
-        if version != 6:
-            raise AssertionError(f"expected schema version 6, got {version!r}")
+        if version != 7:
+            raise AssertionError(f"expected schema version 7, got {version!r}")
     finally:
         await connection.close()
 
