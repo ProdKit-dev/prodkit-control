@@ -12,7 +12,7 @@ from prodkit_control_core import RunRecord
 
 from .models import Base
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 class RunRow(Base):
