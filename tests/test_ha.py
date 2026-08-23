@@ -113,9 +113,35 @@ async def test_bounded_queue_is_idempotent_and_rejects_overload() -> None:
 
     with pytest.raises(QueueOverloadedError):
         await queue.enqueue(_item(clock, key="three", ordinal=3))
-    snapshot = await queue.snapshot(queue="control")
+    snapshot = await queue.snapshot(queue="control", tenant_id="tenant-a")
     assert snapshot.active_depth == 2
     assert snapshot.queued == 2
+    foreign = await queue.snapshot(queue="control", tenant_id="tenant-b")
+    assert foreign.active_depth == 0
+
+
+@pytest.mark.asyncio
+async def test_known_foreign_tenant_cannot_acquire_queued_work() -> None:
+    clock = MutableClock(datetime(2026, 8, 23, 12, 0, tzinfo=UTC))
+    queue = InMemoryDurableWorkQueue(max_queue_depth=4, clock=clock)
+    item = _item(clock, tenant_id="tenant-a")
+    await queue.enqueue(item)
+    assert (
+        await queue.acquire(
+            queue="control",
+            owner_id="foreign-worker",
+            lease_ttl_seconds=30,
+            tenant_id="tenant-b",
+        )
+        is None
+    )
+    leased = await queue.acquire(
+        queue="control",
+        owner_id="tenant-worker",
+        lease_ttl_seconds=30,
+        tenant_id="tenant-a",
+    )
+    assert leased is not None and leased.item.job_id == item.job_id
 
 
 @pytest.mark.asyncio
@@ -138,13 +164,22 @@ async def test_failover_rejects_stale_worker_and_does_not_duplicate_effect() -> 
         latest_fence[leased.lease.resource_key] = fence
         effects[key] = effects.get(key, 0) + 1
 
-    first = await queue.acquire(queue="control", owner_id="replica-a", lease_ttl_seconds=10)
+    first = await queue.acquire(
+        queue="control",
+        owner_id="replica-a",
+        lease_ttl_seconds=10,
+        tenant_id="tenant-a",
+    )
     assert first is not None
     await apply_external_effect(first)
-    # Replica A crashes after the provider accepted the idempotent effect but before queue ACK.
     clock.advance(11)
 
-    second = await queue.acquire(queue="control", owner_id="replica-b", lease_ttl_seconds=10)
+    second = await queue.acquire(
+        queue="control",
+        owner_id="replica-b",
+        lease_ttl_seconds=10,
+        tenant_id="tenant-a",
+    )
     assert second is not None
     assert second.item.job_id == first.item.job_id
     assert second.lease.fence_token > first.lease.fence_token
@@ -163,19 +198,39 @@ async def test_retry_is_bounded_and_dead_letters() -> None:
     item = _item(clock, max_attempts=2)
     await queue.enqueue(item)
 
-    first = await queue.acquire(queue="control", owner_id="worker-a", lease_ttl_seconds=30)
+    first = await queue.acquire(
+        queue="control", owner_id="worker-a", lease_ttl_seconds=30, tenant_id="tenant-a"
+    )
     assert first is not None and first.item.attempt == 1
     retried = await queue.retry(first, delay_seconds=5, error="transient provider failure")
     assert retried.state is WorkState.QUEUED
-    assert await queue.acquire(queue="control", owner_id="too-early", lease_ttl_seconds=30) is None
+    assert (
+        await queue.acquire(
+            queue="control",
+            owner_id="too-early",
+            lease_ttl_seconds=30,
+            tenant_id="tenant-a",
+        )
+        is None
+    )
 
     clock.advance(5)
-    second = await queue.acquire(queue="control", owner_id="worker-b", lease_ttl_seconds=30)
+    second = await queue.acquire(
+        queue="control", owner_id="worker-b", lease_ttl_seconds=30, tenant_id="tenant-a"
+    )
     assert second is not None and second.item.attempt == 2
     dead = await queue.retry(second, delay_seconds=5, error="retry budget exhausted")
     assert dead.state is WorkState.DEAD_LETTER
     assert dead.last_error == "retry budget exhausted"
-    assert await queue.acquire(queue="control", owner_id="worker-c", lease_ttl_seconds=30) is None
+    assert (
+        await queue.acquire(
+            queue="control",
+            owner_id="worker-c",
+            lease_ttl_seconds=30,
+            tenant_id="tenant-a",
+        )
+        is None
+    )
 
 
 @pytest.mark.asyncio
