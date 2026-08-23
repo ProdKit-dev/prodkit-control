@@ -175,9 +175,9 @@ async def test_retention_deletion_and_legal_hold_precedence_are_rechecked() -> N
         created_at=now - timedelta(days=40),
         content_sha256="b" * 64,
     )
-    decision = (
-        await store.evaluate_retention(context=operator, candidates=(candidate,), at=now)
-    )[0]
+    decision = (await store.evaluate_retention(context=operator, candidates=(candidate,), at=now))[
+        0
+    ]
     assert decision.disposition is RetentionDisposition.DELETE
 
     hold = LegalHold(
@@ -190,9 +190,7 @@ async def test_retention_deletion_and_legal_hold_precedence_are_rechecked() -> N
         placed_by=operator.actor,
     )
     await store.place_legal_hold(context=operator, hold=hold)
-    held = (
-        await store.evaluate_retention(context=operator, candidates=(candidate,), at=now)
-    )[0]
+    held = (await store.evaluate_retention(context=operator, candidates=(candidate,), at=now))[0]
     assert held.disposition is RetentionDisposition.RETAIN
     assert held.legal_hold_ids == (hold.hold_id,)
 

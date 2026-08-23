@@ -360,7 +360,9 @@ class InMemoryGovernanceStore:
                 candidates=candidates,
                 at=decision_at,
             )
-            self._audit_decisions_locked(context=context, decisions=decisions, occurred_at=decision_at)
+            self._audit_decisions_locked(
+                context=context, decisions=decisions, occurred_at=decision_at
+            )
             return decisions
 
     async def execute_retention(
@@ -380,9 +382,12 @@ class InMemoryGovernanceStore:
                 candidates=candidates,
                 at=decision_at,
             )
-            self._audit_decisions_locked(context=context, decisions=decisions, occurred_at=decision_at)
+            self._audit_decisions_locked(
+                context=context, decisions=decisions, occurred_at=decision_at
+            )
             candidate_by_key = {
-                (candidate.resource_type, candidate.resource_id): candidate for candidate in candidates
+                (candidate.resource_type, candidate.resource_id): candidate
+                for candidate in candidates
             }
             records: list[RetentionExecutionRecord] = []
             for decision in decisions:
@@ -728,7 +733,9 @@ class InMemoryGovernanceStore:
                 policy_revision=policy.revision,
                 reason="resource type is configured as non-deletable",
             )
-        retain_for = rule.retain_for_seconds if rule is not None else policy.default_retain_for_seconds
+        retain_for = (
+            rule.retain_for_seconds if rule is not None else policy.default_retain_for_seconds
+        )
         grace = rule.deletion_grace_seconds if rule is not None else 0
         if retain_for is None:
             return RetentionDecision(

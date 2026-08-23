@@ -145,9 +145,9 @@ async def _exercise_store(sessions: async_sessionmaker[AsyncSession]) -> None:
         created_at=now - timedelta(minutes=5),
         content_sha256="a" * 64,
     )
-    assert (
-        await store.evaluate_retention(context=operator, candidates=(candidate,), at=now)
-    )[0].disposition is RetentionDisposition.DELETE
+    assert (await store.evaluate_retention(context=operator, candidates=(candidate,), at=now))[
+        0
+    ].disposition is RetentionDisposition.DELETE
 
     hold = LegalHold(
         hold_id=uuid4(),
@@ -160,7 +160,9 @@ async def _exercise_store(sessions: async_sessionmaker[AsyncSession]) -> None:
     )
     await store.place_legal_hold(context=operator, hold=hold)
     held = (await store.evaluate_retention(context=operator, candidates=(candidate,), at=now))[0]
-    assert held.disposition is RetentionDisposition.RETAIN and held.legal_hold_ids == (hold.hold_id,)
+    assert held.disposition is RetentionDisposition.RETAIN and held.legal_hold_ids == (
+        hold.hold_id,
+    )
 
     release = await store.propose_legal_hold_release(
         context=operator,
@@ -265,8 +267,12 @@ async def _exercise_store(sessions: async_sessionmaker[AsyncSession]) -> None:
         current_schema_version=7,
         minimum_supported_schema_version=5,
         migration_paths=(
-            MigrationPath(from_schema_version=5, to_schema_version=6, minimum_control_version="0.5.0"),
-            MigrationPath(from_schema_version=6, to_schema_version=7, minimum_control_version="0.6.0"),
+            MigrationPath(
+                from_schema_version=5, to_schema_version=6, minimum_control_version="0.5.0"
+            ),
+            MigrationPath(
+                from_schema_version=6, to_schema_version=7, minimum_control_version="0.6.0"
+            ),
         ),
     )
     transfer = await store.create_transfer_manifest(
@@ -316,7 +322,9 @@ async def _exercise_store(sessions: async_sessionmaker[AsyncSession]) -> None:
 
 async def _exercise_database_guards() -> None:
     host, port, database, user, password = _connection_values()
-    connection = await asyncpg.connect(host=host, port=port, database=database, user=user, password=password)
+    connection = await asyncpg.connect(
+        host=host, port=port, database=database, user=user, password=password
+    )
     try:
         try:
             await connection.execute("DELETE FROM governance_audit_events")

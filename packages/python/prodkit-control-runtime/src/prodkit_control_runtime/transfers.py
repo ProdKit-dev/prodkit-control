@@ -48,7 +48,9 @@ class GovernanceEvidenceTransferVerifier:
         package_manifest = verified["package_manifest"]
         evidence_manifest = verified["evidence_manifest"]
         if not isinstance(package_manifest, dict) or not isinstance(evidence_manifest, dict):
-            raise IntegrityViolationError("portable verifier returned malformed verification evidence")
+            raise IntegrityViolationError(
+                "portable verifier returned malformed verification evidence"
+            )
         if package_manifest.get("tenant_id") != manifest.tenant_id:
             raise IntegrityViolationError("transfer tenant does not match portable package")
         bundle_manifest_digest = sha256_hex(canonical_json_bytes(evidence_manifest))
@@ -59,7 +61,9 @@ class GovernanceEvidenceTransferVerifier:
         elif expected_trust_policy_sha256 is not None:
             trust_anchor_digest = expected_trust_policy_sha256.lower()
         else:  # PortableEvidencePackageVerifier fails first; keep this boundary explicit.
-            raise IntegrityViolationError("transfer verification requires an independent trust anchor")
+            raise IntegrityViolationError(
+                "transfer verification requires an independent trust anchor"
+            )
         return EvidenceTransferVerification(
             verification_id=uuid4(),
             transfer_id=manifest.transfer_id,

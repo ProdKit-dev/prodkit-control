@@ -30,7 +30,6 @@ from prodkit_control_core import (
     RetentionDisposition,
     RetentionExecutionRecord,
     RetentionPolicy,
-    SignedCheckpoint,
     SupportElevationGrant,
     TenantAccessContext,
     TenantAccessMode,
@@ -391,9 +390,7 @@ class PostgresGovernanceStore:
             hold = await self._hold(session, context.tenant_id, hold_id, for_update=True)
             if hold is None or hold.status is not LegalHoldStatus.ACTIVE:
                 raise KeyError(hold_id)
-            digest = self.legal_hold_release_digest(
-                tenant_id=context.tenant_id, hold_id=hold_id
-            )
+            digest = self.legal_hold_release_digest(tenant_id=context.tenant_id, hold_id=hold_id)
             request = await self._approved_request(
                 session,
                 tenant_id=context.tenant_id,
@@ -508,7 +505,8 @@ class PostgresGovernanceStore:
                 for candidate in candidates
             )
             candidate_by_key = {
-                (candidate.resource_type, candidate.resource_id): candidate for candidate in candidates
+                (candidate.resource_type, candidate.resource_id): candidate
+                for candidate in candidates
             }
             records: list[RetentionExecutionRecord] = []
             for decision in decisions:
@@ -954,10 +952,10 @@ class PostgresGovernanceStore:
             )
         )
         row = (
-            await session.execute(
-                statement, {"tenant_id": tenant_id, "request_id": request_id}
-            )
-        ).mappings().first()
+            (await session.execute(statement, {"tenant_id": tenant_id, "request_id": request_id}))
+            .mappings()
+            .first()
+        )
         return GovernanceChangeRequest.model_validate(row["document"]) if row is not None else None
 
     async def _approved_request(
@@ -1066,10 +1064,10 @@ class PostgresGovernanceStore:
         if for_update:
             sql += " FOR UPDATE"
         row = (
-            await session.execute(
-                text(sql), {"tenant_id": tenant_id, "hold_id": hold_id}
-            )
-        ).mappings().first()
+            (await session.execute(text(sql), {"tenant_id": tenant_id, "hold_id": hold_id}))
+            .mappings()
+            .first()
+        )
         return LegalHold.model_validate(row["document"]) if row is not None else None
 
     async def _active_holds(
@@ -1140,18 +1138,22 @@ class PostgresGovernanceStore:
         tenant_id: str,
     ) -> TrustRootHistory:
         rows = (
-            await session.execute(
-                text(
-                    """
+            (
+                await session.execute(
+                    text(
+                        """
                     SELECT document
                     FROM governance_trust_roots
                     WHERE tenant_id = :tenant_id
                     ORDER BY revision
                     """
-                ),
-                {"tenant_id": tenant_id},
+                    ),
+                    {"tenant_id": tenant_id},
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
         return TrustRootHistory(
             tenant_id=tenant_id,
             roots=tuple(GovernedTrustRoot.model_validate(row["document"]) for row in rows),
@@ -1163,11 +1165,17 @@ class PostgresGovernanceStore:
         tenant_id: str,
     ) -> TenantIsolationProfile | None:
         row = (
-            await session.execute(
-                text("SELECT document FROM tenant_isolation_profiles WHERE tenant_id = :tenant_id"),
-                {"tenant_id": tenant_id},
+            (
+                await session.execute(
+                    text(
+                        "SELECT document FROM tenant_isolation_profiles WHERE tenant_id = :tenant_id"
+                    ),
+                    {"tenant_id": tenant_id},
+                )
             )
-        ).mappings().first()
+            .mappings()
+            .first()
+        )
         return TenantIsolationProfile.model_validate(row["document"]) if row is not None else None
 
     async def _support_grant(
@@ -1177,17 +1185,21 @@ class PostgresGovernanceStore:
         grant_id: UUID,
     ) -> SupportElevationGrant | None:
         row = (
-            await session.execute(
-                text(
-                    """
+            (
+                await session.execute(
+                    text(
+                        """
                     SELECT document
                     FROM support_elevation_grants
                     WHERE tenant_id = :tenant_id AND grant_id = :grant_id
                     """
-                ),
-                {"tenant_id": tenant_id, "grant_id": grant_id},
+                    ),
+                    {"tenant_id": tenant_id, "grant_id": grant_id},
+                )
             )
-        ).mappings().first()
+            .mappings()
+            .first()
+        )
         return SupportElevationGrant.model_validate(row["document"]) if row is not None else None
 
     @staticmethod
@@ -1267,7 +1279,9 @@ class PostgresGovernanceStore:
                 policy_revision=policy.revision,
                 reason="resource type is configured as non-deletable",
             )
-        retain_for = rule.retain_for_seconds if rule is not None else policy.default_retain_for_seconds
+        retain_for = (
+            rule.retain_for_seconds if rule is not None else policy.default_retain_for_seconds
+        )
         grace = rule.deletion_grace_seconds if rule is not None else 0
         if retain_for is None:
             return RetentionDecision(

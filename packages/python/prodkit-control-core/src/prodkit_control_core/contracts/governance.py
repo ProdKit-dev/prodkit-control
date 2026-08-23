@@ -72,7 +72,7 @@ class RetentionRule(ContractModel):
     deletion_allowed: bool = True
 
     @model_validator(mode="after")
-    def validate_rule(self) -> "RetentionRule":
+    def validate_rule(self) -> RetentionRule:
         if not self.deletion_allowed and self.retain_for_seconds is not None:
             raise ValueError("non-deletable retention rules must retain indefinitely")
         return self
@@ -91,7 +91,7 @@ class RetentionPolicy(ContractModel):
     created_by: ActorRef
 
     @model_validator(mode="after")
-    def validate_policy(self) -> "RetentionPolicy":
+    def validate_policy(self) -> RetentionPolicy:
         resource_types = tuple(rule.resource_type for rule in self.rules)
         if len(resource_types) != len(set(resource_types)):
             raise ValueError("retention policy resource types must be unique")
@@ -129,7 +129,7 @@ class RetentionDecision(ContractModel):
     reason: NonBlankStr
 
     @model_validator(mode="after")
-    def validate_decision(self) -> "RetentionDecision":
+    def validate_decision(self) -> RetentionDecision:
         if self.disposition is RetentionDisposition.DELETE:
             if self.delete_not_before is None:
                 raise ValueError("delete decisions require delete_not_before")
@@ -172,7 +172,7 @@ class LegalHold(ContractModel):
     release_change_request_id: UUID | None = None
 
     @model_validator(mode="after")
-    def validate_hold(self) -> "LegalHold":
+    def validate_hold(self) -> LegalHold:
         if len(self.resource_types) != len(set(self.resource_types)):
             raise ValueError("legal-hold resource types must be unique")
         if len(self.resource_ids) != len(set(self.resource_ids)):
@@ -225,7 +225,7 @@ class GovernanceChangeRequest(ContractModel):
     applied_at: AwareDatetime | None = None
 
     @model_validator(mode="after")
-    def validate_change(self) -> "GovernanceChangeRequest":
+    def validate_change(self) -> GovernanceChangeRequest:
         approved = self.status in {
             GovernanceChangeStatus.APPROVED,
             GovernanceChangeStatus.APPLIED,
@@ -273,7 +273,7 @@ class GovernedTrustRoot(ContractModel):
     change_request_id: UUID
 
     @model_validator(mode="after")
-    def validate_root(self) -> "GovernedTrustRoot":
+    def validate_root(self) -> GovernedTrustRoot:
         if self.retired_at is not None and self.retired_at <= self.activated_at:
             raise ValueError("trust-root retirement must follow activation")
         return self
@@ -292,7 +292,7 @@ class KeyRotationPlan(ContractModel):
     emergency: bool = False
 
     @model_validator(mode="after")
-    def validate_rotation(self) -> "KeyRotationPlan":
+    def validate_rotation(self) -> KeyRotationPlan:
         if self.to_revision <= self.from_revision:
             raise ValueError("key rotation must advance trust-root revision")
         if self.overlap_until < self.activate_at:
@@ -307,7 +307,7 @@ class TrustRootHistory(ContractModel):
     roots: tuple[GovernedTrustRoot, ...]
 
     @model_validator(mode="after")
-    def validate_history(self) -> "TrustRootHistory":
+    def validate_history(self) -> TrustRootHistory:
         if not self.roots:
             raise ValueError("trust-root history requires at least one revision")
         revisions = tuple(root.revision for root in self.roots)
@@ -323,10 +323,7 @@ class TrustRootHistory(ContractModel):
             for root in self.roots
             if root.activated_at <= signed_at
             and (root.retired_at is None or signed_at < root.retired_at)
-            and (
-                key_id is None
-                or any(key.key_id == key_id for key in root.policy.trusted_keys)
-            )
+            and (key_id is None or any(key.key_id == key_id for key in root.policy.trusted_keys))
         )
         if len(matches) != 1:
             raise ValueError("no unique trust-root revision covers the signing evidence")
@@ -362,7 +359,7 @@ class EvidenceImportReceipt(ContractModel):
     verified: bool = True
 
     @model_validator(mode="after")
-    def validate_import(self) -> "EvidenceImportReceipt":
+    def validate_import(self) -> EvidenceImportReceipt:
         if not self.verified:
             raise ValueError("evidence import receipts are emitted only after verification")
         return self
@@ -376,7 +373,7 @@ class MigrationPath(ContractModel):
     reversible: bool = False
 
     @model_validator(mode="after")
-    def validate_path(self) -> "MigrationPath":
+    def validate_path(self) -> MigrationPath:
         if self.to_schema_version != self.from_schema_version + 1:
             raise ValueError("supported migration paths must be single-step and sequential")
         return self
@@ -399,14 +396,16 @@ class CompatibilityPolicy(ContractModel):
     deprecations: tuple[DeprecationWindow, ...] = ()
 
     @model_validator(mode="after")
-    def validate_compatibility(self) -> "CompatibilityPolicy":
+    def validate_compatibility(self) -> CompatibilityPolicy:
         if self.minimum_supported_schema_version > self.current_schema_version:
             raise ValueError("minimum supported schema version cannot exceed current")
         expected = tuple(range(self.minimum_supported_schema_version, self.current_schema_version))
         actual = tuple(path.from_schema_version for path in self.migration_paths)
         if actual != expected:
             raise ValueError("compatibility policy must enumerate every supported upgrade step")
-        if any(path.to_schema_version != path.from_schema_version + 1 for path in self.migration_paths):
+        if any(
+            path.to_schema_version != path.from_schema_version + 1 for path in self.migration_paths
+        ):
             raise ValueError("compatibility policy contains a non-sequential migration")
         return self
 
@@ -415,7 +414,9 @@ class CompatibilityPolicy(ContractModel):
             raise ValueError("database schema is older than the supported upgrade window")
         if schema_version > self.current_schema_version:
             raise ValueError("database schema is newer than this runtime")
-        return tuple(path for path in self.migration_paths if path.from_schema_version >= schema_version)
+        return tuple(
+            path for path in self.migration_paths if path.from_schema_version >= schema_version
+        )
 
 
 class GovernanceAuditEvent(ContractModel):

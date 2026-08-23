@@ -35,7 +35,9 @@ async def _apply(connection: asyncpg.Connection, first: int, last: int) -> None:
 
 async def _qualify_upgrade(start_version: int) -> None:
     host, port, database, user, password = _connection_values()
-    connection = await asyncpg.connect(host=host, port=port, database=database, user=user, password=password)
+    connection = await asyncpg.connect(
+        host=host, port=port, database=database, user=user, password=password
+    )
     schema = f"prodkit_upgrade_{start_version}_{uuid4().hex[:10]}"
     run_id = uuid4()
     tenant_id = f"upgrade-v{start_version}"
@@ -88,9 +90,20 @@ async def _qualify_upgrade(start_version: int) -> None:
             "SELECT tenant_id, status, document FROM control_runs WHERE run_id = $1",
             run_id,
         )
-        if preserved is None or preserved["tenant_id"] != tenant_id or preserved["status"] != "running":
-            raise AssertionError(f"upgrade from {start_version} did not preserve run ownership/state")
-        if preserved["document"]["run_id"] != str(run_id):
+        if (
+            preserved is None
+            or preserved["tenant_id"] != tenant_id
+            or preserved["status"] != "running"
+        ):
+            raise AssertionError(
+                f"upgrade from {start_version} did not preserve run ownership/state"
+            )
+        preserved_document = preserved["document"]
+        if isinstance(preserved_document, str):
+            preserved_document = json.loads(preserved_document)
+        if not isinstance(preserved_document, dict) or preserved_document.get("run_id") != str(
+            run_id
+        ):
             raise AssertionError(f"upgrade from {start_version} modified canonical run document")
 
         required_tables = {
