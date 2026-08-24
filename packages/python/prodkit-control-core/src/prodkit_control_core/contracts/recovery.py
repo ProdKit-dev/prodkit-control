@@ -64,6 +64,7 @@ class RecoveryAuditEventType(StrEnum):
     BREAK_GLASS_REVOKED = "break_glass_revoked"
     INTEGRITY_SCAN_RECORDED = "integrity_scan_recorded"
     UNCERTAIN_ATTEMPT_RECONCILED = "uncertain_attempt_reconciled"
+    RECOVERY_GAP_RECONCILED = "recovery_gap_reconciled"
     RESTORE_COMPLETED = "restore_completed"
     GAME_DAY_RECORDED = "game_day_recorded"
 
@@ -154,18 +155,28 @@ class RestorePlan(ContractModel):
     profile_revision: int = Field(ge=1)
     backup_id: UUID
     target_site: NonBlankStr
+    failure_detected_at: AwareDatetime
     requested_at: AwareDatetime
     requested_by: ActorRef
     break_glass_grant_id: UUID
     reconcile_uncertain: bool = True
+    reconcile_recovery_gap: bool = True
     prohibit_blind_replay: bool = True
 
     @model_validator(mode="after")
     def validate_plan(self) -> RestorePlan:
         if self.requested_by.tenant_id != self.tenant_id:
             raise ValueError("restore requester must belong to the tenant")
-        if not self.reconcile_uncertain or not self.prohibit_blind_replay:
-            raise ValueError("restore plans must reconcile uncertainty and prohibit blind replay")
+        if self.requested_at < self.failure_detected_at:
+            raise ValueError("restore request cannot predate failure detection")
+        if (
+            not self.reconcile_uncertain
+            or not self.reconcile_recovery_gap
+            or not self.prohibit_blind_replay
+        ):
+            raise ValueError(
+                "restore plans must reconcile known uncertainty and the RPO gap and prohibit blind replay"
+            )
         return self
 
 
@@ -194,6 +205,7 @@ class IntegrityScanResult(ContractModel):
     completed_at: AwareDatetime
     status: RecoveryIntegrityStatus
     chain_verified: bool
+    checkpoint_verified: bool
     trust_anchor_verified: bool
     object_store_verified: bool
     components_verified: tuple[RecoveryComponent, ...]
@@ -210,11 +222,12 @@ class IntegrityScanResult(ContractModel):
         if self.status is RecoveryIntegrityStatus.VERIFIED:
             if (
                 not self.chain_verified
+                or not self.checkpoint_verified
                 or not self.trust_anchor_verified
                 or not self.object_store_verified
             ):
                 raise ValueError(
-                    "verified recovery requires chain, trust-anchor, and object-store proof"
+                    "verified recovery requires chain, signed-checkpoint, trust-anchor, and object-store proof"
                 )
             if severe:
                 raise ValueError("verified recovery cannot contain error or critical findings")
@@ -257,6 +270,36 @@ class UncertainExecutionRecovery(ContractModel):
         return self
 
 
+class RecoveryGapReconciliation(ContractModel):
+    schema_name: str = "prodkit.recovery-gap-reconciliation"
+    schema_version: str = "1.0.0"
+    reconciliation_id: UUID
+    restore_id: UUID
+    tenant_id: NonBlankStr
+    recovery_point_at: AwareDatetime
+    failure_detected_at: AwareDatetime
+    completed_at: AwareDatetime
+    source_references: tuple[NonBlankStr, ...]
+    unexpected_effect_count: int = Field(ge=0)
+    unresolved_effect_count: int = Field(ge=0)
+    evidence_reference: NonBlankStr
+    blind_replay_permitted: bool = False
+
+    @model_validator(mode="after")
+    def validate_gap(self) -> RecoveryGapReconciliation:
+        if self.recovery_point_at > self.failure_detected_at:
+            raise ValueError("recovery gap cannot begin after failure detection")
+        if self.failure_detected_at > self.completed_at:
+            raise ValueError("recovery-gap reconciliation cannot complete before failure detection")
+        if not self.source_references:
+            raise ValueError("recovery-gap reconciliation requires independent source evidence")
+        if len(self.source_references) != len(set(self.source_references)):
+            raise ValueError("recovery-gap source references must be unique")
+        if self.blind_replay_permitted:
+            raise ValueError("recovery-gap evidence cannot authorize blind replay")
+        return self
+
+
 class RestoreResult(ContractModel):
     schema_name: str = "prodkit.restore-result"
     schema_version: str = "1.0.0"
@@ -269,6 +312,8 @@ class RestoreResult(ContractModel):
     actual_rpo_seconds: float = Field(ge=0)
     actual_rto_seconds: float = Field(ge=0)
     integrity_scan_id: UUID
+    recovery_gap_reconciliation_id: UUID
+    recovery_gap_reconciled: bool
     uncertain_recoveries: tuple[UncertainExecutionRecovery, ...] = ()
     promoted: bool = False
     completed_by: ActorRef
@@ -289,10 +334,14 @@ class RestoreResult(ContractModel):
             }
             for item in self.uncertain_recoveries
         )
-        if self.status is RestoreStatus.VERIFIED and unresolved:
-            raise ValueError("verified restore cannot contain unresolved uncertain actions")
-        if self.promoted and self.status is not RestoreStatus.VERIFIED:
-            raise ValueError("only a verified restore may be promoted")
+        if self.status is RestoreStatus.VERIFIED and (unresolved or not self.recovery_gap_reconciled):
+            raise ValueError(
+                "verified restore requires all known uncertainty and the RPO recovery gap to be reconciled"
+            )
+        if self.promoted and (
+            self.status is not RestoreStatus.VERIFIED or not self.recovery_gap_reconciled
+        ):
+            raise ValueError("only a fully reconciled verified restore may be promoted")
         return self
 
 
@@ -336,6 +385,12 @@ class BreakGlassUse(ContractModel):
     occurred_at: AwareDatetime
     purpose: NonBlankStr
 
+    @model_validator(mode="after")
+    def validate_use(self) -> BreakGlassUse:
+        if self.actor.tenant_id != self.tenant_id:
+            raise ValueError("break-glass use actor must belong to the tenant")
+        return self
+
 
 class GameDayExercise(ContractModel):
     schema_name: str = "prodkit.dr-game-day"
@@ -352,8 +407,12 @@ class GameDayExercise(ContractModel):
     achieved_rpo_seconds: float = Field(ge=0)
     achieved_rto_seconds: float = Field(ge=0)
     chain_verified: bool
+    checkpoint_verified: bool
     trust_anchor_verified: bool
+    object_store_verified: bool
     uncertain_actions_reconciled: bool
+    recovery_gap_reconciled: bool
+    durable_catalog_verified: bool
     blind_replay_count: int = Field(default=0, ge=0)
     passed: bool
     notes: tuple[NonBlankStr, ...] = ()
@@ -365,11 +424,17 @@ class GameDayExercise(ContractModel):
         if self.passed and (
             not self.simulated_site_failure
             or not self.chain_verified
+            or not self.checkpoint_verified
             or not self.trust_anchor_verified
+            or not self.object_store_verified
             or not self.uncertain_actions_reconciled
+            or not self.recovery_gap_reconciled
+            or not self.durable_catalog_verified
             or self.blind_replay_count != 0
         ):
-            raise ValueError("passing game day requires verified recovery with no blind replay")
+            raise ValueError(
+                "passing game day requires durable verified recovery with gap reconciliation and no blind replay"
+            )
         return self
 
 
