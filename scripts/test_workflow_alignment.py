@@ -75,6 +75,9 @@ def main() -> None:
         "reusable-release-proof-promotion-dispatch.yml@",
         workflow="release-proof-dispatch.yml",
     )
+    release_intent = "startsWith(github.event.workflow_run.head_commit.message, 'release: v')"
+    if dispatch.count(release_intent) != 2:
+        raise SystemExit("release-proof-dispatch.yml: both automatic jobs must require release intent")
     require(dispatch, "actions: write", workflow="release-proof-dispatch.yml")
     reject(dispatch, "contents: write", workflow="release-proof-dispatch.yml")
 
@@ -130,7 +133,7 @@ def main() -> None:
 
     print(
         "workflow alignment contract satisfied: immutable prodkit-workflows v0.1.5, "
-        "automatic exact-main proof, promotion, publication verification, and verified cleanup"
+        "explicit release intent, automatic proof, promotion, publication verification, and verified cleanup"
     )
 
 
