@@ -24,9 +24,7 @@ EXPECTED = {
     "release-metadata.yml": "reusable-release-metadata-current.yml",
 }
 
-CENTRAL_REF = re.compile(
-    rf"{re.escape(CENTRAL_REPOSITORY)}/\.github/workflows/([^@\s]+)@([^\s]+)"
-)
+CENTRAL_REF = re.compile(rf"{re.escape(CENTRAL_REPOSITORY)}/\.github/workflows/([^@\s]+)@([^\s]+)")
 
 
 def require(text: str, fragment: str, *, workflow: str) -> None:
@@ -64,14 +62,26 @@ def main() -> None:
         reject(text, "@v0.", workflow=filename)
 
     dispatch = texts["release-proof-dispatch.yml"]
-    require(dispatch, 'workflows: ["CI", "Security", "CodeQL"]', workflow="release-proof-dispatch.yml")
-    require(dispatch, f"required_workflows_json: '{REQUIRED_GATES}'", workflow="release-proof-dispatch.yml")
-    require(dispatch, "reusable-release-proof-promotion-dispatch.yml@", workflow="release-proof-dispatch.yml")
+    require(
+        dispatch, 'workflows: ["CI", "Security", "CodeQL"]', workflow="release-proof-dispatch.yml"
+    )
+    require(
+        dispatch,
+        f"required_workflows_json: '{REQUIRED_GATES}'",
+        workflow="release-proof-dispatch.yml",
+    )
+    require(
+        dispatch,
+        "reusable-release-proof-promotion-dispatch.yml@",
+        workflow="release-proof-dispatch.yml",
+    )
     require(dispatch, "actions: write", workflow="release-proof-dispatch.yml")
     reject(dispatch, "contents: write", workflow="release-proof-dispatch.yml")
 
     proof = texts["trusted-release-proof.yml"]
-    require(proof, f"required_workflows_json: '{REQUIRED_GATES}'", workflow="trusted-release-proof.yml")
+    require(
+        proof, f"required_workflows_json: '{REQUIRED_GATES}'", workflow="trusted-release-proof.yml"
+    )
     require(proof, "source_sha: ${{ github.sha }}", workflow="trusted-release-proof.yml")
     require(proof, "prepare_release_payload: true", workflow="trusted-release-proof.yml")
 
@@ -79,7 +89,11 @@ def main() -> None:
     require(promotion, 'workflows: ["Trusted Release Proof"]', workflow="release-promotion.yml")
     require(promotion, "workflow_dispatch:", workflow="release-promotion.yml")
     require(promotion, "proof_run_id:", workflow="release-promotion.yml")
-    require(promotion, "github.event.workflow_run.conclusion == 'success'", workflow="release-promotion.yml")
+    require(
+        promotion,
+        "github.event.workflow_run.conclusion == 'success'",
+        workflow="release-promotion.yml",
+    )
 
     release = texts["release.yml"]
     require(release, f"required_workflows_json: '{REQUIRED_GATES}'", workflow="release.yml")
@@ -95,7 +109,7 @@ def main() -> None:
         "automatic_cleanup: true",
         "cleanup_workflow_file: branch-cleanup.yml",
         "main_branch: main",
-        "cleanup_branch_prefixes_json: '[\"release/\",\"hotfix/\"]'",
+        'cleanup_branch_prefixes_json: \'["release/","hotfix/"]\'',
     ):
         require(verification, fragment, workflow="release-verification.yml")
     reject(verification, "contents: write", workflow="release-verification.yml")
