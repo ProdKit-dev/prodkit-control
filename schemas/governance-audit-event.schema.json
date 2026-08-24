@@ -76,6 +76,8 @@
         "change_rejected",
         "change_applied",
         "retention_evaluated",
+        "retention_deletion_intent_recorded",
+        "retention_deletion_cancelled",
         "retention_deletion_executed",
         "legal_hold_placed",
         "legal_hold_released",

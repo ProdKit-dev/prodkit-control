@@ -120,6 +120,21 @@
       "title": "Transfer Id",
       "type": "string"
     },
+    "trust_anchor_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Trust Anchor Sha256",
+      "type": "string"
+    },
+    "verification_id": {
+      "format": "uuid",
+      "title": "Verification Id",
+      "type": "string"
+    },
+    "verification_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Verification Sha256",
+      "type": "string"
+    },
     "verified": {
       "default": true,
       "title": "Verified",
@@ -134,7 +149,10 @@
     "imported_by",
     "source_control_version",
     "source_schema_version",
-    "archive_sha256"
+    "archive_sha256",
+    "verification_id",
+    "verification_sha256",
+    "trust_anchor_sha256"
   ],
   "title": "EvidenceImportReceipt",
   "type": "object"

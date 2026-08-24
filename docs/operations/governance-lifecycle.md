@@ -1,6 +1,6 @@
 # Governance, retention, and lifecycle operations
 
-This runbook covers the v0.6.0 governance profile. It assumes v0.5 tenant isolation is already configured and the PostgreSQL production profile is at schema 7.
+This runbook covers the v0.6.1 governance profile. It assumes v0.5 tenant isolation is already configured and the PostgreSQL production profile is at schema 7.
 
 ## High-risk configuration changes
 
@@ -22,7 +22,7 @@ Run retention in two phases when destructive effects are significant:
 - **Evaluate/report:** call the retention evaluator and review `retain`/`delete` decisions, policy revision, deletion-not-before time, and legal-hold IDs.
 - **Execute:** call the governed execution path with an idempotent `RetentionDeletionAdapter`.
 
-The execution path re-evaluates under the tenant governance lock. A legal hold committed first prevents deletion. The adapter must use an idempotency mechanism or provider-native conditional delete where available; retrying an ambiguous destructive effect without reconciliation is not allowed.
+Destructive execution uses authoritative current time; callers cannot advance eligibility with a supplied evaluation timestamp. PostgreSQL evaluates under the tenant governance lock and commits append-only deletion intent before any provider effect. It then reacquires the lock and revalidates current policy and legal holds immediately before invoking the adapter. A hold or policy change committed first cancels deletion. The adapter must use an idempotency mechanism or provider-native conditional delete where available. If provider outcome or final receipt persistence is ambiguous, reconcile the durable intent before any retry.
 
 Resource classes that cannot be safely or lawfully deleted should use `deletion_allowed=false` or indefinite retention. Append-only governance audit/migration evidence is intentionally not a normal retention-deletion target.
 
@@ -69,7 +69,7 @@ For import:
 6. Persist an import receipt/audit event only after these checks.
 7. Preserve applicable legal-hold and retention obligations after import.
 
-Embedded trust metadata alone is not a trust anchor.
+The import call must consume the exact offline `EvidenceTransferVerification`; the durable import receipt records its verification ID, canonical digest, and independent trust-anchor digest. Embedded trust metadata alone is not a trust anchor.
 
 ## Database upgrades to v0.6
 
