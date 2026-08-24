@@ -248,6 +248,8 @@ Support long-lived evidence, compliance workflows, and safe lifecycle changes.
 
 ## v0.7.0 — Reliability and disaster recovery
 
+**Status:** Implemented in v0.7.0; release remains subject to exact-candidate proof, immutable publication, and release-verification gates.
+
 ### Goal
 
 Define and prove how the system recovers without losing assurance semantics.

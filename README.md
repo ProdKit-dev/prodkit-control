@@ -13,20 +13,22 @@ ProdKit Control is designed to be advanced, general-purpose, provider-neutral, a
 
 ## Project status and maturity
 
-`v0.4.0` is the **high-availability and scale milestone**. The repository now includes the canonical foundation, hardened execution, delivery-chain reconciliation, portable assurance, and a qualified HA scheduler/control-plane layer. Enterprise assurance remains maturity-gated; later roadmap milestones cover disaster recovery, stronger tenant isolation, legal hold, compliance packs, and independent security review.
+`v0.7.0` is the **reliability and disaster-recovery milestone**. The repository includes the canonical foundation, hardened execution, delivery-chain reconciliation, portable assurance, HA/scale, multi-tenant isolation engineering controls, governance/lifecycle, and a qualified provider-neutral recovery control plane. The supported enterprise assurance claim remains maturity-gated; v0.8-v1.0 cover further security/operational hardening, production-candidate proof, and independent assurance.
 
-| Capability | v0.4.0 status | Next target |
+| Capability | v0.7.0 status | Next target |
 | --- | --- | --- |
 | Canonical contracts, typed lineage, hash-chained evidence | Implemented | Compatibility hardening |
 | Durable action execution and uncertainty handling | Implemented | Broader executor qualification |
 | Delivery-chain reconciliation | Implemented | Additional provider coverage |
-| Portable attestations and offline verification | Implemented | Enterprise trust/retention profiles |
-| HA fencing, durable bounded work, backpressure, graceful drain | Implemented and qualified | DR / regional recovery |
+| Portable attestations and offline verification | Implemented | Higher-assurance trust profiles |
+| HA fencing, durable bounded work, backpressure, graceful drain | Implemented and qualified | Operational hardening |
+| Multi-tenant isolation engineering profile | Implemented; independent-review claim still gated | Independent review |
+| Governance, retention, legal hold, key/trust-root lifecycle | Implemented | Compliance/hardening expansion |
+| Reliability, backup/restore, uncertain-effect recovery, DR game day | Implemented and qualified reference profile | Production deployment exercises |
 | Python/TypeScript canonical surfaces | Implemented | Compatibility policy expansion |
-| Multi-tenant enterprise isolation | Architectural + tenant-scoped controls | Dedicated isolation verification milestone |
-| DR, legal hold, compliance packs, independent security review | Roadmap | 1.0 production assurance profile |
+| Security/operational hardening and independent assurance | Roadmap | v0.8-v1.0 |
 
-Before enabling production actions, read [Guarantees and non-guarantees](docs/architecture/guarantees.md), [Secure deployment](docs/security/secure-deployment.md), and [the roadmap](ROADMAP.md).
+Before enabling production actions, read [Guarantees and non-guarantees](docs/architecture/guarantees.md), [Reliability and disaster recovery](docs/architecture/reliability-disaster-recovery.md), [the DR runbook](docs/operations/disaster-recovery.md), [Secure deployment](docs/security/secure-deployment.md), and [the roadmap](ROADMAP.md).
 
 ## Why this repository exists
 
@@ -120,7 +122,7 @@ flowchart TB
     Lineage --> Projectors
 ```
 
-The diagram is the control-plane architecture through `v0.4.0`: durable execution, reconciliation, portable assurance, and HA scheduling are implemented behind provider-neutral ports. Later roadmap gates focus on DR, stronger enterprise isolation, governance/compliance packs, and independent assurance.
+The diagram is the provider-neutral control-plane foundation. Through `v0.7.0`, durable execution, reconciliation, portable assurance, HA scheduling, tenant-isolation engineering controls, governance/lifecycle, and reliability/disaster-recovery controls are implemented behind explicit contracts and adapters. Later roadmap gates focus on security/operational hardening and independent production assurance.
 
 See the [architecture overview](docs/architecture/overview.md) for the canonical layer model, trust boundaries, data ownership, invariants, and end-to-end flows.
 

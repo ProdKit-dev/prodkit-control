@@ -6,6 +6,32 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-24
+
+### Added
+
+- Canonical reliability, backup/restore, integrity, recovery-gap, break-glass, uncertain-execution and DR game-day contracts with Python, TypeScript and JSON Schema parity.
+- PostgreSQL schema 8 durable recovery catalog for profiles, backup manifests, break-glass evidence, restore plans/results, integrity scans, uncertain-attempt recovery, RPO-gap reconciliation, game-day exercises and audit evidence.
+- Provider-neutral PostgreSQL 18 disaster-recovery game-day qualification restoring isolated component bytes and proving signed-checkpoint, trust-anchor and object-store integrity.
+- Architecture and operator runbooks for the supported enterprise warm-standby recovery profile.
+
+### Changed
+
+- Verified restore now requires component/ledger integrity, cryptographic verification of the exact backed-up signed checkpoint, an independently supplied trust-root policy, object-store verification, reconciliation of every durable `UNCERTAIN` attempt, and explicit recovery-point-gap reconciliation.
+- Final promotion consumes a separately revalidated `FAILOVER` break-glass capability; earlier restore/reconciliation authority cannot silently become production failover authority.
+- PostgreSQL recovery timing and break-glass validity use database time, while authoritative uncertain-attempt candidates come from durable tenant-scoped execution state rather than caller selection.
+- Runtime schema compatibility advances from schema 7 to schema 8; the supported v0.7 milestone upgrade is schema 7 -> 8.
+
+### Security / reliability
+
+- Recovery never authorizes blind replay of ambiguous external effects. The RPO-gap barrier covers effects that may have occurred after the recovered snapshot but before failure detection.
+- Break-glass authority is tenant-bound, short-lived, four-eyes, capability-scoped, revocable, revalidated on every privileged stage, and unavailable through support elevation.
+- Recovery evidence is append-only and contradictory per-restore uncertain-attempt resolutions are rejected by durable uniqueness constraints.
+
+### Release scope
+
+The qualified reference warm-standby profile targets RPO <= 300 seconds and RTO <= 3600 seconds under the repository's deterministic PostgreSQL 18 game-day conditions. These values are not a universal deployment SLA. v0.8 security/operational hardening and the separate independent v0.5 tenant-isolation review remain outside this release claim.
+
 ## [0.6.1] - 2026-08-24
 
 ### Security

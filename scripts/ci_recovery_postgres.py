@@ -21,6 +21,8 @@ from prodkit_control_core import (
     ReliabilityProfile,
     RestoredComponentObservation,
     RestoreStatus,
+    RunRecord,
+    RunStatus,
     TenantAccessContext,
     TenantCapability,
     TrustRootPolicy,
@@ -31,6 +33,7 @@ from prodkit_control_core import (
 from prodkit_control_postgres import (
     PostgresExecutionAttemptStore,
     PostgresRecoveryStore,
+    PostgresRunStore,
     assert_schema_compatible,
 )
 from prodkit_control_runtime import (
@@ -256,8 +259,21 @@ async def _qualify_store(sessions: async_sessionmaker[AsyncSession]) -> None:
     assert scan.checkpoint_verified and scan.trust_anchor_verified
 
     attempts = PostgresExecutionAttemptStore(sessions)
+    runs = PostgresRunStore(sessions)
     attempt_id, action_id, run_id = uuid4(), uuid4(), uuid4()
     claimed_at = datetime.now(UTC)
+    await runs.create(
+        RunRecord(
+            run_id=run_id,
+            tenant_id=tenant_id,
+            status=RunStatus.RUNNING,
+            initiated_by=admin.actor,
+            environment="recovery-ci",
+            purpose="qualify durable uncertain execution recovery",
+            trace_id=f"recovery-ci-{run_id.hex}",
+            started_at=claimed_at,
+        )
+    )
     claimed = _attempt(
         tenant_id=tenant_id,
         attempt_id=attempt_id,
