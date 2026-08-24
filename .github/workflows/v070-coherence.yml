@@ -6,6 +6,11 @@ on:
     paths:
       - .github/workflows/v070-coherence.yml
       - .prodkit/tmp-v070-coherence.py
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/v070-coherence.yml
+      - .prodkit/tmp-v070-coherence.py
 
 permissions:
   contents: write
@@ -17,6 +22,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
+          ref: release/v0.7.0-reliability-disaster-recovery
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
       - name: Normalize recovery source and schemas
         shell: bash
