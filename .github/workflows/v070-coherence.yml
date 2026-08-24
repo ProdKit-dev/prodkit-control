@@ -1,0 +1,48 @@
+name: v0.7.0 Recovery Coherence
+
+on:
+  push:
+    branches: [release/v0.7.0-reliability-disaster-recovery]
+    paths:
+      - .github/workflows/v070-coherence.yml
+      - .prodkit/tmp-v070-coherence.py
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: ${{ fromJSON(vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+      - name: Normalize recovery source and schemas
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.13
+          uv sync --all-packages --group dev --locked --python 3.13
+          uv run --python 3.13 --no-sync python .prodkit/tmp-v070-coherence.py
+          uv run --python 3.13 --no-sync ruff format \
+            packages/python/prodkit-control-core/src/prodkit_control_core/contracts/recovery.py \
+            packages/python/prodkit-control-runtime/src/prodkit_control_runtime/recovery.py \
+            packages/python/prodkit-control-postgres/src/prodkit_control_postgres/recovery.py \
+            scripts/ci_recovery_postgres.py scripts/ci_recovery_migrations.py \
+            scripts/ci_recovery_game_day.py scripts/export_schemas.py tests/test_recovery.py
+          uv run --python 3.13 --no-sync ruff check \
+            packages/python/prodkit-control-core/src/prodkit_control_core/contracts/recovery.py \
+            packages/python/prodkit-control-runtime/src/prodkit_control_runtime/recovery.py \
+            packages/python/prodkit-control-postgres/src/prodkit_control_postgres/recovery.py \
+            scripts/ci_recovery_postgres.py scripts/ci_recovery_migrations.py \
+            scripts/ci_recovery_game_day.py scripts/export_schemas.py tests/test_recovery.py
+          uv run --python 3.13 --no-sync pytest tests/test_recovery.py --no-cov
+          uv run --python 3.13 --no-sync python scripts/export_schemas.py
+          rm -f .prodkit/tmp-v070-coherence.py .github/workflows/v070-coherence.yml
+          git config user.name "prodkit-release-bot"
+          git config user.email "prodkit-release-bot@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "feat: align v0.7 durable recovery qualification"
+          git push origin HEAD:release/v0.7.0-reliability-disaster-recovery
