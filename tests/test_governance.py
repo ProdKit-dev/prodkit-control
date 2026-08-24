@@ -10,6 +10,7 @@ from prodkit_control_core import (
     ActorRef,
     AuthorizationDeniedError,
     CompatibilityPolicy,
+    EvidenceTransferVerification,
     GovernanceApprovalDecision,
     GovernanceRisk,
     GovernanceTargetType,
@@ -209,10 +210,7 @@ async def test_retention_deletion_and_legal_hold_precedence_are_rechecked() -> N
 
     adapter = _DeletionAdapter()
     records = await store.execute_retention(
-        context=operator,
-        candidates=(candidate,),
-        adapter=adapter,
-        at=now + timedelta(seconds=1),
+        context=operator, candidates=(candidate,), adapter=adapter
     )
     assert len(records) == 1
     assert adapter.deleted == [("artifact", "bundle-1")]
@@ -334,9 +332,21 @@ async def test_evidence_transfer_import_enforces_digest_and_upgrade_window() -> 
         archive_sha256="1" * 64,
         bundle_manifest_sha256="2" * 64,
     )
+    verification = EvidenceTransferVerification(
+        verification_id=uuid4(),
+        transfer_id=manifest.transfer_id,
+        tenant_id=manifest.tenant_id,
+        verified_at=datetime.now(UTC),
+        source_control_version=manifest.source_control_version,
+        source_schema_version=manifest.source_schema_version,
+        package_sha256=manifest.archive_sha256,
+        bundle_manifest_sha256=manifest.bundle_manifest_sha256,
+        trust_anchor_sha256="4" * 64,
+    )
     receipt = await store.record_verified_import(
         context=context,
         manifest=manifest,
+        verification=verification,
         archive_sha256="1" * 64,
         compatibility=compatibility,
     )
@@ -346,6 +356,183 @@ async def test_evidence_transfer_import_enforces_digest_and_upgrade_window() -> 
         await store.record_verified_import(
             context=context,
             manifest=manifest,
+            verification=verification,
             archive_sha256="3" * 64,
             compatibility=compatibility,
+        )
+
+
+class _FailingDeletionAdapter:
+    async def delete(
+        self,
+        *,
+        context: TenantAccessContext,
+        candidate: RetentionCandidate,
+        decision: RetentionDecision,
+    ) -> str:
+        raise RuntimeError("simulated provider failure")
+
+
+@pytest.mark.asyncio
+async def test_destructive_retention_rejects_caller_time_and_duplicate_identities() -> None:
+    store = InMemoryGovernanceStore()
+    operator = _context(
+        "tenant-time",
+        "operator-a",
+        TenantCapability.CONFIGURE,
+        TenantCapability.READ,
+        TenantCapability.DELETE,
+    )
+    approver = _context("tenant-time", "operator-b", TenantCapability.APPROVE)
+    now = datetime.now(UTC)
+    policy = RetentionPolicy(
+        policy_id=uuid4(),
+        tenant_id="tenant-time",
+        revision=1,
+        effective_at=now,
+        rules=(RetentionRule(resource_type="artifact", retain_for_seconds=0),),
+        created_at=now,
+        created_by=operator.actor,
+    )
+    request = await store.propose_change(
+        context=operator,
+        target_type=GovernanceTargetType.RETENTION_POLICY,
+        target_id=str(policy.policy_id),
+        proposed_digest=sha256_hex(policy),
+        risk=GovernanceRisk.HIGH,
+        reason="retention safety regression",
+        ticket_reference="HOTFIX-1",
+    )
+    await _approve(store, context=approver, request_id=request.request_id)
+    await store.apply_retention_policy(policy, context=operator, request_id=request.request_id)
+    candidate = RetentionCandidate(
+        tenant_id="tenant-time",
+        resource_type="artifact",
+        resource_id="same",
+        created_at=now - timedelta(days=1),
+    )
+    with pytest.raises(ValueError, match="authoritative current time"):
+        await store.execute_retention(
+            context=operator,
+            candidates=(candidate,),
+            adapter=_DeletionAdapter(),
+            at=now + timedelta(days=365),
+        )
+    with pytest.raises(ValueError, match="unique resource identities"):
+        await store.execute_retention(
+            context=operator,
+            candidates=(candidate, candidate.model_copy()),
+            adapter=_DeletionAdapter(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_failed_deletion_preserves_intent_evidence() -> None:
+    store = InMemoryGovernanceStore()
+    operator = _context(
+        "tenant-intent",
+        "operator-a",
+        TenantCapability.CONFIGURE,
+        TenantCapability.READ,
+        TenantCapability.DELETE,
+    )
+    approver = _context("tenant-intent", "operator-b", TenantCapability.APPROVE)
+    now = datetime.now(UTC)
+    policy = RetentionPolicy(
+        policy_id=uuid4(),
+        tenant_id="tenant-intent",
+        revision=1,
+        effective_at=now,
+        rules=(RetentionRule(resource_type="artifact", retain_for_seconds=0),),
+        created_at=now,
+        created_by=operator.actor,
+    )
+    request = await store.propose_change(
+        context=operator,
+        target_type=GovernanceTargetType.RETENTION_POLICY,
+        target_id=str(policy.policy_id),
+        proposed_digest=sha256_hex(policy),
+        risk=GovernanceRisk.HIGH,
+        reason="durable deletion intent",
+        ticket_reference="HOTFIX-2",
+    )
+    await _approve(store, context=approver, request_id=request.request_id)
+    await store.apply_retention_policy(policy, context=operator, request_id=request.request_id)
+    candidate = RetentionCandidate(
+        tenant_id="tenant-intent",
+        resource_type="artifact",
+        resource_id="artifact-fail",
+        created_at=now - timedelta(days=1),
+    )
+    with pytest.raises(RuntimeError, match="simulated provider failure"):
+        await store.execute_retention(
+            context=operator,
+            candidates=(candidate,),
+            adapter=_FailingDeletionAdapter(),
+        )
+    audit = await store.list_audit(context=operator)
+    assert any(event.event_type.value == "retention_deletion_intent_recorded" for event in audit)
+    assert not any(event.event_type.value == "retention_deletion_executed" for event in audit)
+
+
+@pytest.mark.asyncio
+async def test_import_requires_exact_offline_verification_evidence() -> None:
+    store = InMemoryGovernanceStore()
+    context = _context(
+        "tenant-verify",
+        "operator-a",
+        TenantCapability.EXPORT,
+        TenantCapability.WRITE,
+    )
+    compatibility = CompatibilityPolicy(
+        current_schema_version=7, minimum_supported_schema_version=7, migration_paths=()
+    )
+    manifest = await store.create_transfer_manifest(
+        context=context,
+        source_control_version="0.6.0",
+        source_schema_version=7,
+        archive_sha256="5" * 64,
+        bundle_manifest_sha256="6" * 64,
+    )
+    verification = EvidenceTransferVerification(
+        verification_id=uuid4(),
+        transfer_id=manifest.transfer_id,
+        tenant_id=manifest.tenant_id,
+        verified_at=datetime.now(UTC),
+        source_control_version=manifest.source_control_version,
+        source_schema_version=manifest.source_schema_version,
+        package_sha256=manifest.archive_sha256,
+        bundle_manifest_sha256=manifest.bundle_manifest_sha256,
+        trust_anchor_sha256="7" * 64,
+    )
+    receipt = await store.record_verified_import(
+        context=context,
+        manifest=manifest,
+        verification=verification,
+        archive_sha256=manifest.archive_sha256,
+        compatibility=compatibility,
+    )
+    assert receipt.verification_id == verification.verification_id
+    assert receipt.verification_sha256 == sha256_hex(verification)
+    assert receipt.trust_anchor_sha256 == verification.trust_anchor_sha256
+    with pytest.raises(ValueError, match="bundle-manifest"):
+        await store.record_verified_import(
+            context=context,
+            manifest=manifest,
+            verification=verification.model_copy(update={"bundle_manifest_sha256": "8" * 64}),
+            archive_sha256=manifest.archive_sha256,
+            compatibility=compatibility,
+        )
+    with pytest.raises(ValueError, match="offline verified"):
+        EvidenceTransferVerification(
+            verification_id=uuid4(),
+            transfer_id=manifest.transfer_id,
+            tenant_id=manifest.tenant_id,
+            verified_at=datetime.now(UTC),
+            source_control_version=manifest.source_control_version,
+            source_schema_version=manifest.source_schema_version,
+            package_sha256=manifest.archive_sha256,
+            bundle_manifest_sha256=manifest.bundle_manifest_sha256,
+            trust_anchor_sha256="9" * 64,
+            verified_offline=False,
         )

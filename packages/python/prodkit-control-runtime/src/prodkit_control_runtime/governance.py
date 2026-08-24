@@ -9,6 +9,7 @@ from prodkit_control_core import (
     CompatibilityPolicy,
     EvidenceImportReceipt,
     EvidenceTransferManifest,
+    EvidenceTransferVerification,
     GovernanceApproval,
     GovernanceApprovalDecision,
     GovernanceAuditEvent,
@@ -375,7 +376,13 @@ class InMemoryGovernanceStore:
     ) -> tuple[RetentionExecutionRecord, ...]:
         self._require(context, TenantCapability.DELETE)
         self._require(context, TenantCapability.READ)
-        decision_at = at or datetime.now(UTC)
+        if at is not None:
+            raise ValueError(
+                "destructive retention execution uses authoritative current time; "
+                "caller-supplied evaluation time is not permitted"
+            )
+        self._require_unique_candidates(candidates)
+        decision_at = datetime.now(UTC)
         async with self._lock:
             decisions = self._retention_decisions_locked(
                 tenant_id=context.tenant_id,
@@ -385,22 +392,34 @@ class InMemoryGovernanceStore:
             self._audit_decisions_locked(
                 context=context, decisions=decisions, occurred_at=decision_at
             )
-            candidate_by_key = {
-                (candidate.resource_type, candidate.resource_id): candidate
-                for candidate in candidates
-            }
             records: list[RetentionExecutionRecord] = []
-            for decision in decisions:
+            for candidate, decision in zip(candidates, decisions, strict=True):
                 if decision.disposition is not RetentionDisposition.DELETE:
                     continue
-                candidate = candidate_by_key[(decision.resource_type, decision.resource_id)]
+                execution_id = uuid4()
+                self._append_audit(
+                    GovernanceAuditEvent(
+                        event_id=uuid4(),
+                        tenant_id=context.tenant_id,
+                        event_type=GovernanceAuditEventType.RETENTION_DELETION_INTENT_RECORDED,
+                        actor=context.actor,
+                        occurred_at=decision_at,
+                        target_id=f"{candidate.resource_type}:{candidate.resource_id}",
+                        reason=decision.reason,
+                        attributes={
+                            "execution_id": str(execution_id),
+                            "decision_sha256": sha256_hex(decision),
+                            "content_sha256": candidate.content_sha256 or "",
+                        },
+                    )
+                )
                 deletion_reference = await adapter.delete(
                     context=context,
                     candidate=candidate,
                     decision=decision,
                 )
                 record = RetentionExecutionRecord(
-                    execution_id=uuid4(),
+                    execution_id=execution_id,
                     tenant_id=context.tenant_id,
                     resource_type=candidate.resource_type,
                     resource_id=candidate.resource_id,
@@ -421,7 +440,10 @@ class InMemoryGovernanceStore:
                         occurred_at=decision_at,
                         target_id=f"{candidate.resource_type}:{candidate.resource_id}",
                         reason=decision.reason,
-                        attributes={"deletion_reference": deletion_reference},
+                        attributes={
+                            "execution_id": str(execution_id),
+                            "deletion_reference": deletion_reference,
+                        },
                     )
                 )
             return tuple(records)
@@ -605,14 +627,17 @@ class InMemoryGovernanceStore:
         *,
         context: TenantAccessContext,
         manifest: EvidenceTransferManifest,
+        verification: EvidenceTransferVerification,
         archive_sha256: str,
         compatibility: CompatibilityPolicy,
     ) -> EvidenceImportReceipt:
         self._require(context, TenantCapability.WRITE)
-        if manifest.tenant_id != context.tenant_id:
-            raise AuthorizationDeniedError("evidence import crossed tenant boundary")
-        if manifest.archive_sha256 != archive_sha256:
-            raise ValueError("import archive digest does not match transfer manifest")
+        self._validate_import_verification(
+            context=context,
+            manifest=manifest,
+            verification=verification,
+            archive_sha256=archive_sha256,
+        )
         compatibility.path_from(manifest.source_schema_version)
         now = datetime.now(UTC)
         receipt = EvidenceImportReceipt(
@@ -624,6 +649,9 @@ class InMemoryGovernanceStore:
             source_control_version=manifest.source_control_version,
             source_schema_version=manifest.source_schema_version,
             archive_sha256=archive_sha256,
+            verification_id=verification.verification_id,
+            verification_sha256=sha256_hex(verification),
+            trust_anchor_sha256=verification.trust_anchor_sha256,
         )
         async with self._lock:
             self._imports[(context.tenant_id, receipt.import_id)] = receipt
@@ -638,6 +666,11 @@ class InMemoryGovernanceStore:
                     after_digest=sha256_hex(receipt),
                     reason=context.reason or "verified evidence import",
                     ticket_reference=context.ticket_reference,
+                    attributes={
+                        "verification_id": str(verification.verification_id),
+                        "verification_sha256": sha256_hex(verification),
+                        "trust_anchor_sha256": verification.trust_anchor_sha256,
+                    },
                 )
             )
         return receipt
@@ -650,6 +683,40 @@ class InMemoryGovernanceStore:
         self._require(context, TenantCapability.READ)
         async with self._lock:
             return tuple(self._audit.get(context.tenant_id, ()))
+
+    @staticmethod
+    def _require_unique_candidates(candidates: tuple[RetentionCandidate, ...]) -> None:
+        identities = tuple(
+            (candidate.resource_type, candidate.resource_id) for candidate in candidates
+        )
+        if len(identities) != len(set(identities)):
+            raise ValueError("retention candidates must have unique resource identities")
+
+    @staticmethod
+    def _validate_import_verification(
+        *,
+        context: TenantAccessContext,
+        manifest: EvidenceTransferManifest,
+        verification: EvidenceTransferVerification,
+        archive_sha256: str,
+    ) -> None:
+        if manifest.tenant_id != context.tenant_id or verification.tenant_id != context.tenant_id:
+            raise AuthorizationDeniedError("evidence import crossed tenant boundary")
+        if verification.transfer_id != manifest.transfer_id:
+            raise ValueError("verification does not belong to the transfer manifest")
+        if (
+            manifest.archive_sha256 != archive_sha256
+            or verification.package_sha256 != archive_sha256
+        ):
+            raise ValueError("import archive digest does not match verified transfer evidence")
+        if verification.bundle_manifest_sha256 != manifest.bundle_manifest_sha256:
+            raise ValueError("verified bundle-manifest digest does not match transfer manifest")
+        if verification.source_control_version != manifest.source_control_version:
+            raise ValueError("verified source control version does not match transfer manifest")
+        if verification.source_schema_version != manifest.source_schema_version:
+            raise ValueError("verified source schema version does not match transfer manifest")
+        if not verification.verified_offline:
+            raise ValueError("evidence import requires offline verification evidence")
 
     def _retention_decisions_locked(
         self,
