@@ -1,6 +1,6 @@
 [project]
 name = "prodkit-control-cli"
-version = "0.6.0"
+version = "0.6.1"
 description = "CLI for local operation and evidence verification."
 requires-python = ">=3.12,<3.15"
 license = { text = "Apache-2.0" }

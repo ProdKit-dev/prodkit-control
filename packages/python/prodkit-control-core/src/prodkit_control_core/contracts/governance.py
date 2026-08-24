@@ -56,6 +56,8 @@ class GovernanceAuditEventType(StrEnum):
     CHANGE_REJECTED = "change_rejected"
     CHANGE_APPLIED = "change_applied"
     RETENTION_EVALUATED = "retention_evaluated"
+    RETENTION_DELETION_INTENT_RECORDED = "retention_deletion_intent_recorded"
+    RETENTION_DELETION_CANCELLED = "retention_deletion_cancelled"
     RETENTION_DELETION_EXECUTED = "retention_deletion_executed"
     LEGAL_HOLD_PLACED = "legal_hold_placed"
     LEGAL_HOLD_RELEASED = "legal_hold_released"
@@ -356,6 +358,9 @@ class EvidenceImportReceipt(ContractModel):
     source_control_version: NonBlankStr
     source_schema_version: int = Field(ge=1)
     archive_sha256: Sha256
+    verification_id: UUID
+    verification_sha256: Sha256
+    trust_anchor_sha256: Sha256
     verified: bool = True
 
     @model_validator(mode="after")

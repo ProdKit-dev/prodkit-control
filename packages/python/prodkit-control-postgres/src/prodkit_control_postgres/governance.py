@@ -12,6 +12,7 @@ from prodkit_control_core import (
     CompatibilityPolicy,
     EvidenceImportReceipt,
     EvidenceTransferManifest,
+    EvidenceTransferVerification,
     GovernanceApproval,
     GovernanceApprovalDecision,
     GovernanceAuditEvent,
@@ -490,26 +491,29 @@ class PostgresGovernanceStore:
     ) -> tuple[RetentionExecutionRecord, ...]:
         self._require_tenant_mutation(context, TenantCapability.DELETE)
         self._require_context(context, TenantCapability.READ)
+        if at is not None:
+            raise ValueError(
+                "destructive retention execution uses authoritative database time; "
+                "caller-supplied evaluation time is not permitted"
+            )
+        self._require_unique_candidates(candidates)
+        pending: list[tuple[RetentionCandidate, RetentionDecision, UUID]] = []
         async with self._sessions.begin() as session:
             await self._tenant_lock(session, context.tenant_id)
             now = await _database_now(session)
-            decision_at = at or now
+            self._require_context(context, TenantCapability.DELETE, at=now)
+            self._require_context(context, TenantCapability.READ, at=now)
             policy = await self._current_retention_policy(
-                session, context.tenant_id, at=decision_at, include_future=False
+                session, context.tenant_id, at=now, include_future=False
             )
             if policy is None:
                 raise AuthorizationDeniedError("no effective retention policy is configured")
             holds = await self._active_holds(session, context.tenant_id, for_update=True)
             decisions = tuple(
-                self._decision_for(policy=policy, holds=holds, candidate=candidate, at=decision_at)
+                self._decision_for(policy=policy, holds=holds, candidate=candidate, at=now)
                 for candidate in candidates
             )
-            candidate_by_key = {
-                (candidate.resource_type, candidate.resource_id): candidate
-                for candidate in candidates
-            }
-            records: list[RetentionExecutionRecord] = []
-            for decision in decisions:
+            for candidate, decision in zip(candidates, decisions, strict=True):
                 await self._append_audit(
                     session,
                     GovernanceAuditEvent(
@@ -525,14 +529,71 @@ class PostgresGovernanceStore:
                 )
                 if decision.disposition is not RetentionDisposition.DELETE:
                     continue
-                candidate = candidate_by_key[(decision.resource_type, decision.resource_id)]
+                execution_id = uuid4()
+                await self._append_audit(
+                    session,
+                    GovernanceAuditEvent(
+                        event_id=uuid4(),
+                        tenant_id=context.tenant_id,
+                        event_type=GovernanceAuditEventType.RETENTION_DELETION_INTENT_RECORDED,
+                        actor=context.actor,
+                        occurred_at=now,
+                        target_id=f"{candidate.resource_type}:{candidate.resource_id}",
+                        reason=decision.reason,
+                        attributes={
+                            "execution_id": str(execution_id),
+                            "decision_sha256": sha256_hex(decision),
+                            "content_sha256": candidate.content_sha256 or "",
+                        },
+                    ),
+                )
+                pending.append((candidate, decision, execution_id))
+
+        records: list[RetentionExecutionRecord] = []
+        for candidate, intended_decision, execution_id in pending:
+            async with self._sessions.begin() as session:
+                await self._tenant_lock(session, context.tenant_id)
+                now = await _database_now(session)
+                self._require_context(context, TenantCapability.DELETE, at=now)
+                self._require_context(context, TenantCapability.READ, at=now)
+                policy = await self._current_retention_policy(
+                    session, context.tenant_id, at=now, include_future=False
+                )
+                if policy is None:
+                    raise AuthorizationDeniedError("no effective retention policy is configured")
+                holds = await self._active_holds(session, context.tenant_id, for_update=True)
+                decision = self._decision_for(
+                    policy=policy,
+                    holds=holds,
+                    candidate=candidate,
+                    at=now,
+                )
+                if (
+                    decision.disposition is not RetentionDisposition.DELETE
+                    or decision.policy_id != intended_decision.policy_id
+                    or decision.policy_revision != intended_decision.policy_revision
+                ):
+                    await self._append_audit(
+                        session,
+                        GovernanceAuditEvent(
+                            event_id=uuid4(),
+                            tenant_id=context.tenant_id,
+                            event_type=GovernanceAuditEventType.RETENTION_DELETION_CANCELLED,
+                            actor=context.actor,
+                            occurred_at=now,
+                            target_id=f"{candidate.resource_type}:{candidate.resource_id}",
+                            reason="deletion intent no longer matches current governed retention state",
+                            attributes={"execution_id": str(execution_id)},
+                        ),
+                    )
+                    continue
                 deletion_reference = await adapter.delete(
                     context=context,
                     candidate=candidate,
                     decision=decision,
                 )
                 record = RetentionExecutionRecord(
-                    execution_id=uuid4(),
+                    execution_id=execution_id,
                     tenant_id=context.tenant_id,
                     resource_type=candidate.resource_type,
                     resource_id=candidate.resource_id,
@@ -566,7 +627,6 @@ class PostgresGovernanceStore:
                         "document": record.model_dump_json(),
                     },
                 )
-                records.append(record)
                 await self._append_audit(
                     session,
                     GovernanceAuditEvent(
@@ -577,10 +637,14 @@ class PostgresGovernanceStore:
                         occurred_at=now,
                         target_id=f"{candidate.resource_type}:{candidate.resource_id}",
                         reason=decision.reason,
-                        attributes={"deletion_reference": deletion_reference},
+                        attributes={
+                            "execution_id": str(execution_id),
+                            "deletion_reference": deletion_reference,
+                        },
                     ),
                 )
-            return tuple(records)
+                records.append(record)
+        return tuple(records)
 
     async def bootstrap_trust_root(
         self,
@@ -791,16 +855,19 @@ class PostgresGovernanceStore:
         *,
         context: TenantAccessContext,
         manifest: EvidenceTransferManifest,
+        verification: EvidenceTransferVerification,
         archive_sha256: str,
         compatibility: CompatibilityPolicy,
     ) -> EvidenceImportReceipt:
         async with self._sessions.begin() as session:
             now = await _database_now(session)
             await self._authorize(session, context, TenantCapability.WRITE, now=now)
-            if manifest.tenant_id != context.tenant_id:
-                raise AuthorizationDeniedError("evidence import crossed tenant boundary")
-            if manifest.archive_sha256 != archive_sha256:
-                raise ValueError("import archive digest does not match transfer manifest")
+            self._validate_import_verification(
+                context=context,
+                manifest=manifest,
+                verification=verification,
+                archive_sha256=archive_sha256,
+            )
             compatibility.path_from(manifest.source_schema_version)
             receipt = EvidenceImportReceipt(
                 import_id=uuid4(),
@@ -811,6 +878,9 @@ class PostgresGovernanceStore:
                 source_control_version=manifest.source_control_version,
                 source_schema_version=manifest.source_schema_version,
                 archive_sha256=archive_sha256,
+                verification_id=verification.verification_id,
+                verification_sha256=sha256_hex(verification),
+                trust_anchor_sha256=verification.trust_anchor_sha256,
             )
             await session.execute(
                 text(
@@ -846,6 +916,11 @@ class PostgresGovernanceStore:
                     after_digest=sha256_hex(receipt),
                     reason=context.reason or "verified evidence import",
                     ticket_reference=context.ticket_reference,
+                    attributes={
+                        "verification_id": str(verification.verification_id),
+                        "verification_sha256": sha256_hex(verification),
+                        "trust_anchor_sha256": verification.trust_anchor_sha256,
+                    },
                 ),
             )
             return receipt
@@ -876,6 +951,40 @@ class PostgresGovernanceStore:
                 .all()
             )
             return tuple(GovernanceAuditEvent.model_validate(row["document"]) for row in rows)
+
+    @staticmethod
+    def _require_unique_candidates(candidates: tuple[RetentionCandidate, ...]) -> None:
+        identities = tuple(
+            (candidate.resource_type, candidate.resource_id) for candidate in candidates
+        )
+        if len(identities) != len(set(identities)):
+            raise ValueError("retention candidates must have unique resource identities")
+
+    @staticmethod
+    def _validate_import_verification(
+        *,
+        context: TenantAccessContext,
+        manifest: EvidenceTransferManifest,
+        verification: EvidenceTransferVerification,
+        archive_sha256: str,
+    ) -> None:
+        if manifest.tenant_id != context.tenant_id or verification.tenant_id != context.tenant_id:
+            raise AuthorizationDeniedError("evidence import crossed tenant boundary")
+        if verification.transfer_id != manifest.transfer_id:
+            raise ValueError("verification does not belong to the transfer manifest")
+        if (
+            manifest.archive_sha256 != archive_sha256
+            or verification.package_sha256 != archive_sha256
+        ):
+            raise ValueError("import archive digest does not match verified transfer evidence")
+        if verification.bundle_manifest_sha256 != manifest.bundle_manifest_sha256:
+            raise ValueError("verified bundle-manifest digest does not match transfer manifest")
+        if verification.source_control_version != manifest.source_control_version:
+            raise ValueError("verified source control version does not match transfer manifest")
+        if verification.source_schema_version != manifest.source_schema_version:
+            raise ValueError("verified source schema version does not match transfer manifest")
+        if not verification.verified_offline:
+            raise ValueError("evidence import requires offline verification evidence")
 
     async def _authorize(
         self,

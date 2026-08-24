@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from pydantic import AwareDatetime, Field
+from pydantic import AwareDatetime, Field, model_validator
 
 from .base import ContractModel, NonBlankStr, Sha256
 
@@ -22,3 +22,9 @@ class EvidenceTransferVerification(ContractModel):
     bundle_manifest_sha256: Sha256
     trust_anchor_sha256: Sha256
     verified_offline: bool = True
+
+    @model_validator(mode="after")
+    def require_offline_verification(self) -> EvidenceTransferVerification:
+        if not self.verified_offline:
+            raise ValueError("evidence transfer verification must be offline verified")
+        return self

@@ -13,6 +13,7 @@ from prodkit_control_core import (
     ActorRef,
     AuthorizationDeniedError,
     CompatibilityPolicy,
+    EvidenceTransferVerification,
     GovernanceApprovalDecision,
     GovernanceRisk,
     GovernanceTargetType,
@@ -175,11 +176,29 @@ async def _exercise_store(sessions: async_sessionmaker[AsyncSession]) -> None:
         context=operator, hold_id=hold.hold_id, request_id=release.request_id
     )
     adapter = _DeletionAdapter()
+    try:
+        await store.execute_retention(
+            context=operator,
+            candidates=(candidate,),
+            adapter=adapter,
+            at=now + timedelta(days=365),
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("destructive retention must reject caller-supplied time")
+    try:
+        await store.execute_retention(
+            context=operator,
+            candidates=(candidate, candidate.model_copy()),
+            adapter=adapter,
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("duplicate retention candidate identities must fail closed")
     executions = await store.execute_retention(
-        context=operator,
-        candidates=(candidate,),
-        adapter=adapter,
-        at=now + timedelta(seconds=1),
+        context=operator, candidates=(candidate,), adapter=adapter
     )
     assert len(executions) == 1 and adapter.deleted == [candidate.resource_id]
 
@@ -283,12 +302,25 @@ async def _exercise_store(sessions: async_sessionmaker[AsyncSession]) -> None:
         bundle_manifest_sha256="1" * 64,
         trust_root_revision=2,
     )
+    verification = EvidenceTransferVerification(
+        verification_id=uuid4(),
+        transfer_id=transfer.transfer_id,
+        tenant_id=transfer.tenant_id,
+        verified_at=datetime.now(UTC),
+        source_control_version=transfer.source_control_version,
+        source_schema_version=transfer.source_schema_version,
+        package_sha256=transfer.archive_sha256,
+        bundle_manifest_sha256=transfer.bundle_manifest_sha256,
+        trust_anchor_sha256="3" * 64,
+    )
     receipt = await store.record_verified_import(
         context=operator,
         manifest=transfer,
+        verification=verification,
         archive_sha256="f" * 64,
         compatibility=compatibility,
     )
+    assert receipt.verification_sha256 == sha256_hex(verification)
     assert receipt.verified
 
     audit = await store.list_audit(context=operator)

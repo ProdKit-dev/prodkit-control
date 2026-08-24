@@ -1,6 +1,6 @@
 [project]
 name = "prodkit-provider-openai"
-version = "0.6.0"
+version = "0.6.1"
 description = "OpenAI model-provider normalization adapter."
 requires-python = ">=3.12,<3.15"
 license = { text = "Apache-2.0" }

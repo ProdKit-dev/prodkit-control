@@ -6,6 +6,26 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-24
+
+### Security
+
+- Evidence import now requires consumed `EvidenceTransferVerification` evidence and binds the import receipt to the exact verification ID, canonical verification digest, and independent trust-anchor digest.
+- Destructive retention execution rejects caller-supplied evaluation timestamps and uses authoritative current time, preventing future-time acceleration of retention eligibility.
+- Retention batches reject duplicate resource identities so destructive decisions cannot alias across distinct candidate objects.
+- PostgreSQL destructive retention commits append-only deletion intent before the provider effect, then reacquires the tenant governance lock and revalidates current policy and legal holds immediately before deletion.
+- If governed state changes before execution, deletion is cancelled with durable evidence; if provider outcome or final persistence is ambiguous, the pre-committed intent remains available for reconciliation.
+
+### Changed
+
+- `EvidenceImportReceipt` carries verification provenance (`verification_id`, `verification_sha256`, and `trust_anchor_sha256`).
+- `EvidenceTransferVerification.verified_offline` is a fail-closed invariant rather than caller-controlled claim state.
+- Governance operations documentation now treats deletion intent as a durable reconciliation boundary and requires explicit verification evidence for imports.
+
+### Release scope
+
+`v0.6.1` supersedes `v0.6.0` for governance retention deletion and evidence-import deployments. PostgreSQL schema 7 and the v0.6 compatibility window are unchanged. The immutable `v0.6.0` tag is not moved or rewritten.
+
 ## [0.6.0] - 2026-08-24
 
 ### Added

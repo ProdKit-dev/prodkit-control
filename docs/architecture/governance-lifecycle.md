@@ -1,6 +1,6 @@
 # Governance, retention, and lifecycle architecture
 
-ProdKit Control v0.6.0 adds a provider-neutral governance plane around long-lived control evidence and high-risk configuration. It does not replace the canonical ledger, tenant-isolation controls, or portable assurance primitives introduced earlier; it governs how those controls change over time.
+ProdKit Control v0.6.1 maintains the v0.6 provider-neutral governance plane around long-lived control evidence and high-risk configuration. It does not replace the canonical ledger, tenant-isolation controls, or portable assurance primitives introduced earlier; it governs how those controls change over time.
 
 ## Design invariants
 
@@ -51,7 +51,7 @@ The production profile uses `PostgresGovernanceStore` and schema version 7. Post
 
 `RetentionPolicy` is a tenant-local revision stream. Rules may define a retention duration, deletion grace period, or a permanently non-deletable resource class. A missing duration means indefinite retention. A legal hold can target all resources, a set of resource types, specific resource IDs, or an intersection of type and ID constraints.
 
-A retention decision is not itself a delete. `execute_retention` re-evaluates under the governance lock, records the decision, invokes the adapter only for a `delete` disposition, then appends a `RetentionExecutionRecord` and governance audit event. A hold committed before deletion obtains the same lock first and therefore forces `retain`.
+A retention decision is not itself a delete. Destructive `execute_retention` rejects caller-supplied evaluation time and uses authoritative current time. PostgreSQL first evaluates under the tenant governance lock and commits append-only deletion intent. It then reacquires the same lock, re-reads current policy and legal holds, and invokes the adapter only if the exact governed eligibility still holds. A hold or policy change committed first therefore cancels deletion. If the provider effect or final persistence is ambiguous, the pre-committed intent remains durable reconciliation evidence rather than disappearing with a rolled-back execution transaction.
 
 ## Legal-hold model
 
@@ -69,7 +69,7 @@ This release manages trust-root policy history. It does not pretend to be an HSM
 
 `EvidenceTransferManifest` binds tenant, source control/schema version, portable-package SHA-256, evidence-bundle manifest SHA-256, optional trust-root revision, and legal-hold preservation intent. `GovernanceEvidenceTransferVerifier` verifies the portable package offline using the existing v0.3 assurance verifier and an independent trust root/digest, then binds the result to a typed `EvidenceTransferVerification`.
 
-An import must also satisfy the v0.6 compatibility window. Verification does not automatically make imported evidence authoritative for a production decision; consumers must preserve source identity, trust anchors, and any applicable legal hold/retention metadata.
+An import must also satisfy the v0.6 compatibility window. The import API consumes the exact `EvidenceTransferVerification`; the resulting receipt binds its verification ID, canonical verification digest, and trust-anchor digest. A caller cannot create authoritative import evidence merely by supplying matching archive metadata. Verification still does not automatically make imported evidence authoritative for a production decision; consumers must preserve source identity, trust anchors, and any applicable legal hold/retention metadata.
 
 ## Compatibility boundary
 

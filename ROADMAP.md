@@ -222,7 +222,7 @@ Make tenant and organization isolation an independently verifiable property rath
 
 ## v0.6.0 — Governance, retention, and lifecycle
 
-**Status:** Implemented in v0.6.0; release remains subject to the exact-candidate gates below.
+**Status:** Implemented in v0.6.0; v0.6.1 closes the post-release governance safety review findings while preserving the same schema-7 milestone boundary.
 
 ### Goal
 

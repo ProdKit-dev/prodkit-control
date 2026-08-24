@@ -307,6 +307,8 @@ export type GovernanceAuditEventType =
   | "change_rejected"
   | "change_applied"
   | "retention_evaluated"
+  | "retention_deletion_intent_recorded"
+  | "retention_deletion_cancelled"
   | "retention_deletion_executed"
   | "legal_hold_placed"
   | "legal_hold_released"
@@ -505,6 +507,9 @@ export interface EvidenceImportReceipt {
   readonly source_control_version: string;
   readonly source_schema_version: number;
   readonly archive_sha256: string;
+  readonly verification_id: string;
+  readonly verification_sha256: string;
+  readonly trust_anchor_sha256: string;
   readonly verified: true;
 }
 
@@ -520,7 +525,7 @@ export interface EvidenceTransferVerification {
   readonly package_sha256: string;
   readonly bundle_manifest_sha256: string;
   readonly trust_anchor_sha256: string;
-  readonly verified_offline: boolean;
+  readonly verified_offline: true;
 }
 
 export interface MigrationPath {
