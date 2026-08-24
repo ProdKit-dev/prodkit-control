@@ -125,13 +125,30 @@ CREATE TABLE IF NOT EXISTS recovery_uncertain_executions (
   document JSONB NOT NULL,
   CONSTRAINT fk_recovery_uncertain_restore
     FOREIGN KEY (tenant_id, restore_id)
-    REFERENCES recovery_restore_plans (tenant_id, restore_id)
+    REFERENCES recovery_restore_plans (tenant_id, restore_id),
+  CONSTRAINT uq_recovery_uncertain_attempt UNIQUE (tenant_id, restore_id, attempt_id)
 );
 
 CREATE INDEX IF NOT EXISTS ix_recovery_uncertain_restore
   ON recovery_uncertain_executions (tenant_id, restore_id, observed_at, recovery_id);
 CREATE INDEX IF NOT EXISTS ix_recovery_uncertain_attempt
   ON recovery_uncertain_executions (tenant_id, attempt_id, observed_at DESC);
+
+CREATE TABLE IF NOT EXISTS recovery_gap_reconciliations (
+  reconciliation_id UUID PRIMARY KEY,
+  tenant_id VARCHAR(255) NOT NULL,
+  restore_id UUID NOT NULL,
+  completed_at TIMESTAMPTZ NOT NULL,
+  unresolved_effect_count INTEGER NOT NULL CHECK (unresolved_effect_count >= 0),
+  document JSONB NOT NULL,
+  CONSTRAINT fk_recovery_gap_restore
+    FOREIGN KEY (tenant_id, restore_id)
+    REFERENCES recovery_restore_plans (tenant_id, restore_id),
+  CONSTRAINT uq_recovery_gap_restore UNIQUE (tenant_id, restore_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_recovery_gap_tenant_completed
+  ON recovery_gap_reconciliations (tenant_id, completed_at DESC, reconciliation_id);
 
 CREATE TABLE IF NOT EXISTS recovery_restore_results (
   tenant_id VARCHAR(255) NOT NULL,
@@ -228,6 +245,11 @@ FOR EACH ROW EXECUTE FUNCTION prodkit_recovery_reject_mutation();
 DROP TRIGGER IF EXISTS trg_recovery_uncertain_append_only_v8 ON recovery_uncertain_executions;
 CREATE TRIGGER trg_recovery_uncertain_append_only_v8
 BEFORE UPDATE OR DELETE ON recovery_uncertain_executions
+FOR EACH ROW EXECUTE FUNCTION prodkit_recovery_reject_mutation();
+
+DROP TRIGGER IF EXISTS trg_recovery_gap_append_only_v8 ON recovery_gap_reconciliations;
+CREATE TRIGGER trg_recovery_gap_append_only_v8
+BEFORE UPDATE OR DELETE ON recovery_gap_reconciliations
 FOR EACH ROW EXECUTE FUNCTION prodkit_recovery_reject_mutation();
 
 DROP TRIGGER IF EXISTS trg_recovery_result_append_only_v8 ON recovery_restore_results;
