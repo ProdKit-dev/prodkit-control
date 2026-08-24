@@ -1,0 +1,47 @@
+{
+  "$defs": {
+    "RecoveryComponent": {
+      "enum": [
+        "ledger",
+        "lineage",
+        "configuration",
+        "artifact_metadata",
+        "object_store",
+        "idempotency",
+        "execution_attempts",
+        "governance"
+      ],
+      "title": "RecoveryComponent",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "component": {
+      "$ref": "#/$defs/RecoveryComponent"
+    },
+    "observed_at": {
+      "format": "date-time",
+      "title": "Observed At",
+      "type": "string"
+    },
+    "reference": {
+      "minLength": 1,
+      "title": "Reference",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "component",
+    "reference",
+    "sha256",
+    "observed_at"
+  ],
+  "title": "RestoredComponentObservation",
+  "type": "object"
+}

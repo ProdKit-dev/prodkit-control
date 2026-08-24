@@ -1,0 +1,183 @@
+{
+  "$defs": {
+    "ActorKind": {
+      "enum": [
+        "human",
+        "agent",
+        "service",
+        "workflow",
+        "executor"
+      ],
+      "title": "ActorKind",
+      "type": "string"
+    },
+    "ActorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Attributes",
+          "type": "object"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ActorKind"
+        },
+        "tenant_id": {
+          "minLength": 1,
+          "title": "Tenant Id",
+          "type": "string"
+        },
+        "workload_identity": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workload Identity"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "tenant_id"
+      ],
+      "title": "ActorRef",
+      "type": "object"
+    },
+    "RecoveryComponent": {
+      "enum": [
+        "ledger",
+        "lineage",
+        "configuration",
+        "artifact_metadata",
+        "object_store",
+        "idempotency",
+        "execution_attempts",
+        "governance"
+      ],
+      "title": "RecoveryComponent",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "backup_interval_seconds": {
+      "exclusiveMinimum": 0,
+      "title": "Backup Interval Seconds",
+      "type": "integer"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "created_by": {
+      "$ref": "#/$defs/ActorRef"
+    },
+    "effective_at": {
+      "format": "date-time",
+      "title": "Effective At",
+      "type": "string"
+    },
+    "max_backup_age_seconds": {
+      "exclusiveMinimum": 0,
+      "title": "Max Backup Age Seconds",
+      "type": "integer"
+    },
+    "max_break_glass_seconds": {
+      "default": 900,
+      "maximum": 3600,
+      "minimum": 60,
+      "title": "Max Break Glass Seconds",
+      "type": "integer"
+    },
+    "profile_id": {
+      "minLength": 1,
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "required_components": {
+      "items": {
+        "$ref": "#/$defs/RecoveryComponent"
+      },
+      "title": "Required Components",
+      "type": "array"
+    },
+    "restore_exercise_interval_seconds": {
+      "exclusiveMinimum": 0,
+      "title": "Restore Exercise Interval Seconds",
+      "type": "integer"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "rpo_seconds": {
+      "minimum": 0,
+      "title": "Rpo Seconds",
+      "type": "integer"
+    },
+    "rto_seconds": {
+      "exclusiveMinimum": 0,
+      "title": "Rto Seconds",
+      "type": "integer"
+    },
+    "schema_name": {
+      "default": "prodkit.reliability-profile",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "tenant_id": {
+      "minLength": 1,
+      "title": "Tenant Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "profile_id",
+    "tenant_id",
+    "revision",
+    "rpo_seconds",
+    "rto_seconds",
+    "backup_interval_seconds",
+    "max_backup_age_seconds",
+    "restore_exercise_interval_seconds",
+    "required_components",
+    "effective_at",
+    "created_at",
+    "created_by"
+  ],
+  "title": "ReliabilityProfile",
+  "type": "object"
+}

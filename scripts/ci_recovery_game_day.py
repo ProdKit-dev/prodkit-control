@@ -59,7 +59,9 @@ class _ProviderResolver:
         restore_id: UUID,
     ) -> UncertainExecutionRecovery:
         if attempt.provider_operation_id is None:
-            raise AssertionError("game-day uncertain attempt must retain provider operation identity")
+            raise AssertionError(
+                "game-day uncertain attempt must retain provider operation identity"
+            )
         return UncertainExecutionRecovery(
             recovery_id=uuid4(),
             restore_id=restore_id,
@@ -87,9 +89,10 @@ async def main() -> None:
     operator = _context(tenant_id, "dr-operator", TenantCapability.READ)
     started = datetime.now(UTC)
 
-    with tempfile.TemporaryDirectory(prefix="prodkit-dr-source-") as source_tmp, tempfile.TemporaryDirectory(
-        prefix="prodkit-dr-target-"
-    ) as target_tmp:
+    with (
+        tempfile.TemporaryDirectory(prefix="prodkit-dr-source-") as source_tmp,
+        tempfile.TemporaryDirectory(prefix="prodkit-dr-target-") as target_tmp,
+    ):
         source = Path(source_tmp)
         target = Path(target_tmp)
         component_records: list[BackupComponentRecord] = []
@@ -183,9 +186,7 @@ async def main() -> None:
             RestoredComponentObservation(
                 component=component_record.component,
                 reference=f"file://{Path(component_record.reference).name}",
-                sha256=_sha256(
-                    target / Path(component_record.reference.removeprefix("file://"))
-                ),
+                sha256=_sha256(target / Path(component_record.reference.removeprefix("file://"))),
                 observed_at=datetime.now(UTC),
             )
             for component_record in component_records
@@ -194,12 +195,14 @@ async def main() -> None:
             context=operator,
             restore_id=plan.restore_id,
             observations=observations,
-            ledger_chain_tip_sha256=_sha256(
-                target / f"{RecoveryComponent.LEDGER.value}.snapshot"
-            ),
+            ledger_chain_tip_sha256=_sha256(target / f"{RecoveryComponent.LEDGER.value}.snapshot"),
             trust_anchor_sha256=hashlib.sha256(independent_anchor_path.read_bytes()).hexdigest(),
         )
-        if not scan.chain_verified or not scan.trust_anchor_verified or not scan.object_store_verified:
+        if (
+            not scan.chain_verified
+            or not scan.trust_anchor_verified
+            or not scan.object_store_verified
+        ):
             raise AssertionError("restored assurance state did not verify")
 
         uncertain_at = started - timedelta(seconds=5)

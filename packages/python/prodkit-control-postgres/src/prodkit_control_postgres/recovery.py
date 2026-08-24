@@ -40,7 +40,9 @@ class PostgresRecoveryStore:
         async with self._sessions.begin() as session:
             await self._tenant_lock(session, profile.tenant_id)
             current_revision = await session.scalar(
-                text("SELECT COALESCE(MAX(revision), 0) FROM recovery_profiles WHERE tenant_id = :tenant_id"),
+                text(
+                    "SELECT COALESCE(MAX(revision), 0) FROM recovery_profiles WHERE tenant_id = :tenant_id"
+                ),
                 {"tenant_id": profile.tenant_id},
             )
             expected = int(current_revision or 0) + 1

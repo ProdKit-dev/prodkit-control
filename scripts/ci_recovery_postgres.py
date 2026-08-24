@@ -282,7 +282,9 @@ async def _qualify_append_only() -> None:
             except asyncpg.RaiseError:
                 pass
             else:
-                raise AssertionError(f"recovery evidence mutation unexpectedly succeeded: {statement}")
+                raise AssertionError(
+                    f"recovery evidence mutation unexpectedly succeeded: {statement}"
+                )
     finally:
         await connection.close()
 

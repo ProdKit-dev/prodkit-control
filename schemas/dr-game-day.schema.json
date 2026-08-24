@@ -1,0 +1,119 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "achieved_rpo_seconds": {
+      "minimum": 0,
+      "title": "Achieved Rpo Seconds",
+      "type": "number"
+    },
+    "achieved_rto_seconds": {
+      "minimum": 0,
+      "title": "Achieved Rto Seconds",
+      "type": "number"
+    },
+    "backup_id": {
+      "format": "uuid",
+      "title": "Backup Id",
+      "type": "string"
+    },
+    "blind_replay_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Blind Replay Count",
+      "type": "integer"
+    },
+    "chain_verified": {
+      "title": "Chain Verified",
+      "type": "boolean"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "title": "Completed At",
+      "type": "string"
+    },
+    "exercise_id": {
+      "format": "uuid",
+      "title": "Exercise Id",
+      "type": "string"
+    },
+    "notes": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
+    },
+    "passed": {
+      "title": "Passed",
+      "type": "boolean"
+    },
+    "profile_id": {
+      "minLength": 1,
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "profile_revision": {
+      "minimum": 1,
+      "title": "Profile Revision",
+      "type": "integer"
+    },
+    "restore_id": {
+      "format": "uuid",
+      "title": "Restore Id",
+      "type": "string"
+    },
+    "schema_name": {
+      "default": "prodkit.dr-game-day",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "simulated_site_failure": {
+      "title": "Simulated Site Failure",
+      "type": "boolean"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "tenant_id": {
+      "minLength": 1,
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "trust_anchor_verified": {
+      "title": "Trust Anchor Verified",
+      "type": "boolean"
+    },
+    "uncertain_actions_reconciled": {
+      "title": "Uncertain Actions Reconciled",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "exercise_id",
+    "tenant_id",
+    "profile_id",
+    "profile_revision",
+    "backup_id",
+    "restore_id",
+    "started_at",
+    "completed_at",
+    "simulated_site_failure",
+    "achieved_rpo_seconds",
+    "achieved_rto_seconds",
+    "chain_verified",
+    "trust_anchor_verified",
+    "uncertain_actions_reconciled",
+    "passed"
+  ],
+  "title": "GameDayExercise",
+  "type": "object"
+}

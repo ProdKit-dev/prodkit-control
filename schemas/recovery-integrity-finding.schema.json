@@ -1,0 +1,88 @@
+{
+  "$defs": {
+    "RecoveryComponent": {
+      "enum": [
+        "ledger",
+        "lineage",
+        "configuration",
+        "artifact_metadata",
+        "object_store",
+        "idempotency",
+        "execution_attempts",
+        "governance"
+      ],
+      "title": "RecoveryComponent",
+      "type": "string"
+    },
+    "RecoveryFindingSeverity": {
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical"
+      ],
+      "title": "RecoveryFindingSeverity",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "component": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RecoveryComponent"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "expected_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Sha256"
+    },
+    "observed_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Observed Sha256"
+    },
+    "reference": {
+      "minLength": 1,
+      "title": "Reference",
+      "type": "string"
+    },
+    "severity": {
+      "$ref": "#/$defs/RecoveryFindingSeverity"
+    },
+    "summary": {
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    }
+  },
+  "required": [
+    "severity",
+    "reference",
+    "summary"
+  ],
+  "title": "RecoveryIntegrityFinding",
+  "type": "object"
+}

@@ -208,8 +208,14 @@ class IntegrityScanResult(ContractModel):
             for finding in self.findings
         )
         if self.status is RecoveryIntegrityStatus.VERIFIED:
-            if not self.chain_verified or not self.trust_anchor_verified or not self.object_store_verified:
-                raise ValueError("verified recovery requires chain, trust-anchor, and object-store proof")
+            if (
+                not self.chain_verified
+                or not self.trust_anchor_verified
+                or not self.object_store_verified
+            ):
+                raise ValueError(
+                    "verified recovery requires chain, trust-anchor, and object-store proof"
+                )
             if severe:
                 raise ValueError("verified recovery cannot contain error or critical findings")
         return self
@@ -236,11 +242,17 @@ class UncertainExecutionRecovery(ContractModel):
         if self.original_state is not ExecutionAttemptState.UNCERTAIN:
             raise ValueError("recovery records apply only to uncertain execution attempts")
         if self.replay_permitted:
-            raise ValueError("disaster recovery never authorizes blind replay of an uncertain action")
-        if self.disposition in {
-            UncertainRecoveryDisposition.MATCHED_SUCCESS,
-            UncertainRecoveryDisposition.MATCHED_FAILURE,
-        } and self.evidence_reference is None:
+            raise ValueError(
+                "disaster recovery never authorizes blind replay of an uncertain action"
+            )
+        if (
+            self.disposition
+            in {
+                UncertainRecoveryDisposition.MATCHED_SUCCESS,
+                UncertainRecoveryDisposition.MATCHED_FAILURE,
+            }
+            and self.evidence_reference is None
+        ):
             raise ValueError("resolved uncertain outcomes require evidence_reference")
         return self
 
@@ -299,7 +311,10 @@ class BreakGlassGrant(ContractModel):
 
     @model_validator(mode="after")
     def validate_grant(self) -> BreakGlassGrant:
-        if self.operator.tenant_id != self.tenant_id or self.approved_by.tenant_id != self.tenant_id:
+        if (
+            self.operator.tenant_id != self.tenant_id
+            or self.approved_by.tenant_id != self.tenant_id
+        ):
             raise ValueError("break-glass actors must belong to the tenant")
         if self.operator.kind == self.approved_by.kind and self.operator.id == self.approved_by.id:
             raise ValueError("break-glass use requires an independent approver")

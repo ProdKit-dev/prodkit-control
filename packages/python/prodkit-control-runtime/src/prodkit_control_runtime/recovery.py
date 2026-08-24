@@ -6,6 +6,7 @@ from typing import Protocol
 from uuid import UUID, uuid4
 
 from prodkit_control_core import (
+    ActorRef,
     AuthorizationDeniedError,
     BackupManifest,
     BreakGlassCapability,
@@ -177,7 +178,9 @@ class InMemoryRecoveryStore:
             history = self._profiles.setdefault(context.tenant_id, [])
             expected_revision = 1 if not history else history[-1].revision + 1
             if profile.revision != expected_revision:
-                raise ValueError(f"reliability profile revision must advance to {expected_revision}")
+                raise ValueError(
+                    f"reliability profile revision must advance to {expected_revision}"
+                )
             history.append(profile)
             self._append_audit(
                 RecoveryAuditEvent(
@@ -193,9 +196,7 @@ class InMemoryRecoveryStore:
             )
             return profile
 
-    async def current_profile(
-        self, *, context: TenantAccessContext
-    ) -> ReliabilityProfile | None:
+    async def current_profile(self, *, context: TenantAccessContext) -> ReliabilityProfile | None:
         self._require(context, TenantCapability.READ)
         async with self._lock:
             history = self._profiles.get(context.tenant_id, [])
@@ -269,17 +270,13 @@ class InMemoryRecoveryStore:
         self,
         *,
         context: TenantAccessContext,
-        operator: object,
+        operator: ActorRef,
         capabilities: tuple[BreakGlassCapability, ...],
         reason: str,
         ticket_reference: str,
         ttl_seconds: int,
     ) -> BreakGlassGrant:
-        from prodkit_control_core import ActorRef
-
         self._require_tenant(context, TenantCapability.APPROVE)
-        if not isinstance(operator, ActorRef):
-            raise TypeError("operator must be ActorRef")
         profile = await self.current_profile(context=context)
         if profile is None:
             raise RuntimeError("reliability profile is not configured")
@@ -653,9 +650,7 @@ class InMemoryRecoveryStore:
             )
             return exercise
 
-    async def audit_events(
-        self, *, context: TenantAccessContext
-    ) -> tuple[RecoveryAuditEvent, ...]:
+    async def audit_events(self, *, context: TenantAccessContext) -> tuple[RecoveryAuditEvent, ...]:
         self._require(context, TenantCapability.READ)
         async with self._lock:
             return tuple(self._audit.get(context.tenant_id, ()))

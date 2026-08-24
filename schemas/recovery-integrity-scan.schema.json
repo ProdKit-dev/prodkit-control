@@ -1,0 +1,174 @@
+{
+  "$defs": {
+    "RecoveryComponent": {
+      "enum": [
+        "ledger",
+        "lineage",
+        "configuration",
+        "artifact_metadata",
+        "object_store",
+        "idempotency",
+        "execution_attempts",
+        "governance"
+      ],
+      "title": "RecoveryComponent",
+      "type": "string"
+    },
+    "RecoveryFindingSeverity": {
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical"
+      ],
+      "title": "RecoveryFindingSeverity",
+      "type": "string"
+    },
+    "RecoveryIntegrityFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "component": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RecoveryComponent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "expected_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Sha256"
+        },
+        "observed_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed Sha256"
+        },
+        "reference": {
+          "minLength": 1,
+          "title": "Reference",
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/RecoveryFindingSeverity"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "severity",
+        "reference",
+        "summary"
+      ],
+      "title": "RecoveryIntegrityFinding",
+      "type": "object"
+    },
+    "RecoveryIntegrityStatus": {
+      "enum": [
+        "verified",
+        "failed"
+      ],
+      "title": "RecoveryIntegrityStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "chain_verified": {
+      "title": "Chain Verified",
+      "type": "boolean"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "title": "Completed At",
+      "type": "string"
+    },
+    "components_verified": {
+      "items": {
+        "$ref": "#/$defs/RecoveryComponent"
+      },
+      "title": "Components Verified",
+      "type": "array"
+    },
+    "findings": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/RecoveryIntegrityFinding"
+      },
+      "title": "Findings",
+      "type": "array"
+    },
+    "object_store_verified": {
+      "title": "Object Store Verified",
+      "type": "boolean"
+    },
+    "restore_id": {
+      "format": "uuid",
+      "title": "Restore Id",
+      "type": "string"
+    },
+    "scan_id": {
+      "format": "uuid",
+      "title": "Scan Id",
+      "type": "string"
+    },
+    "schema_name": {
+      "default": "prodkit.recovery-integrity-scan",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/RecoveryIntegrityStatus"
+    },
+    "tenant_id": {
+      "minLength": 1,
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "trust_anchor_verified": {
+      "title": "Trust Anchor Verified",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "scan_id",
+    "restore_id",
+    "tenant_id",
+    "completed_at",
+    "status",
+    "chain_verified",
+    "trust_anchor_verified",
+    "object_store_verified",
+    "components_verified"
+  ],
+  "title": "IntegrityScanResult",
+  "type": "object"
+}

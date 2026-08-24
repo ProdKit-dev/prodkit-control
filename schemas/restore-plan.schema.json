@@ -1,0 +1,152 @@
+{
+  "$defs": {
+    "ActorKind": {
+      "enum": [
+        "human",
+        "agent",
+        "service",
+        "workflow",
+        "executor"
+      ],
+      "title": "ActorKind",
+      "type": "string"
+    },
+    "ActorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Attributes",
+          "type": "object"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ActorKind"
+        },
+        "tenant_id": {
+          "minLength": 1,
+          "title": "Tenant Id",
+          "type": "string"
+        },
+        "workload_identity": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workload Identity"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "tenant_id"
+      ],
+      "title": "ActorRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "backup_id": {
+      "format": "uuid",
+      "title": "Backup Id",
+      "type": "string"
+    },
+    "break_glass_grant_id": {
+      "format": "uuid",
+      "title": "Break Glass Grant Id",
+      "type": "string"
+    },
+    "profile_id": {
+      "minLength": 1,
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "profile_revision": {
+      "minimum": 1,
+      "title": "Profile Revision",
+      "type": "integer"
+    },
+    "prohibit_blind_replay": {
+      "default": true,
+      "title": "Prohibit Blind Replay",
+      "type": "boolean"
+    },
+    "reconcile_uncertain": {
+      "default": true,
+      "title": "Reconcile Uncertain",
+      "type": "boolean"
+    },
+    "requested_at": {
+      "format": "date-time",
+      "title": "Requested At",
+      "type": "string"
+    },
+    "requested_by": {
+      "$ref": "#/$defs/ActorRef"
+    },
+    "restore_id": {
+      "format": "uuid",
+      "title": "Restore Id",
+      "type": "string"
+    },
+    "schema_name": {
+      "default": "prodkit.restore-plan",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "target_site": {
+      "minLength": 1,
+      "title": "Target Site",
+      "type": "string"
+    },
+    "tenant_id": {
+      "minLength": 1,
+      "title": "Tenant Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "restore_id",
+    "tenant_id",
+    "profile_id",
+    "profile_revision",
+    "backup_id",
+    "target_site",
+    "requested_at",
+    "requested_by",
+    "break_glass_grant_id"
+  ],
+  "title": "RestorePlan",
+  "type": "object"
+}

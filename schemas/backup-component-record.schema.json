@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "RecoveryComponent": {
+      "enum": [
+        "ledger",
+        "lineage",
+        "configuration",
+        "artifact_metadata",
+        "object_store",
+        "idempotency",
+        "execution_attempts",
+        "governance"
+      ],
+      "title": "RecoveryComponent",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "captured_at": {
+      "format": "date-time",
+      "title": "Captured At",
+      "type": "string"
+    },
+    "component": {
+      "$ref": "#/$defs/RecoveryComponent"
+    },
+    "encrypted": {
+      "default": true,
+      "title": "Encrypted",
+      "type": "boolean"
+    },
+    "immutable": {
+      "default": true,
+      "title": "Immutable",
+      "type": "boolean"
+    },
+    "reference": {
+      "minLength": 1,
+      "title": "Reference",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    },
+    "size_bytes": {
+      "minimum": 0,
+      "title": "Size Bytes",
+      "type": "integer"
+    },
+    "source_site": {
+      "minLength": 1,
+      "title": "Source Site",
+      "type": "string"
+    }
+  },
+  "required": [
+    "component",
+    "reference",
+    "sha256",
+    "size_bytes",
+    "captured_at",
+    "source_site"
+  ],
+  "title": "BackupComponentRecord",
+  "type": "object"
+}
