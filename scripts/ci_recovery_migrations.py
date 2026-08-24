@@ -152,6 +152,7 @@ async def main() -> None:
             "recovery_restore_plans",
             "recovery_integrity_scans",
             "recovery_uncertain_executions",
+            "recovery_gap_reconciliations",
             "recovery_restore_results",
             "recovery_game_day_exercises",
             "recovery_audit_events",
@@ -183,6 +184,7 @@ async def main() -> None:
                     "to_schema_version": 8,
                     "qualified": True,
                     "assurance_state_preserved": True,
+                    "recovery_gap_barrier_available": True,
                 }
             ),
         )
