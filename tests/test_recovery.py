@@ -19,6 +19,7 @@ from prodkit_control_core import (
     ReliabilityProfile,
     RestoredComponentObservation,
     RestoreStatus,
+    SignedCheckpoint,
     TenantAccessContext,
     TenantCapability,
     TrustRootPolicy,
@@ -73,7 +74,7 @@ def _profile(tenant_id: str, actor: ActorRef, now: datetime) -> ReliabilityProfi
 
 def _assurance(
     tenant_id: str, now: datetime, ledger_chain_tip: str
-) -> tuple[object, TrustRootPolicy]:
+) -> tuple[SignedCheckpoint, TrustRootPolicy]:
     signer = Ed25519CheckpointSigner.generate(key_id="dr-key-2026q3", signer_id="dr-signer")
     trust = TrustRootPolicy(
         policy_id="dr-recovery-trust",
@@ -92,7 +93,9 @@ def _assurance(
     return checkpoint, trust
 
 
-def _manifest(tenant_id: str, now: datetime) -> tuple[BackupManifest, object, TrustRootPolicy]:
+def _manifest(
+    tenant_id: str, now: datetime
+) -> tuple[BackupManifest, SignedCheckpoint, TrustRootPolicy]:
     components = tuple(
         BackupComponentRecord(
             component=component,
