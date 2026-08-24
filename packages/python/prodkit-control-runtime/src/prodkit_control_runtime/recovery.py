@@ -16,10 +16,12 @@ from prodkit_control_core import (
     ExecutionAttemptState,
     GameDayExercise,
     IntegrityScanResult,
+    IntegrityViolationError,
     RecoveryAuditEvent,
     RecoveryAuditEventType,
     RecoveryComponent,
     RecoveryFindingSeverity,
+    RecoveryGapReconciliation,
     RecoveryIntegrityFinding,
     RecoveryIntegrityStatus,
     ReliabilityProfile,
@@ -27,12 +29,17 @@ from prodkit_control_core import (
     RestorePlan,
     RestoreResult,
     RestoreStatus,
+    SignedCheckpoint,
     TenantAccessContext,
     TenantAccessMode,
     TenantCapability,
+    TrustRootPolicy,
     UncertainExecutionRecovery,
     UncertainRecoveryDisposition,
+    sha256_hex,
 )
+
+from .attestations import OfflineAssuranceVerifier, checkpoint_sha256
 
 
 class UncertainAttemptResolver(Protocol):
@@ -45,7 +52,10 @@ class UncertainAttemptResolver(Protocol):
 
 
 class RecoveryIntegrityVerifier:
-    """Deterministically verifies restored recovery components and trusted anchors."""
+    """Verify restored bytes, chain state, signed checkpoint, and independent trust root."""
+
+    def __init__(self, assurance_verifier: OfflineAssuranceVerifier | None = None) -> None:
+        self._assurance = assurance_verifier or OfflineAssuranceVerifier()
 
     def verify(
         self,
@@ -54,7 +64,8 @@ class RecoveryIntegrityVerifier:
         restore_id: UUID,
         observations: tuple[RestoredComponentObservation, ...],
         ledger_chain_tip_sha256: str,
-        trust_anchor_sha256: str,
+        checkpoint: SignedCheckpoint,
+        trust_policy: TrustRootPolicy,
         completed_at: datetime | None = None,
     ) -> IntegrityScanResult:
         now = completed_at or datetime.now(UTC)
@@ -92,6 +103,17 @@ class RecoveryIntegrityVerifier:
                 continue
             verified.append(component)
 
+        for component in set(observed) - set(expected):
+            findings.append(
+                RecoveryIntegrityFinding(
+                    severity=RecoveryFindingSeverity.ERROR,
+                    component=component,
+                    reference=observed[component].reference,
+                    summary="restored component was not present in the canonical backup manifest",
+                    observed_sha256=observed[component].sha256,
+                )
+            )
+
         chain_verified = ledger_chain_tip_sha256 == manifest.ledger_chain_tip_sha256
         if not chain_verified:
             findings.append(
@@ -105,17 +127,64 @@ class RecoveryIntegrityVerifier:
                 )
             )
 
-        trust_anchor_verified = trust_anchor_sha256 == manifest.trust_anchor_sha256
+        trust_anchor_digest = sha256_hex(trust_policy)
+        trust_anchor_verified = trust_anchor_digest == manifest.trust_anchor_sha256
         if not trust_anchor_verified:
             findings.append(
                 RecoveryIntegrityFinding(
                     severity=RecoveryFindingSeverity.CRITICAL,
                     reference="trusted-anchor",
-                    summary="restored evidence does not verify against the independently retained anchor",
+                    summary="independent trust-root policy does not match the backup manifest anchor",
                     expected_sha256=manifest.trust_anchor_sha256,
-                    observed_sha256=trust_anchor_sha256,
+                    observed_sha256=trust_anchor_digest,
                 )
             )
+
+        checkpoint_digest = checkpoint_sha256(checkpoint)
+        checkpoint_verified = checkpoint_digest == manifest.trusted_checkpoint_sha256
+        if not checkpoint_verified:
+            findings.append(
+                RecoveryIntegrityFinding(
+                    severity=RecoveryFindingSeverity.CRITICAL,
+                    reference="signed-checkpoint",
+                    summary="restored signed checkpoint digest does not match the backup manifest",
+                    expected_sha256=manifest.trusted_checkpoint_sha256,
+                    observed_sha256=checkpoint_digest,
+                )
+            )
+        if checkpoint.tenant_id != manifest.tenant_id:
+            checkpoint_verified = False
+            findings.append(
+                RecoveryIntegrityFinding(
+                    severity=RecoveryFindingSeverity.CRITICAL,
+                    reference="signed-checkpoint-tenant",
+                    summary="restored signed checkpoint belongs to another tenant",
+                )
+            )
+        if checkpoint.final_event_hash != manifest.ledger_chain_tip_sha256:
+            checkpoint_verified = False
+            findings.append(
+                RecoveryIntegrityFinding(
+                    severity=RecoveryFindingSeverity.CRITICAL,
+                    component=RecoveryComponent.LEDGER,
+                    reference="signed-checkpoint-chain-tip",
+                    summary="signed checkpoint does not bind the restored ledger chain tip",
+                    expected_sha256=manifest.ledger_chain_tip_sha256,
+                    observed_sha256=checkpoint.final_event_hash,
+                )
+            )
+        if trust_anchor_verified and checkpoint_verified:
+            try:
+                self._assurance.verify_checkpoint(checkpoint, trust_policy=trust_policy)
+            except IntegrityViolationError as exc:
+                checkpoint_verified = False
+                findings.append(
+                    RecoveryIntegrityFinding(
+                        severity=RecoveryFindingSeverity.CRITICAL,
+                        reference="signed-checkpoint-signature",
+                        summary=f"signed checkpoint failed independent verification: {exc}",
+                    )
+                )
 
         object_store_expected = RecoveryComponent.OBJECT_STORE in expected
         object_store_verified = (
@@ -133,7 +202,11 @@ class RecoveryIntegrityVerifier:
 
         status = (
             RecoveryIntegrityStatus.VERIFIED
-            if not findings and chain_verified and trust_anchor_verified and object_store_verified
+            if not findings
+            and chain_verified
+            and checkpoint_verified
+            and trust_anchor_verified
+            and object_store_verified
             else RecoveryIntegrityStatus.FAILED
         )
         return IntegrityScanResult(
@@ -143,6 +216,7 @@ class RecoveryIntegrityVerifier:
             completed_at=now,
             status=status,
             chain_verified=chain_verified,
+            checkpoint_verified=checkpoint_verified,
             trust_anchor_verified=trust_anchor_verified,
             object_store_verified=object_store_verified,
             components_verified=tuple(verified),
@@ -151,7 +225,7 @@ class RecoveryIntegrityVerifier:
 
 
 class InMemoryRecoveryStore:
-    """Standalone v0.7 reliability, restore, break-glass, and DR evidence service."""
+    """Standalone recovery control profile; enterprise DR proof uses the durable PostgreSQL profile."""
 
     def __init__(self) -> None:
         self._profiles: dict[str, list[ReliabilityProfile]] = {}
@@ -159,6 +233,7 @@ class InMemoryRecoveryStore:
         self._plans: dict[tuple[str, UUID], RestorePlan] = {}
         self._scans: dict[tuple[str, UUID], IntegrityScanResult] = {}
         self._recoveries: dict[tuple[str, UUID], list[UncertainExecutionRecovery]] = {}
+        self._gaps: dict[tuple[str, UUID], RecoveryGapReconciliation] = {}
         self._results: dict[tuple[str, UUID], RestoreResult] = {}
         self._grants: dict[tuple[str, UUID], BreakGlassGrant] = {}
         self._grant_uses: dict[tuple[str, UUID], list[BreakGlassUse]] = {}
@@ -197,10 +272,10 @@ class InMemoryRecoveryStore:
             return profile
 
     async def current_profile(self, *, context: TenantAccessContext) -> ReliabilityProfile | None:
-        self._require(context, TenantCapability.READ)
+        self._require_tenant(context, TenantCapability.READ)
+        now = datetime.now(UTC)
         async with self._lock:
-            history = self._profiles.get(context.tenant_id, [])
-            return history[-1] if history else None
+            return self._profile_locked(context.tenant_id, now, required=False)
 
     async def record_backup(
         self, *, context: TenantAccessContext, manifest: BackupManifest
@@ -208,13 +283,17 @@ class InMemoryRecoveryStore:
         self._require_tenant(context, TenantCapability.WRITE)
         if manifest.tenant_id != context.tenant_id:
             raise AuthorizationDeniedError("backup manifest crossed tenant boundary")
+        now = datetime.now(UTC)
+        if manifest.created_at > now:
+            raise ValueError("backup manifest creation time cannot be in the future")
         async with self._lock:
-            profile = self._profile_locked(context.tenant_id)
+            profile = self._profile_locked(context.tenant_id, now)
+            assert profile is not None
             if (manifest.profile_id, manifest.profile_revision) != (
                 profile.profile_id,
                 profile.revision,
             ):
-                raise ValueError("backup manifest does not target the current reliability profile")
+                raise ValueError("backup manifest does not target the active reliability profile")
             component_set = {item.component for item in manifest.components}
             missing = set(profile.required_components) - component_set
             if missing:
@@ -222,8 +301,8 @@ class InMemoryRecoveryStore:
                     "backup is missing required components: "
                     + ", ".join(sorted(item.value for item in missing))
                 )
-            recovery_age = (manifest.created_at - manifest.recovery_point_at).total_seconds()
-            if recovery_age > profile.rpo_seconds:
+            recovery_age = (now - manifest.recovery_point_at).total_seconds()
+            if recovery_age < 0 or recovery_age > profile.rpo_seconds:
                 raise ValueError("backup recovery point exceeds the declared RPO")
             key = (context.tenant_id, manifest.backup_id)
             existing = self._backups.get(key)
@@ -236,7 +315,7 @@ class InMemoryRecoveryStore:
                     tenant_id=context.tenant_id,
                     event_type=RecoveryAuditEventType.BACKUP_RECORDED,
                     actor=context.actor,
-                    occurred_at=manifest.created_at,
+                    occurred_at=now,
                     target_id=str(manifest.backup_id),
                     reason="record recovery backup",
                     attributes={"snapshot_set_id": manifest.snapshot_set_id},
@@ -244,24 +323,25 @@ class InMemoryRecoveryStore:
             )
             return manifest
 
-    async def latest_usable_backup(
-        self, *, context: TenantAccessContext, at: datetime | None = None
-    ) -> BackupManifest | None:
-        self._require(context, TenantCapability.READ)
-        now = at or datetime.now(UTC)
+    async def latest_usable_backup(self, *, context: TenantAccessContext) -> BackupManifest | None:
+        self._require_tenant(context, TenantCapability.READ)
+        now = datetime.now(UTC)
         async with self._lock:
-            profile = self._profile_locked(context.tenant_id)
+            profile = self._profile_locked(context.tenant_id, now)
+            assert profile is not None
             backups = sorted(
                 (
                     item
                     for (tenant_id, _), item in self._backups.items()
                     if tenant_id == context.tenant_id
+                    and (item.profile_id, item.profile_revision)
+                    == (profile.profile_id, profile.revision)
                 ),
                 key=lambda item: item.recovery_point_at,
                 reverse=True,
             )
             for backup in backups:
-                age = (now - backup.created_at).total_seconds()
+                age = (now - backup.recovery_point_at).total_seconds()
                 if 0 <= age <= profile.max_backup_age_seconds:
                     return backup
             return None
@@ -277,24 +357,23 @@ class InMemoryRecoveryStore:
         ttl_seconds: int,
     ) -> BreakGlassGrant:
         self._require_tenant(context, TenantCapability.APPROVE)
-        profile = await self.current_profile(context=context)
-        if profile is None:
-            raise RuntimeError("reliability profile is not configured")
-        if ttl_seconds < 1 or ttl_seconds > profile.max_break_glass_seconds:
-            raise ValueError("break-glass TTL exceeds the reliability profile")
         now = datetime.now(UTC)
-        grant = BreakGlassGrant(
-            grant_id=uuid4(),
-            tenant_id=context.tenant_id,
-            operator=operator,
-            approved_by=context.actor,
-            capabilities=capabilities,
-            reason=reason,
-            ticket_reference=ticket_reference,
-            issued_at=now,
-            expires_at=now + timedelta(seconds=ttl_seconds),
-        )
         async with self._lock:
+            profile = self._profile_locked(context.tenant_id, now)
+            assert profile is not None
+            if ttl_seconds < 60 or ttl_seconds > profile.max_break_glass_seconds:
+                raise ValueError("break-glass TTL is outside the reliability profile")
+            grant = BreakGlassGrant(
+                grant_id=uuid4(),
+                tenant_id=context.tenant_id,
+                operator=operator,
+                approved_by=context.actor,
+                capabilities=capabilities,
+                reason=reason,
+                ticket_reference=ticket_reference,
+                issued_at=now,
+                expires_at=now + timedelta(seconds=ttl_seconds),
+            )
             self._grants[(context.tenant_id, grant.grant_id)] = grant
             self._append_audit(
                 RecoveryAuditEvent(
@@ -309,7 +388,7 @@ class InMemoryRecoveryStore:
                     attributes={"operator": operator.id},
                 )
             )
-        return grant
+            return grant
 
     async def revoke_break_glass(
         self, *, context: TenantAccessContext, grant_id: UUID, reason: str
@@ -340,6 +419,7 @@ class InMemoryRecoveryStore:
         capability: BreakGlassCapability,
         purpose: str,
     ) -> BreakGlassUse:
+        self._require_tenant_mode(context)
         now = datetime.now(UTC)
         async with self._lock:
             grant = self._grant_locked(context.tenant_id, grant_id)
@@ -395,7 +475,13 @@ class InMemoryRecoveryStore:
             backup = self._backups.get((context.tenant_id, backup_id))
             if backup is None:
                 raise KeyError(backup_id)
-            profile = self._profile_locked(context.tenant_id)
+            profile = self._profile_locked(context.tenant_id, now)
+            assert profile is not None
+            if (backup.profile_id, backup.profile_revision) != (
+                profile.profile_id,
+                profile.revision,
+            ):
+                raise ValueError("restore backup does not target the active reliability profile")
             plan = RestorePlan(
                 restore_id=uuid4(),
                 tenant_id=context.tenant_id,
@@ -403,6 +489,7 @@ class InMemoryRecoveryStore:
                 profile_revision=profile.revision,
                 backup_id=backup_id,
                 target_site=target_site,
+                failure_detected_at=now,
                 requested_at=now,
                 requested_by=context.actor,
                 break_glass_grant_id=grant_id,
@@ -429,7 +516,8 @@ class InMemoryRecoveryStore:
         restore_id: UUID,
         observations: tuple[RestoredComponentObservation, ...],
         ledger_chain_tip_sha256: str,
-        trust_anchor_sha256: str,
+        checkpoint: SignedCheckpoint,
+        trust_policy: TrustRootPolicy,
     ) -> IntegrityScanResult:
         async with self._lock:
             plan = self._plan_locked(context.tenant_id, restore_id)
@@ -445,7 +533,8 @@ class InMemoryRecoveryStore:
             restore_id=restore_id,
             observations=observations,
             ledger_chain_tip_sha256=ledger_chain_tip_sha256,
-            trust_anchor_sha256=trust_anchor_sha256,
+            checkpoint=checkpoint,
+            trust_policy=trust_policy,
         )
         async with self._lock:
             self._scans[(context.tenant_id, scan.scan_id)] = scan
@@ -479,6 +568,9 @@ class InMemoryRecoveryStore:
             capability=BreakGlassCapability.RECONCILE,
             purpose=f"reconcile uncertain execution after restore {restore_id}",
         )
+        identities = [attempt.attempt_id for attempt in attempts]
+        if len(identities) != len(set(identities)):
+            raise ValueError("uncertain recovery candidates must have unique attempt identities")
         records: list[UncertainExecutionRecovery] = []
         for attempt in attempts:
             if attempt.tenant_id != context.tenant_id:
@@ -514,22 +606,89 @@ class InMemoryRecoveryStore:
                 )
         return tuple(records)
 
+    async def record_recovery_gap(
+        self,
+        *,
+        context: TenantAccessContext,
+        restore_id: UUID,
+        source_references: tuple[str, ...],
+        unexpected_effect_count: int,
+        unresolved_effect_count: int,
+        evidence_reference: str,
+    ) -> RecoveryGapReconciliation:
+        async with self._lock:
+            plan = self._plan_locked(context.tenant_id, restore_id)
+            backup = self._backups[(context.tenant_id, plan.backup_id)]
+        await self.use_break_glass(
+            context=context,
+            grant_id=plan.break_glass_grant_id,
+            capability=BreakGlassCapability.RECONCILE,
+            purpose=f"reconcile RPO recovery gap for {restore_id}",
+        )
+        now = datetime.now(UTC)
+        record = RecoveryGapReconciliation(
+            reconciliation_id=uuid4(),
+            restore_id=restore_id,
+            tenant_id=context.tenant_id,
+            recovery_point_at=backup.recovery_point_at,
+            failure_detected_at=plan.failure_detected_at,
+            completed_at=now,
+            source_references=source_references,
+            unexpected_effect_count=unexpected_effect_count,
+            unresolved_effect_count=unresolved_effect_count,
+            evidence_reference=evidence_reference,
+        )
+        async with self._lock:
+            key = (context.tenant_id, restore_id)
+            existing = self._gaps.get(key)
+            if existing is not None:
+                if existing != record:
+                    raise ValueError("recovery-gap reconciliation is immutable once recorded")
+                return existing
+            self._gaps[key] = record
+            self._append_audit(
+                RecoveryAuditEvent(
+                    event_id=uuid4(),
+                    tenant_id=context.tenant_id,
+                    event_type=RecoveryAuditEventType.RECOVERY_GAP_RECONCILED,
+                    actor=context.actor,
+                    occurred_at=now,
+                    target_id=str(restore_id),
+                    reason="reconcile effects across the backup RPO gap",
+                    attributes={
+                        "unexpected_effect_count": str(unexpected_effect_count),
+                        "unresolved_effect_count": str(unresolved_effect_count),
+                    },
+                )
+            )
+            return record
+
     async def complete_restore(
         self,
         *,
         context: TenantAccessContext,
         restore_id: UUID,
         scan_id: UUID,
-        started_at: datetime,
     ) -> RestoreResult:
-        now = datetime.now(UTC)
         async with self._lock:
             plan = self._plan_locked(context.tenant_id, restore_id)
+        await self.use_break_glass(
+            context=context,
+            grant_id=plan.break_glass_grant_id,
+            capability=BreakGlassCapability.FAILOVER,
+            purpose=f"authorize promotion of verified restore {restore_id}",
+        )
+        now = datetime.now(UTC)
+        async with self._lock:
             backup = self._backups[(context.tenant_id, plan.backup_id)]
-            profile = self._profile_locked(context.tenant_id)
+            profile = self._profile_locked(context.tenant_id, now)
+            assert profile is not None
             scan = self._scans.get((context.tenant_id, scan_id))
             if scan is None or scan.restore_id != restore_id:
                 raise ValueError("restore requires an integrity scan for the same restore")
+            gap = self._gaps.get((context.tenant_id, restore_id))
+            if gap is None:
+                raise ValueError("restore requires reconciliation of the RPO recovery gap")
             recoveries = tuple(self._recoveries.get((context.tenant_id, restore_id), []))
             unresolved = any(
                 record.disposition
@@ -539,11 +698,15 @@ class InMemoryRecoveryStore:
                 }
                 for record in recoveries
             )
-            actual_rpo = max(0.0, (plan.requested_at - backup.recovery_point_at).total_seconds())
-            actual_rto = max(0.0, (now - started_at).total_seconds())
+            gap_reconciled = gap.unresolved_effect_count == 0
+            actual_rpo = max(
+                0.0,
+                (plan.failure_detected_at - backup.recovery_point_at).total_seconds(),
+            )
+            actual_rto = max(0.0, (now - plan.failure_detected_at).total_seconds())
             integrity_ok = scan.status is RecoveryIntegrityStatus.VERIFIED
             targets_met = actual_rpo <= profile.rpo_seconds and actual_rto <= profile.rto_seconds
-            if integrity_ok and not unresolved and targets_met:
+            if integrity_ok and not unresolved and gap_reconciled and targets_met:
                 status = RestoreStatus.VERIFIED
                 promoted = True
             elif integrity_ok:
@@ -556,12 +719,14 @@ class InMemoryRecoveryStore:
                 restore_id=restore_id,
                 tenant_id=context.tenant_id,
                 backup_id=backup.backup_id,
-                started_at=started_at,
+                started_at=plan.failure_detected_at,
                 completed_at=now,
                 status=status,
                 actual_rpo_seconds=actual_rpo,
                 actual_rto_seconds=actual_rto,
                 integrity_scan_id=scan_id,
+                recovery_gap_reconciliation_id=gap.reconciliation_id,
+                recovery_gap_reconciled=gap_reconciled,
                 uncertain_recoveries=recoveries,
                 promoted=promoted,
                 completed_by=context.actor,
@@ -580,6 +745,7 @@ class InMemoryRecoveryStore:
                         "status": status.value,
                         "actual_rpo_seconds": str(actual_rpo),
                         "actual_rto_seconds": str(actual_rto),
+                        "recovery_gap_reconciled": str(gap_reconciled).lower(),
                     },
                 )
             )
@@ -590,15 +756,16 @@ class InMemoryRecoveryStore:
         *,
         context: TenantAccessContext,
         result: RestoreResult,
-        started_at: datetime,
         simulated_site_failure: bool,
         notes: tuple[str, ...] = (),
     ) -> GameDayExercise:
         self._require_tenant(context, TenantCapability.CONFIGURE)
         if result.tenant_id != context.tenant_id:
             raise AuthorizationDeniedError("game-day result crossed tenant boundary")
+        now = datetime.now(UTC)
         async with self._lock:
-            profile = self._profile_locked(context.tenant_id)
+            profile = self._profile_locked(context.tenant_id, now)
+            assert profile is not None
             scan = self._scans[(context.tenant_id, result.integrity_scan_id)]
             unresolved = any(
                 record.disposition
@@ -608,14 +775,7 @@ class InMemoryRecoveryStore:
                 }
                 for record in result.uncertain_recoveries
             )
-            passed = (
-                result.status is RestoreStatus.VERIFIED
-                and result.actual_rpo_seconds <= profile.rpo_seconds
-                and result.actual_rto_seconds <= profile.rto_seconds
-                and scan.chain_verified
-                and scan.trust_anchor_verified
-                and not unresolved
-            )
+            passed = False
             exercise = GameDayExercise(
                 exercise_id=uuid4(),
                 tenant_id=context.tenant_id,
@@ -623,14 +783,18 @@ class InMemoryRecoveryStore:
                 profile_revision=profile.revision,
                 backup_id=result.backup_id,
                 restore_id=result.restore_id,
-                started_at=started_at,
-                completed_at=datetime.now(UTC),
+                started_at=result.started_at,
+                completed_at=now,
                 simulated_site_failure=simulated_site_failure,
                 achieved_rpo_seconds=result.actual_rpo_seconds,
                 achieved_rto_seconds=result.actual_rto_seconds,
                 chain_verified=scan.chain_verified,
+                checkpoint_verified=scan.checkpoint_verified,
                 trust_anchor_verified=scan.trust_anchor_verified,
+                object_store_verified=scan.object_store_verified,
                 uncertain_actions_reconciled=not unresolved,
+                recovery_gap_reconciled=result.recovery_gap_reconciled,
+                durable_catalog_verified=False,
                 blind_replay_count=0,
                 passed=passed,
                 notes=notes,
@@ -644,22 +808,28 @@ class InMemoryRecoveryStore:
                     actor=context.actor,
                     occurred_at=exercise.completed_at,
                     target_id=str(exercise.exercise_id),
-                    reason="record disaster recovery game day",
-                    attributes={"passed": str(exercise.passed).lower()},
+                    reason="record standalone disaster recovery exercise",
+                    attributes={
+                        "passed": "false",
+                        "durable_catalog_verified": "false",
+                    },
                 )
             )
             return exercise
 
     async def audit_events(self, *, context: TenantAccessContext) -> tuple[RecoveryAuditEvent, ...]:
-        self._require(context, TenantCapability.READ)
+        self._require_tenant(context, TenantCapability.READ)
         async with self._lock:
             return tuple(self._audit.get(context.tenant_id, ()))
 
-    def _profile_locked(self, tenant_id: str) -> ReliabilityProfile:
-        history = self._profiles.get(tenant_id, [])
-        if not history:
-            raise RuntimeError("reliability profile is not configured")
-        return history[-1]
+    def _profile_locked(
+        self, tenant_id: str, at: datetime, *, required: bool = True
+    ) -> ReliabilityProfile | None:
+        active = [item for item in self._profiles.get(tenant_id, []) if item.effective_at <= at]
+        profile = max(active, key=lambda item: item.revision) if active else None
+        if profile is None and required:
+            raise RuntimeError("reliability profile is not configured or not yet effective")
+        return profile
 
     def _plan_locked(self, tenant_id: str, restore_id: UUID) -> RestorePlan:
         plan = self._plans.get((tenant_id, restore_id))
@@ -683,6 +853,10 @@ class InMemoryRecoveryStore:
 
     @classmethod
     def _require_tenant(cls, context: TenantAccessContext, capability: TenantCapability) -> None:
+        cls._require_tenant_mode(context)
         cls._require(context, capability)
+
+    @staticmethod
+    def _require_tenant_mode(context: TenantAccessContext) -> None:
         if context.mode is not TenantAccessMode.TENANT:
-            raise AuthorizationDeniedError("support elevation is not recovery governance authority")
+            raise AuthorizationDeniedError("support elevation is not disaster-recovery authority")
