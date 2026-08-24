@@ -1,0 +1,45 @@
+name: v0.7.0 Game Day FK Fix
+
+on:
+  push:
+    branches: [release/v0.7.0-reliability-disaster-recovery]
+    paths:
+      - .github/workflows/v070-game-day-fk.yml
+      - .prodkit/tmp-v070-game-day-fk.py
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/v070-game-day-fk.yml
+      - .prodkit/tmp-v070-game-day-fk.py
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event_name == 'push' || github.head_ref == 'release/v0.7.0-reliability-disaster-recovery'
+    runs-on: ${{ fromJSON(vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          ref: release/v0.7.0-reliability-disaster-recovery
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: '0.10.0'
+      - name: Apply game-day parent-run fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.13
+          uv sync --all-packages --group dev --locked --python 3.13
+          uv run --python 3.13 --no-sync python .prodkit/tmp-v070-game-day-fk.py
+          uv run --python 3.13 --no-sync ruff format scripts/ci_recovery_game_day.py
+          uv run --python 3.13 --no-sync ruff check scripts/ci_recovery_game_day.py
+          rm -f .prodkit/tmp-v070-game-day-fk.py .github/workflows/v070-game-day-fk.yml
+          git config user.name "prodkit-release-bot"
+          git config user.email "prodkit-release-bot@users.noreply.github.com"
+          git add -- scripts/ci_recovery_game_day.py .prodkit/tmp-v070-game-day-fk.py .github/workflows/v070-game-day-fk.yml
+          git diff --cached --check
+          git commit -m "fix: preserve tenant run ownership in DR game day"
+          git push origin HEAD:release/v0.7.0-reliability-disaster-recovery
