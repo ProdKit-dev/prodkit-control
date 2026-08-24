@@ -23,6 +23,8 @@ from prodkit_control_core import (
     ReliabilityProfile,
     RestoredComponentObservation,
     RestoreStatus,
+    RunRecord,
+    RunStatus,
     TenantAccessContext,
     TenantCapability,
     TrustRootPolicy,
@@ -34,6 +36,7 @@ from prodkit_control_core import (
 from prodkit_control_postgres import (
     PostgresExecutionAttemptStore,
     PostgresRecoveryStore,
+    PostgresRunStore,
     assert_schema_compatible,
 )
 from prodkit_control_runtime import (
@@ -301,8 +304,21 @@ async def main() -> None:
                 raise AssertionError("restored assurance state did not verify")
 
             attempt_store = PostgresExecutionAttemptStore(sessions)
+            run_store = PostgresRunStore(sessions)
             attempt_id, action_id, run_id = uuid4(), uuid4(), uuid4()
             claimed_at = datetime.now(UTC)
+            await run_store.create(
+                RunRecord(
+                    run_id=run_id,
+                    tenant_id=tenant_id,
+                    status=RunStatus.RUNNING,
+                    initiated_by=admin.actor,
+                    environment="dr-game-day",
+                    purpose="qualify uncertain execution recovery during site loss",
+                    trace_id=f"dr-game-day-{run_id.hex}",
+                    started_at=claimed_at,
+                )
+            )
             await attempt_store.create(
                 _attempt(
                     tenant_id=tenant_id,
