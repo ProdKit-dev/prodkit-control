@@ -20,7 +20,6 @@ from prodkit_control_core import (
     IntegrityScanResult,
     RecoveryAuditEvent,
     RecoveryAuditEventType,
-    RecoveryComponent,
     RecoveryGapReconciliation,
     RecoveryIntegrityStatus,
     ReliabilityProfile,
@@ -220,9 +219,7 @@ class PostgresRecoveryStore:
                 )
         return manifest
 
-    async def latest_usable_backup(
-        self, *, context: TenantAccessContext
-    ) -> BackupManifest | None:
+    async def latest_usable_backup(self, *, context: TenantAccessContext) -> BackupManifest | None:
         self._require_tenant(context, TenantCapability.READ)
         async with self._sessions() as session:
             now = await _database_now(session)
@@ -997,9 +994,7 @@ class PostgresRecoveryStore:
             )
             return GameDayExercise.model_validate(document) if document is not None else None
 
-    async def audit_events(
-        self, *, context: TenantAccessContext
-    ) -> tuple[RecoveryAuditEvent, ...]:
+    async def audit_events(self, *, context: TenantAccessContext) -> tuple[RecoveryAuditEvent, ...]:
         self._require_tenant(context, TenantCapability.READ)
         async with self._sessions() as session:
             result = await session.execute(
@@ -1145,9 +1140,7 @@ class PostgresRecoveryStore:
         return BackupManifest.model_validate(document) if document is not None else None
 
     @staticmethod
-    async def _plan(
-        session: AsyncSession, tenant_id: str, restore_id: UUID
-    ) -> RestorePlan | None:
+    async def _plan(session: AsyncSession, tenant_id: str, restore_id: UUID) -> RestorePlan | None:
         document = await session.scalar(
             text(
                 "SELECT document FROM recovery_restore_plans "
@@ -1191,12 +1184,19 @@ class PostgresRecoveryStore:
         *,
         for_share: bool = False,
     ) -> BreakGlassGrant | None:
-        suffix = " FOR SHARE" if for_share else ""
-        document = await session.scalar(
+        statement = (
             text(
                 "SELECT document FROM recovery_break_glass_grants "
-                "WHERE tenant_id = :tenant_id AND grant_id = :grant_id" + suffix
-            ),
+                "WHERE tenant_id = :tenant_id AND grant_id = :grant_id FOR SHARE"
+            )
+            if for_share
+            else text(
+                "SELECT document FROM recovery_break_glass_grants "
+                "WHERE tenant_id = :tenant_id AND grant_id = :grant_id"
+            )
+        )
+        document = await session.scalar(
+            statement,
             {"tenant_id": tenant_id, "grant_id": grant_id},
         )
         return BreakGlassGrant.model_validate(document) if document is not None else None

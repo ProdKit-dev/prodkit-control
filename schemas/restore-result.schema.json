@@ -236,6 +236,15 @@
       "title": "Promoted",
       "type": "boolean"
     },
+    "recovery_gap_reconciled": {
+      "title": "Recovery Gap Reconciled",
+      "type": "boolean"
+    },
+    "recovery_gap_reconciliation_id": {
+      "format": "uuid",
+      "title": "Recovery Gap Reconciliation Id",
+      "type": "string"
+    },
     "restore_id": {
       "format": "uuid",
       "title": "Restore Id",
@@ -283,6 +292,8 @@
     "actual_rpo_seconds",
     "actual_rto_seconds",
     "integrity_scan_id",
+    "recovery_gap_reconciliation_id",
+    "recovery_gap_reconciled",
     "completed_by"
   ],
   "title": "RestoreResult",

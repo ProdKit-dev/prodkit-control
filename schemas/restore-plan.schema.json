@@ -82,6 +82,11 @@
       "title": "Break Glass Grant Id",
       "type": "string"
     },
+    "failure_detected_at": {
+      "format": "date-time",
+      "title": "Failure Detected At",
+      "type": "string"
+    },
     "profile_id": {
       "minLength": 1,
       "title": "Profile Id",
@@ -95,6 +100,11 @@
     "prohibit_blind_replay": {
       "default": true,
       "title": "Prohibit Blind Replay",
+      "type": "boolean"
+    },
+    "reconcile_recovery_gap": {
+      "default": true,
+      "title": "Reconcile Recovery Gap",
       "type": "boolean"
     },
     "reconcile_uncertain": {
@@ -143,6 +153,7 @@
     "profile_revision",
     "backup_id",
     "target_site",
+    "failure_detected_at",
     "requested_at",
     "requested_by",
     "break_glass_grant_id"

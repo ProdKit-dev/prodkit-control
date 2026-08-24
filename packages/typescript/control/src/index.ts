@@ -607,6 +607,7 @@ export type RecoveryAuditEventType =
   | "break_glass_revoked"
   | "integrity_scan_recorded"
   | "uncertain_attempt_reconciled"
+  | "recovery_gap_reconciled"
   | "restore_completed"
   | "game_day_recorded";
 
@@ -667,10 +668,12 @@ export interface RestorePlan {
   readonly profile_revision: number;
   readonly backup_id: string;
   readonly target_site: string;
+  readonly failure_detected_at: string;
   readonly requested_at: string;
   readonly requested_by: ActorRef;
   readonly break_glass_grant_id: string;
   readonly reconcile_uncertain: true;
+  readonly reconcile_recovery_gap: true;
   readonly prohibit_blind_replay: true;
 }
 
@@ -699,6 +702,7 @@ export interface IntegrityScanResult {
   readonly completed_at: string;
   readonly status: RecoveryIntegrityStatus;
   readonly chain_verified: boolean;
+  readonly checkpoint_verified: boolean;
   readonly trust_anchor_verified: boolean;
   readonly object_store_verified: boolean;
   readonly components_verified: readonly RecoveryComponent[];
@@ -722,6 +726,22 @@ export interface UncertainExecutionRecovery {
   readonly replay_permitted: false;
 }
 
+export interface RecoveryGapReconciliation {
+  readonly schema_name: "prodkit.recovery-gap-reconciliation";
+  readonly schema_version: "1.0.0";
+  readonly reconciliation_id: string;
+  readonly restore_id: string;
+  readonly tenant_id: string;
+  readonly recovery_point_at: string;
+  readonly failure_detected_at: string;
+  readonly completed_at: string;
+  readonly source_references: readonly string[];
+  readonly unexpected_effect_count: number;
+  readonly unresolved_effect_count: number;
+  readonly evidence_reference: string;
+  readonly blind_replay_permitted: false;
+}
+
 export interface RestoreResult {
   readonly schema_name: "prodkit.restore-result";
   readonly schema_version: "1.0.0";
@@ -734,6 +754,8 @@ export interface RestoreResult {
   readonly actual_rpo_seconds: number;
   readonly actual_rto_seconds: number;
   readonly integrity_scan_id: string;
+  readonly recovery_gap_reconciliation_id: string;
+  readonly recovery_gap_reconciled: boolean;
   readonly uncertain_recoveries: readonly UncertainExecutionRecovery[];
   readonly promoted: boolean;
   readonly completed_by: ActorRef;
@@ -780,8 +802,12 @@ export interface GameDayExercise {
   readonly achieved_rpo_seconds: number;
   readonly achieved_rto_seconds: number;
   readonly chain_verified: boolean;
+  readonly checkpoint_verified: boolean;
   readonly trust_anchor_verified: boolean;
+  readonly object_store_verified: boolean;
   readonly uncertain_actions_reconciled: boolean;
+  readonly recovery_gap_reconciled: boolean;
+  readonly durable_catalog_verified: boolean;
   readonly blind_replay_count: number;
   readonly passed: boolean;
   readonly notes: readonly string[];

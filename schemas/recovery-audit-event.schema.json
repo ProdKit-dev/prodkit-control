@@ -79,6 +79,7 @@
         "break_glass_revoked",
         "integrity_scan_recorded",
         "uncertain_attempt_reconciled",
+        "recovery_gap_reconciled",
         "restore_completed",
         "game_day_recorded"
       ],

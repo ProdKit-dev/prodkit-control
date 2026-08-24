@@ -26,10 +26,18 @@
       "title": "Chain Verified",
       "type": "boolean"
     },
+    "checkpoint_verified": {
+      "title": "Checkpoint Verified",
+      "type": "boolean"
+    },
     "completed_at": {
       "format": "date-time",
       "title": "Completed At",
       "type": "string"
+    },
+    "durable_catalog_verified": {
+      "title": "Durable Catalog Verified",
+      "type": "boolean"
     },
     "exercise_id": {
       "format": "uuid",
@@ -45,6 +53,10 @@
       "title": "Notes",
       "type": "array"
     },
+    "object_store_verified": {
+      "title": "Object Store Verified",
+      "type": "boolean"
+    },
     "passed": {
       "title": "Passed",
       "type": "boolean"
@@ -58,6 +70,10 @@
       "minimum": 1,
       "title": "Profile Revision",
       "type": "integer"
+    },
+    "recovery_gap_reconciled": {
+      "title": "Recovery Gap Reconciled",
+      "type": "boolean"
     },
     "restore_id": {
       "format": "uuid",
@@ -110,8 +126,12 @@
     "achieved_rpo_seconds",
     "achieved_rto_seconds",
     "chain_verified",
+    "checkpoint_verified",
     "trust_anchor_verified",
+    "object_store_verified",
     "uncertain_actions_reconciled",
+    "recovery_gap_reconciled",
+    "durable_catalog_verified",
     "passed"
   ],
   "title": "GameDayExercise",

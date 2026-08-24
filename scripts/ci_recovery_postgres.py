@@ -54,9 +54,7 @@ def _actor(tenant_id: str, actor_id: str) -> ActorRef:
     return ActorRef(kind=ActorKind.HUMAN, id=actor_id, tenant_id=tenant_id)
 
 
-def _context(
-    tenant_id: str, actor_id: str, *capabilities: TenantCapability
-) -> TenantAccessContext:
+def _context(tenant_id: str, actor_id: str, *capabilities: TenantCapability) -> TenantAccessContext:
     now = datetime.now(UTC)
     return TenantAccessContext(
         tenant_id=tenant_id,
@@ -320,7 +318,9 @@ async def _qualify_store(sessions: async_sessionmaker[AsyncSession]) -> None:
     )
     assert result.status is RestoreStatus.VERIFIED and result.promoted
     assert result.recovery_gap_reconciled
-    assert await store.get_restore_result(context=foreign_reader, restore_id=plan.restore_id) is None
+    assert (
+        await store.get_restore_result(context=foreign_reader, restore_id=plan.restore_id) is None
+    )
 
     exercise = await store.record_game_day(
         context=admin,
@@ -330,7 +330,9 @@ async def _qualify_store(sessions: async_sessionmaker[AsyncSession]) -> None:
     )
     assert exercise.passed and exercise.durable_catalog_verified
     assert await store.get_game_day(context=admin, exercise_id=exercise.exercise_id) == exercise
-    assert await store.get_game_day(context=foreign_reader, exercise_id=exercise.exercise_id) is None
+    assert (
+        await store.get_game_day(context=foreign_reader, exercise_id=exercise.exercise_id) is None
+    )
     assert await store.audit_events(context=admin)
     assert await store.audit_events(context=foreign_reader) == ()
 

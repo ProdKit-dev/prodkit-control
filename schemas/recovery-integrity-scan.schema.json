@@ -101,6 +101,10 @@
       "title": "Chain Verified",
       "type": "boolean"
     },
+    "checkpoint_verified": {
+      "title": "Checkpoint Verified",
+      "type": "boolean"
+    },
     "completed_at": {
       "format": "date-time",
       "title": "Completed At",
@@ -165,6 +169,7 @@
     "completed_at",
     "status",
     "chain_verified",
+    "checkpoint_verified",
     "trust_anchor_verified",
     "object_store_verified",
     "components_verified"

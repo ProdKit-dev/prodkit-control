@@ -334,7 +334,9 @@ class RestoreResult(ContractModel):
             }
             for item in self.uncertain_recoveries
         )
-        if self.status is RestoreStatus.VERIFIED and (unresolved or not self.recovery_gap_reconciled):
+        if self.status is RestoreStatus.VERIFIED and (
+            unresolved or not self.recovery_gap_reconciled
+        ):
             raise ValueError(
                 "verified restore requires all known uncertainty and the RPO recovery gap to be reconciled"
             )
