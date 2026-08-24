@@ -23,7 +23,7 @@ permissions:
 jobs:
   release:
     name: release
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@89eec1f6bcd4e45fb67c9fa99122ea6feba9d4bc
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release.yml@d117932d61e0bc45ec065dfc13728b71c6ceb9f3
     with:
       version: ${{ inputs.version }}
       target_sha: ${{ github.sha }}
@@ -51,10 +51,7 @@ jobs:
     permissions:
       actions: write
       contents: read
-    # v0.1.3's immutable dispatcher has a documented expression-interpolation defect.
-    # Pin only this reusable to the minimal upstream recovery commit; every other
-    # lifecycle reusable remains on the immutable v0.1.3 release source.
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-verification-dispatch.yml@237d54ed3e9ffe6baa58196aa13cfa1b610298aa
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-verification-dispatch.yml@d117932d61e0bc45ec065dfc13728b71c6ceb9f3
     with:
       source_sha: ${{ github.sha }}
       version: ${{ inputs.version }}
