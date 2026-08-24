@@ -12,16 +12,21 @@ on:
         default: ""
 
 permissions:
-  actions: read
+  actions: write
   contents: read
+  pull-requests: read
 
 jobs:
   verification:
     name: verification
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-verification.yml@89eec1f6bcd4e45fb67c9fa99122ea6feba9d4bc
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-verification.yml@d117932d61e0bc45ec065dfc13728b71c6ceb9f3
     with:
       source_sha: ${{ github.sha }}
       release_run_id: ${{ inputs.release_run_id }}
       runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]' }}
       manifest_path: .prodkit/release.json
       release_workflow_file: release.yml
+      automatic_cleanup: true
+      cleanup_workflow_file: branch-cleanup.yml
+      main_branch: main
+      cleanup_branch_prefixes_json: '["release/","hotfix/"]'
