@@ -1,0 +1,61 @@
+name: v0.7.0 Release Finalize
+
+on:
+  push:
+    branches: [release/v0.7.0-reliability-disaster-recovery]
+    paths:
+      - .github/workflows/v070-release-finalize.yml
+      - .prodkit/tmp-v070-release-finalize.py
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/v070-release-finalize.yml
+      - .prodkit/tmp-v070-release-finalize.py
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.event_name == 'push' || github.head_ref == 'release/v0.7.0-reliability-disaster-recovery'
+    runs-on: ${{ fromJSON(vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || '["self-hosted","Linux","X64"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          ref: release/v0.7.0-reliability-disaster-recovery
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: '0.10.0'
+      - name: Normalize v0.7 release source
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.13
+          uv sync --all-packages --group dev --locked --python 3.13
+          uv run --python 3.13 --no-sync python .prodkit/tmp-v070-release-finalize.py
+          uv lock
+          uv sync --all-packages --group dev --locked --python 3.13
+          uv run --python 3.13 --no-sync ruff format \
+            packages/python/prodkit-control-core/src/prodkit_control_core/contracts/recovery.py \
+            packages/python/prodkit-control-runtime/src/prodkit_control_runtime/recovery.py \
+            packages/python/prodkit-control-postgres/src/prodkit_control_postgres/recovery.py \
+            scripts/ci_recovery_postgres.py scripts/ci_recovery_migrations.py \
+            scripts/ci_recovery_game_day.py scripts/export_schemas.py tests/test_recovery.py
+          uv run --python 3.13 --no-sync ruff check \
+            packages/python/prodkit-control-core/src/prodkit_control_core/contracts/recovery.py \
+            packages/python/prodkit-control-runtime/src/prodkit_control_runtime/recovery.py \
+            packages/python/prodkit-control-postgres/src/prodkit_control_postgres/recovery.py \
+            scripts/ci_recovery_postgres.py scripts/ci_recovery_migrations.py \
+            scripts/ci_recovery_game_day.py scripts/export_schemas.py tests/test_recovery.py
+          uv run --python 3.13 --no-sync pytest tests/test_recovery.py --no-cov
+          uv run --python 3.13 --no-sync python scripts/export_schemas.py
+          uv run --python 3.13 --no-sync python scripts/export_schemas.py --check
+          uv run --python 3.13 --no-sync python scripts/release_check.py --version 0.7.0
+          rm -f .prodkit/tmp-v070-release-finalize.py .github/workflows/v070-release-finalize.yml
+          git config user.name "prodkit-release-bot"
+          git config user.email "prodkit-release-bot@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "release: prepare v0.7.0 candidate"
+          git push origin HEAD:release/v0.7.0-reliability-disaster-recovery
