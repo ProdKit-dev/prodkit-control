@@ -3,10 +3,11 @@ from pathlib import Path
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
     if old not in text:
-        raise SystemExit(f"missing expected TypeScript fragment: {label}")
+        raise SystemExit(f"missing expected source fragment: {label}")
     return text.replace(old, new, 1)
 
 
+# Keep TypeScript parity aligned with the hardened canonical recovery contracts.
 path = Path("packages/typescript/control/src/index.ts")
 text = path.read_text(encoding="utf-8")
 text = replace_once(
@@ -47,5 +48,35 @@ text = replace_once(
     '  readonly chain_verified: boolean;\n  readonly trust_anchor_verified: boolean;\n  readonly uncertain_actions_reconciled: boolean;\n  readonly blind_replay_count:',
     '  readonly chain_verified: boolean;\n  readonly checkpoint_verified: boolean;\n  readonly trust_anchor_verified: boolean;\n  readonly object_store_verified: boolean;\n  readonly uncertain_actions_reconciled: boolean;\n  readonly recovery_gap_reconciled: boolean;\n  readonly durable_catalog_verified: boolean;\n  readonly blind_replay_count:',
     "game day assurance fields",
+)
+path.write_text(text, encoding="utf-8")
+
+
+# Ruff closure for the durable recovery implementation.
+path = Path(
+    "packages/python/prodkit-control-postgres/src/prodkit_control_postgres/recovery.py"
+)
+text = path.read_text(encoding="utf-8")
+text = replace_once(
+    text,
+    "    RecoveryAuditEventType,\n    RecoveryComponent,\n    RecoveryGapReconciliation,",
+    "    RecoveryAuditEventType,\n    RecoveryGapReconciliation,",
+    "unused RecoveryComponent import",
+)
+text = replace_once(
+    text,
+    '''        suffix = " FOR SHARE" if for_share else ""\n        document = await session.scalar(\n            text(\n                "SELECT document FROM recovery_break_glass_grants "\n                "WHERE tenant_id = :tenant_id AND grant_id = :grant_id" + suffix\n            ),\n            {"tenant_id": tenant_id, "grant_id": grant_id},\n        )\n''',
+    '''        statement = (\n            text(\n                "SELECT document FROM recovery_break_glass_grants "\n                "WHERE tenant_id = :tenant_id AND grant_id = :grant_id FOR SHARE"\n            )\n            if for_share\n            else text(\n                "SELECT document FROM recovery_break_glass_grants "\n                "WHERE tenant_id = :tenant_id AND grant_id = :grant_id"\n            )\n        )\n        document = await session.scalar(\n            statement,\n            {"tenant_id": tenant_id, "grant_id": grant_id},\n        )\n''',
+    "static break-glass select",
+)
+path.write_text(text, encoding="utf-8")
+
+path = Path("scripts/ci_recovery_game_day.py")
+text = path.read_text(encoding="utf-8")
+text = replace_once(
+    text,
+    "from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine",
+    "from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine",
+    "unused AsyncSession import",
 )
 path.write_text(text, encoding="utf-8")
