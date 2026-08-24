@@ -39,7 +39,7 @@ jobs:
             packages/python/prodkit-control-runtime/src/prodkit_control_runtime/governance.py \
             packages/python/prodkit-control-postgres/src/prodkit_control_postgres/governance.py \
             tests/test_governance.py scripts/ci_governance_postgres.py
-          uv run --python 3.13 --no-sync pytest -q tests/test_governance.py
+          uv run --python 3.13 --no-sync pytest -q --no-cov tests/test_governance.py
           rm -f scripts/apply_v061_governance_safety.py .github/workflows/v061-hotfix-apply.yml
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
