@@ -283,3 +283,286 @@ export interface TenantExportManifest {
   readonly content_digests: readonly string[];
   readonly legal_hold_preserved: boolean;
 }
+
+export type GovernanceRisk = "low" | "medium" | "high" | "critical";
+export type GovernanceTargetType =
+  | "retention_policy"
+  | "trust_root_policy"
+  | "legal_hold_release"
+  | "tenant_configuration"
+  | "compatibility_policy"
+  | "deprecation_policy";
+export type GovernanceChangeStatus =
+  | "proposed"
+  | "approved"
+  | "rejected"
+  | "applied"
+  | "cancelled";
+export type GovernanceApprovalDecision = "approve" | "reject";
+export type RetentionDisposition = "retain" | "delete";
+export type LegalHoldStatus = "active" | "released";
+export type GovernanceAuditEventType =
+  | "change_proposed"
+  | "change_approved"
+  | "change_rejected"
+  | "change_applied"
+  | "retention_evaluated"
+  | "retention_deletion_executed"
+  | "legal_hold_placed"
+  | "legal_hold_released"
+  | "trust_root_activated"
+  | "evidence_export_created"
+  | "evidence_import_verified"
+  | "migration_recorded";
+
+export interface RetentionRule {
+  readonly resource_type: string;
+  readonly retain_for_seconds?: number | null;
+  readonly deletion_grace_seconds: number;
+  readonly deletion_allowed: boolean;
+}
+
+export interface RetentionPolicy {
+  readonly schema_name: "prodkit.retention-policy";
+  readonly schema_version: "1.0.0";
+  readonly policy_id: string;
+  readonly tenant_id: string;
+  readonly revision: number;
+  readonly effective_at: string;
+  readonly default_retain_for_seconds?: number | null;
+  readonly rules: readonly RetentionRule[];
+  readonly created_at: string;
+  readonly created_by: ActorRef;
+}
+
+export interface RetentionCandidate {
+  readonly schema_name: "prodkit.retention-candidate";
+  readonly schema_version: "1.0.0";
+  readonly tenant_id: string;
+  readonly resource_type: string;
+  readonly resource_id: string;
+  readonly created_at: string;
+  readonly content_sha256?: string | null;
+  readonly attributes: Readonly<Record<string, string>>;
+}
+
+export interface RetentionDecision {
+  readonly schema_name: "prodkit.retention-decision";
+  readonly schema_version: "1.0.0";
+  readonly tenant_id: string;
+  readonly resource_type: string;
+  readonly resource_id: string;
+  readonly disposition: RetentionDisposition;
+  readonly evaluated_at: string;
+  readonly policy_id: string;
+  readonly policy_revision: number;
+  readonly delete_not_before?: string | null;
+  readonly legal_hold_ids: readonly string[];
+  readonly reason: string;
+}
+
+export interface RetentionExecutionRecord {
+  readonly schema_name: "prodkit.retention-execution";
+  readonly schema_version: "1.0.0";
+  readonly execution_id: string;
+  readonly tenant_id: string;
+  readonly resource_type: string;
+  readonly resource_id: string;
+  readonly executed_at: string;
+  readonly executed_by: ActorRef;
+  readonly policy_id: string;
+  readonly policy_revision: number;
+  readonly content_sha256?: string | null;
+  readonly deletion_reference: string;
+}
+
+export interface LegalHold {
+  readonly schema_name: "prodkit.legal-hold";
+  readonly schema_version: "1.0.0";
+  readonly hold_id: string;
+  readonly tenant_id: string;
+  readonly status: LegalHoldStatus;
+  readonly reason: string;
+  readonly case_reference: string;
+  readonly resource_types: readonly string[];
+  readonly resource_ids: readonly string[];
+  readonly placed_at: string;
+  readonly placed_by: ActorRef;
+  readonly released_at?: string | null;
+  readonly released_by?: ActorRef | null;
+  readonly release_change_request_id?: string | null;
+}
+
+export interface GovernanceChangeRequest {
+  readonly schema_name: "prodkit.governance-change-request";
+  readonly schema_version: "1.0.0";
+  readonly request_id: string;
+  readonly tenant_id: string;
+  readonly target_type: GovernanceTargetType;
+  readonly target_id: string;
+  readonly proposed_digest: string;
+  readonly expected_current_digest?: string | null;
+  readonly risk: GovernanceRisk;
+  readonly reason: string;
+  readonly ticket_reference: string;
+  readonly proposed_at: string;
+  readonly proposed_by: ActorRef;
+  readonly status: GovernanceChangeStatus;
+  readonly approved_at?: string | null;
+  readonly approved_by?: ActorRef | null;
+  readonly applied_at?: string | null;
+}
+
+export interface GovernanceApproval {
+  readonly schema_name: "prodkit.governance-approval";
+  readonly schema_version: "1.0.0";
+  readonly approval_id: string;
+  readonly request_id: string;
+  readonly tenant_id: string;
+  readonly decision: GovernanceApprovalDecision;
+  readonly actor: ActorRef;
+  readonly occurred_at: string;
+  readonly reason: string;
+}
+
+export type CheckpointSigningAlgorithm = "ed25519";
+
+export interface TrustedSigningKey {
+  readonly key_id: string;
+  readonly algorithm: CheckpointSigningAlgorithm;
+  readonly public_key_base64: string;
+  readonly signer_id: string;
+  readonly valid_from: string;
+  readonly valid_until?: string | null;
+  readonly revoked_at?: string | null;
+}
+
+export interface TrustRootPolicy {
+  readonly schema_name: "prodkit.trust-root-policy";
+  readonly schema_version: "1.0.0";
+  readonly policy_id: string;
+  readonly revision: string;
+  readonly trusted_keys: readonly TrustedSigningKey[];
+  readonly allowed_signers: readonly string[];
+  readonly allow_historical_signatures_before_revocation: boolean;
+}
+
+export interface GovernedTrustRoot {
+  readonly schema_name: "prodkit.governed-trust-root";
+  readonly schema_version: "1.0.0";
+  readonly tenant_id: string;
+  readonly revision: number;
+  readonly policy: TrustRootPolicy;
+  readonly policy_sha256: string;
+  readonly activated_at: string;
+  readonly retired_at?: string | null;
+  readonly change_request_id: string;
+}
+
+export interface KeyRotationPlan {
+  readonly schema_name: "prodkit.key-rotation-plan";
+  readonly schema_version: "1.0.0";
+  readonly rotation_id: string;
+  readonly tenant_id: string;
+  readonly from_revision: number;
+  readonly to_revision: number;
+  readonly activate_at: string;
+  readonly overlap_until: string;
+  readonly change_request_id: string;
+  readonly emergency: boolean;
+}
+
+export interface TrustRootHistory {
+  readonly schema_name: "prodkit.trust-root-history";
+  readonly schema_version: "1.0.0";
+  readonly tenant_id: string;
+  readonly roots: readonly GovernedTrustRoot[];
+}
+
+export interface EvidenceTransferManifest {
+  readonly schema_name: "prodkit.evidence-transfer-manifest";
+  readonly schema_version: "1.0.0";
+  readonly transfer_id: string;
+  readonly tenant_id: string;
+  readonly created_at: string;
+  readonly created_by: ActorRef;
+  readonly source_control_version: string;
+  readonly source_schema_version: number;
+  readonly archive_sha256: string;
+  readonly bundle_manifest_sha256: string;
+  readonly trust_root_revision?: number | null;
+  readonly legal_hold_preserved: boolean;
+}
+
+export interface EvidenceImportReceipt {
+  readonly schema_name: "prodkit.evidence-import-receipt";
+  readonly schema_version: "1.0.0";
+  readonly import_id: string;
+  readonly transfer_id: string;
+  readonly tenant_id: string;
+  readonly imported_at: string;
+  readonly imported_by: ActorRef;
+  readonly source_control_version: string;
+  readonly source_schema_version: number;
+  readonly archive_sha256: string;
+  readonly verified: true;
+}
+
+export interface EvidenceTransferVerification {
+  readonly schema_name: "prodkit.evidence-transfer-verification";
+  readonly schema_version: "1.0.0";
+  readonly verification_id: string;
+  readonly transfer_id: string;
+  readonly tenant_id: string;
+  readonly verified_at: string;
+  readonly source_control_version: string;
+  readonly source_schema_version: number;
+  readonly package_sha256: string;
+  readonly bundle_manifest_sha256: string;
+  readonly trust_anchor_sha256: string;
+  readonly verified_offline: boolean;
+}
+
+export interface MigrationPath {
+  readonly from_schema_version: number;
+  readonly to_schema_version: number;
+  readonly minimum_control_version: string;
+  readonly requires_backup: boolean;
+  readonly reversible: boolean;
+}
+
+export interface DeprecationWindow {
+  readonly surface: string;
+  readonly deprecated_in_version: string;
+  readonly removal_not_before_version: string;
+  readonly announced_at: string;
+  readonly replacement?: string | null;
+}
+
+export interface CompatibilityPolicy {
+  readonly schema_name: "prodkit.compatibility-policy";
+  readonly schema_version: "1.0.0";
+  readonly current_schema_version: number;
+  readonly minimum_supported_schema_version: number;
+  readonly migration_paths: readonly MigrationPath[];
+  readonly deprecations: readonly DeprecationWindow[];
+}
+
+export interface GovernanceAuditEvent {
+  readonly schema_name: "prodkit.governance-audit-event";
+  readonly schema_version: "1.0.0";
+  readonly event_id: string;
+  readonly tenant_id: string;
+  readonly event_type: GovernanceAuditEventType;
+  readonly actor: ActorRef;
+  readonly occurred_at: string;
+  readonly request_id?: string | null;
+  readonly target_type?: GovernanceTargetType | null;
+  readonly target_id?: string | null;
+  readonly before_digest?: string | null;
+  readonly after_digest?: string | null;
+  readonly reason: string;
+  readonly ticket_reference?: string | null;
+  readonly attributes: Readonly<Record<string, string>>;
+}
+

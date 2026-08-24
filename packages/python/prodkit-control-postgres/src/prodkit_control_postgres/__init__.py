@@ -1,4 +1,5 @@
 from .execution import PostgresExecutionAttemptStore, PostgresIdempotencyStore
+from .governance import PostgresGovernanceStore
 from .ha import DurableWorkItemRow, PostgresDurableWorkQueue, PostgresLeaseStore, WorkLeaseRow
 from .ledger import PostgresEventLedger
 from .lineage import PostgresLineageStore
@@ -25,6 +26,7 @@ __all__ = (
     "PostgresDurableWorkQueue",
     "PostgresEventLedger",
     "PostgresExecutionAttemptStore",
+    "PostgresGovernanceStore",
     "PostgresIdempotencyStore",
     "PostgresLeaseStore",
     "PostgresLineageStore",

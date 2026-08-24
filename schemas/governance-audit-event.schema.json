@@ -1,0 +1,235 @@
+{
+  "$defs": {
+    "ActorKind": {
+      "enum": [
+        "human",
+        "agent",
+        "service",
+        "workflow",
+        "executor"
+      ],
+      "title": "ActorKind",
+      "type": "string"
+    },
+    "ActorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Attributes",
+          "type": "object"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ActorKind"
+        },
+        "tenant_id": {
+          "minLength": 1,
+          "title": "Tenant Id",
+          "type": "string"
+        },
+        "workload_identity": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workload Identity"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "tenant_id"
+      ],
+      "title": "ActorRef",
+      "type": "object"
+    },
+    "GovernanceAuditEventType": {
+      "enum": [
+        "change_proposed",
+        "change_approved",
+        "change_rejected",
+        "change_applied",
+        "retention_evaluated",
+        "retention_deletion_executed",
+        "legal_hold_placed",
+        "legal_hold_released",
+        "trust_root_activated",
+        "evidence_export_created",
+        "evidence_import_verified",
+        "migration_recorded"
+      ],
+      "title": "GovernanceAuditEventType",
+      "type": "string"
+    },
+    "GovernanceTargetType": {
+      "enum": [
+        "retention_policy",
+        "trust_root_policy",
+        "legal_hold_release",
+        "tenant_configuration",
+        "compatibility_policy",
+        "deprecation_policy"
+      ],
+      "title": "GovernanceTargetType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "actor": {
+      "$ref": "#/$defs/ActorRef"
+    },
+    "after_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "After Digest"
+    },
+    "attributes": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Attributes",
+      "type": "object"
+    },
+    "before_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Before Digest"
+    },
+    "event_id": {
+      "format": "uuid",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "event_type": {
+      "$ref": "#/$defs/GovernanceAuditEventType"
+    },
+    "occurred_at": {
+      "format": "date-time",
+      "title": "Occurred At",
+      "type": "string"
+    },
+    "reason": {
+      "minLength": 1,
+      "title": "Reason",
+      "type": "string"
+    },
+    "request_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Request Id"
+    },
+    "schema_name": {
+      "default": "prodkit.governance-audit-event",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "target_id": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Id"
+    },
+    "target_type": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GovernanceTargetType"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "tenant_id": {
+      "minLength": 1,
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "ticket_reference": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ticket Reference"
+    }
+  },
+  "required": [
+    "event_id",
+    "tenant_id",
+    "event_type",
+    "actor",
+    "occurred_at",
+    "reason"
+  ],
+  "title": "GovernanceAuditEvent",
+  "type": "object"
+}

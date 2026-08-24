@@ -8,4 +8,4 @@ from .mcp import MCPActionAdapter as MCPActionAdapter
 from .mcp import MCPToolBinding as MCPToolBinding
 from .mcp import MCPToolCall as MCPToolCall
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"

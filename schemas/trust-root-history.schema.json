@@ -1,0 +1,226 @@
+{
+  "$defs": {
+    "CheckpointSigningAlgorithm": {
+      "enum": [
+        "ed25519"
+      ],
+      "title": "CheckpointSigningAlgorithm",
+      "type": "string"
+    },
+    "GovernedTrustRoot": {
+      "additionalProperties": false,
+      "properties": {
+        "activated_at": {
+          "format": "date-time",
+          "title": "Activated At",
+          "type": "string"
+        },
+        "change_request_id": {
+          "format": "uuid",
+          "title": "Change Request Id",
+          "type": "string"
+        },
+        "policy": {
+          "$ref": "#/$defs/TrustRootPolicy"
+        },
+        "policy_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Policy Sha256",
+          "type": "string"
+        },
+        "retired_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retired At"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "schema_name": {
+          "default": "prodkit.governed-trust-root",
+          "title": "Schema Name",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "tenant_id": {
+          "minLength": 1,
+          "title": "Tenant Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tenant_id",
+        "revision",
+        "policy",
+        "policy_sha256",
+        "activated_at",
+        "change_request_id"
+      ],
+      "title": "GovernedTrustRoot",
+      "type": "object"
+    },
+    "TrustRootPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_historical_signatures_before_revocation": {
+          "default": true,
+          "title": "Allow Historical Signatures Before Revocation",
+          "type": "boolean"
+        },
+        "allowed_signers": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Allowed Signers",
+          "type": "array"
+        },
+        "policy_id": {
+          "minLength": 1,
+          "title": "Policy Id",
+          "type": "string"
+        },
+        "revision": {
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "schema_name": {
+          "const": "prodkit.trust-root-policy",
+          "default": "prodkit.trust-root-policy",
+          "title": "Schema Name",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "trusted_keys": {
+          "items": {
+            "$ref": "#/$defs/TrustedSigningKey"
+          },
+          "title": "Trusted Keys",
+          "type": "array"
+        }
+      },
+      "required": [
+        "policy_id",
+        "revision",
+        "trusted_keys"
+      ],
+      "title": "TrustRootPolicy",
+      "type": "object"
+    },
+    "TrustedSigningKey": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "$ref": "#/$defs/CheckpointSigningAlgorithm",
+          "default": "ed25519"
+        },
+        "key_id": {
+          "minLength": 1,
+          "title": "Key Id",
+          "type": "string"
+        },
+        "public_key_base64": {
+          "minLength": 1,
+          "title": "Public Key Base64",
+          "type": "string"
+        },
+        "revoked_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revoked At"
+        },
+        "signer_id": {
+          "minLength": 1,
+          "title": "Signer Id",
+          "type": "string"
+        },
+        "valid_from": {
+          "format": "date-time",
+          "title": "Valid From",
+          "type": "string"
+        },
+        "valid_until": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Valid Until"
+        }
+      },
+      "required": [
+        "key_id",
+        "public_key_base64",
+        "signer_id",
+        "valid_from"
+      ],
+      "title": "TrustedSigningKey",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "roots": {
+      "items": {
+        "$ref": "#/$defs/GovernedTrustRoot"
+      },
+      "title": "Roots",
+      "type": "array"
+    },
+    "schema_name": {
+      "default": "prodkit.trust-root-history",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "tenant_id": {
+      "minLength": 1,
+      "title": "Tenant Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "tenant_id",
+    "roots"
+  ],
+  "title": "TrustRootHistory",
+  "type": "object"
+}

@@ -1,0 +1,46 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "announced_at": {
+      "format": "date-time",
+      "title": "Announced At",
+      "type": "string"
+    },
+    "deprecated_in_version": {
+      "minLength": 1,
+      "title": "Deprecated In Version",
+      "type": "string"
+    },
+    "removal_not_before_version": {
+      "minLength": 1,
+      "title": "Removal Not Before Version",
+      "type": "string"
+    },
+    "replacement": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Replacement"
+    },
+    "surface": {
+      "minLength": 1,
+      "title": "Surface",
+      "type": "string"
+    }
+  },
+  "required": [
+    "surface",
+    "deprecated_in_version",
+    "removal_not_before_version",
+    "announced_at"
+  ],
+  "title": "DeprecationWindow",
+  "type": "object"
+}
