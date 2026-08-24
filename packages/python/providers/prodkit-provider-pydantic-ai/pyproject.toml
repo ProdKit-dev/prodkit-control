@@ -1,6 +1,6 @@
 [project]
 name = "prodkit-provider-pydantic-ai"
-version = "0.6.1"
+version = "0.7.0"
 description = "Pydantic AI model-provider normalization adapter."
 requires-python = ">=3.12,<3.15"
 license = { text = "Apache-2.0" }

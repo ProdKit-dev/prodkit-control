@@ -13,6 +13,7 @@ from .lineage import *
 from .policy import *
 from .providers import *
 from .reconciliation import *
+from .recovery import *
 from .runs import *
 from .tenancy import *
 from .transfers import *

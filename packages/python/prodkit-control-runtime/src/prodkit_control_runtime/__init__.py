@@ -49,8 +49,11 @@ from .reconciliation import InMemoryReconciliationStore as InMemoryReconciliatio
 from .reconciliation import ReconciliationCoordinator as ReconciliationCoordinator
 from .reconciliation import ReconciliationSource as ReconciliationSource
 from .reconciliation import ReconciliationStore as ReconciliationStore
+from .recovery import InMemoryRecoveryStore as InMemoryRecoveryStore
+from .recovery import RecoveryIntegrityVerifier as RecoveryIntegrityVerifier
+from .recovery import UncertainAttemptResolver as UncertainAttemptResolver
 from .tenancy import InMemoryTenantControlStore as InMemoryTenantControlStore
 from .tenancy import TenantCacheNamespace as TenantCacheNamespace
 from .transfers import GovernanceEvidenceTransferVerifier as GovernanceEvidenceTransferVerifier
 
-__version__ = "0.6.1"
+__version__ = "0.7.0"

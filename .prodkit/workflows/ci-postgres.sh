@@ -13,3 +13,6 @@ uv run --python 3.13 --no-sync python scripts/ci_postgres.py
 uv run --python 3.13 --no-sync python scripts/ci_tenant_isolation_postgres.py
 uv run --python 3.13 --no-sync python scripts/ci_governance_postgres.py
 uv run --python 3.13 --no-sync python scripts/ci_governance_migrations.py
+uv run --python 3.13 --no-sync python scripts/ci_recovery_postgres.py
+uv run --python 3.13 --no-sync python scripts/ci_recovery_migrations.py
+uv run --python 3.13 --no-sync python scripts/ci_recovery_game_day.py
