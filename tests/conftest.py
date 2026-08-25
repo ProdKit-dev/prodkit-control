@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import sys
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
 
-from prodkit_control_core import (
+ROOT = str(Path(__file__).resolve().parents[1])
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+from prodkit_control_core import (  # noqa: E402
     ActionSpec,
     ActionTarget,
     ActorKind,

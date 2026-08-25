@@ -1,0 +1,59 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "metric": {
+      "minLength": 1,
+      "title": "Metric",
+      "type": "string"
+    },
+    "page_burn_rate": {
+      "default": 14.4,
+      "exclusiveMinimum": 0.0,
+      "title": "Page Burn Rate",
+      "type": "number"
+    },
+    "schema_name": {
+      "const": "prodkit.operational-slo",
+      "default": "prodkit.operational-slo",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "slo_id": {
+      "minLength": 1,
+      "title": "Slo Id",
+      "type": "string"
+    },
+    "target_ratio": {
+      "exclusiveMinimum": 0.0,
+      "maximum": 1.0,
+      "title": "Target Ratio",
+      "type": "number"
+    },
+    "ticket_burn_rate": {
+      "default": 6.0,
+      "exclusiveMinimum": 0.0,
+      "title": "Ticket Burn Rate",
+      "type": "number"
+    },
+    "window_seconds": {
+      "maximum": 31536000,
+      "minimum": 60,
+      "title": "Window Seconds",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "slo_id",
+    "metric",
+    "target_ratio",
+    "window_seconds"
+  ],
+  "title": "OperationalSLO",
+  "type": "object"
+}

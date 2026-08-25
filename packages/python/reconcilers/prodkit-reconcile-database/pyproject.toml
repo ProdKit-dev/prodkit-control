@@ -1,6 +1,6 @@
 [project]
 name = "prodkit-reconcile-database"
-version = "0.7.0"
+version = "0.8.0"
 description = "Database state reconciliation adapter."
 requires-python = ">=3.12,<3.15"
 license = { text = "Apache-2.0" }

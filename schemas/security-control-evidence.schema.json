@@ -1,0 +1,45 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "collected_at": {
+      "format": "date-time",
+      "title": "Collected At",
+      "type": "string"
+    },
+    "control_id": {
+      "minLength": 1,
+      "title": "Control Id",
+      "type": "string"
+    },
+    "evidence_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Evidence Sha256",
+      "type": "string"
+    },
+    "schema_name": {
+      "const": "prodkit.security-control-evidence",
+      "default": "prodkit.security-control-evidence",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "minLength": 1,
+      "title": "Source",
+      "type": "string"
+    }
+  },
+  "required": [
+    "control_id",
+    "evidence_sha256",
+    "collected_at",
+    "source"
+  ],
+  "title": "SecurityControlEvidence",
+  "type": "object"
+}

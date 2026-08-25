@@ -1,0 +1,75 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "allowed_client_ids": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Allowed Client Ids",
+      "type": "array"
+    },
+    "audience": {
+      "minLength": 1,
+      "title": "Audience",
+      "type": "string"
+    },
+    "clock_skew_seconds": {
+      "default": 30,
+      "maximum": 120,
+      "minimum": 0,
+      "title": "Clock Skew Seconds",
+      "type": "integer"
+    },
+    "issuer": {
+      "minLength": 1,
+      "title": "Issuer",
+      "type": "string"
+    },
+    "max_assertion_lifetime_seconds": {
+      "default": 300,
+      "maximum": 900,
+      "minimum": 30,
+      "title": "Max Assertion Lifetime Seconds",
+      "type": "integer"
+    },
+    "require_nonce": {
+      "default": true,
+      "title": "Require Nonce",
+      "type": "boolean"
+    },
+    "require_not_before": {
+      "default": true,
+      "title": "Require Not Before",
+      "type": "boolean"
+    },
+    "schema_name": {
+      "const": "prodkit.workload-identity-policy",
+      "default": "prodkit.workload-identity-policy",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "subject_prefixes": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Subject Prefixes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "issuer",
+    "audience",
+    "subject_prefixes"
+  ],
+  "title": "WorkloadIdentityPolicy",
+  "type": "object"
+}

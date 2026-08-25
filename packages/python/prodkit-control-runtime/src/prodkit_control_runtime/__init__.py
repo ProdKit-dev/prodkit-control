@@ -52,8 +52,20 @@ from .reconciliation import ReconciliationStore as ReconciliationStore
 from .recovery import InMemoryRecoveryStore as InMemoryRecoveryStore
 from .recovery import RecoveryIntegrityVerifier as RecoveryIntegrityVerifier
 from .recovery import UncertainAttemptResolver as UncertainAttemptResolver
+from .security import ArtifactProvenanceVerifier as ArtifactProvenanceVerifier
+from .security import InMemoryReplayStore as InMemoryReplayStore
+from .security import NDJSONSecurityAuditExporter as NDJSONSecurityAuditExporter
+from .security import RateLimitDecision as RateLimitDecision
+from .security import SecretReferenceGuard as SecretReferenceGuard
+from .security import SecurityAuditExporter as SecurityAuditExporter
+from .security import SlidingWindowRateLimiter as SlidingWindowRateLimiter
+from .security import SLOEvaluation as SLOEvaluation
+from .security import WorkloadIdentityAuthenticator as WorkloadIdentityAuthenticator
+from .security import WorkloadIdentityVerifier as WorkloadIdentityVerifier
+from .security import evaluate_slo as evaluate_slo
+from .security import redact_security_attributes as redact_security_attributes
 from .tenancy import InMemoryTenantControlStore as InMemoryTenantControlStore
 from .tenancy import TenantCacheNamespace as TenantCacheNamespace
 from .transfers import GovernanceEvidenceTransferVerifier as GovernanceEvidenceTransferVerifier
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"

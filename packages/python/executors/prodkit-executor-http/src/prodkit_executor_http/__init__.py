@@ -3,4 +3,4 @@
 from .executor import ConstrainedHTTPExecutor, HTTPExecutorConfig
 
 __all__ = ("ConstrainedHTTPExecutor", "HTTPExecutorConfig")
-__version__ = "0.7.0"
+__version__ = "0.8.0"
