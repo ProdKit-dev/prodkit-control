@@ -12,7 +12,8 @@ USES = re.compile(r"^\s*uses:\s*([^\s#]+)", re.MULTILINE)
 
 def check_workflow_pins() -> None:
     violations: list[str] = []
-    for path in sorted(WORKFLOWS.glob("*.yml")):
+    workflow_paths = sorted((*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")))
+    for path in workflow_paths:
         text = path.read_text(encoding="utf-8")
         for match in USES.finditer(text):
             target = match.group(1).strip("\"'")
