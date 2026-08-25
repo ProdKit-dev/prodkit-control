@@ -13,7 +13,7 @@ permissions:
 jobs:
   dispatch:
     name: dispatch proof
-    if: ${{ github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_commit.message, 'release: v') }}
+    if: "${{ github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_commit.message, 'release: v') }}"
     permissions:
       actions: write
       contents: read
@@ -28,7 +28,7 @@ jobs:
   promote:
     name: bridge proof to promotion
     needs: dispatch
-    if: ${{ github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_commit.message, 'release: v') }}
+    if: "${{ github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_commit.message, 'release: v') }}"
     permissions:
       actions: write
       contents: read
