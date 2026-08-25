@@ -1,5 +1,5 @@
 /** React external-store primitives for ProdKit Control data and mutation lifecycles. */
-export const CONTROL_REACT_PACKAGE_VERSION = "0.9.0" as const;
+export const CONTROL_REACT_PACKAGE_VERSION = "0.9.1" as const;
 
 export type ControlResourceStatus = "idle" | "loading" | "success" | "error";
 
