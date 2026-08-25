@@ -25,13 +25,20 @@ class StaticSigningKeyProvider:
         return SimpleNamespace(key=self._public_key)
 
 
-def _resolver(public_key: rsa.RSAPublicKey) -> OIDCPrincipalResolver:
+def _resolver(
+    public_key: rsa.RSAPublicKey,
+    *,
+    allowed_authorized_parties: tuple[str, ...] = (),
+) -> OIDCPrincipalResolver:
     resolver = OIDCPrincipalResolver(
         issuer=ISSUER,
         audience=AUDIENCE,
         jwks_url=JWKS_URL,
         algorithms=("RS256",),
         leeway_seconds=0,
+        max_token_lifetime_seconds=600,
+        require_not_before=True,
+        allowed_authorized_parties=allowed_authorized_parties,
     )
     resolver._jwks = StaticSigningKeyProvider(public_key)  # type: ignore[assignment]
     return resolver
@@ -56,6 +63,7 @@ def _claims(**overrides: object) -> dict[str, object]:
         "roles": ["operator", "production_approver"],
         "actor_kind": ActorKind.SERVICE.value,
         "iat": now,
+        "nbf": now - timedelta(seconds=1),
         "exp": now + timedelta(minutes=5),
     }
     claims.update(overrides)
@@ -100,3 +108,51 @@ async def test_oidc_resolver_rejects_signed_identity_without_tenant_binding() ->
 
     assert error.value.status_code == 401
     assert error.value.detail == {"code": "missing_required_identity_claim"}
+
+
+@pytest.mark.asyncio
+async def test_oidc_resolver_rejects_missing_not_before() -> None:
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    claims = _claims()
+    del claims["nbf"]
+    token = jwt.encode(claims, private_key, algorithm="RS256")
+
+    with pytest.raises(HTTPException) as error:
+        await _resolver(private_key.public_key())(_request(token))
+
+    assert error.value.status_code == 401
+    assert error.value.detail == {"code": "invalid_bearer_token"}
+
+
+@pytest.mark.asyncio
+async def test_oidc_resolver_rejects_overlong_token_lifetime() -> None:
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    now = datetime.now(UTC)
+    token = jwt.encode(
+        _claims(iat=now, nbf=now, exp=now + timedelta(minutes=20)),
+        private_key,
+        algorithm="RS256",
+    )
+
+    with pytest.raises(HTTPException) as error:
+        await _resolver(private_key.public_key())(_request(token))
+
+    assert error.value.status_code == 401
+    assert error.value.detail == {"code": "invalid_bearer_token"}
+
+
+@pytest.mark.asyncio
+async def test_oidc_resolver_enforces_authorized_party_binding() -> None:
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    accepted = jwt.encode(_claims(azp="trusted-client"), private_key, algorithm="RS256")
+    rejected = jwt.encode(_claims(azp="other-client"), private_key, algorithm="RS256")
+    resolver = _resolver(
+        private_key.public_key(), allowed_authorized_parties=("trusted-client",)
+    )
+
+    principal = await resolver(_request(accepted))
+    assert principal.actor_id == "service-42"
+
+    with pytest.raises(HTTPException) as error:
+        await resolver(_request(rejected))
+    assert error.value.status_code == 401
