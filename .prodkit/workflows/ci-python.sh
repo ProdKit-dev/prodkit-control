@@ -8,6 +8,9 @@ uv run --python "$python_version" --no-sync ruff check .
 uv run --python "$python_version" --no-sync mypy
 uv run --python "$python_version" --no-sync pytest --cov-report=xml
 uv run --python "$python_version" --no-sync python scripts/export_schemas.py --check
+uv run --python "$python_version" --no-sync python scripts/check_package_completeness.py
+uv run --python "$python_version" --no-sync python scripts/check_contract_authority.py
+uv run --python "$python_version" --no-sync python scripts/check_contract_conformance.py
 
 if [[ "$python_version" == "3.13" ]]; then
   uv run --python "$python_version" --no-sync python scripts/ci_ha_scale.py

@@ -1,3 +1,6 @@
-"""Google model-provider normalization adapter."""
+"""Google Gemini model-provider normalization adapter."""
 
-__version__ = "0.8.0"
+from .provider import GoogleProvider, GoogleTransport
+
+__all__ = ["GoogleProvider", "GoogleTransport"]
+__version__ = "0.9.0"

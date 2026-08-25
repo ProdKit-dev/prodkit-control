@@ -1,0 +1,43 @@
+{
+  "schema_name": "prodkit.control-contract-authority-index",
+  "schema_version": "1.0.0",
+  "authority": "language-neutral",
+  "normative_roots": [
+    "contracts/specifications",
+    "contracts/protocols",
+    "contracts/conformance",
+    "schemas"
+  ],
+  "canonicalization_profiles": [
+    "prodkit-json-v1"
+  ],
+  "policy_profiles": [
+    "prodkit-default-policy-v1",
+    "prodkit-conjunctive-policy-v1"
+  ],
+  "specifications": [
+    "contracts/specifications/canonicalization-v1.md",
+    "contracts/specifications/policy-v1.md"
+  ],
+  "conformance": [
+    "contracts/conformance/canonicalization-v1.json",
+    "contracts/conformance/policy-v1.json"
+  ],
+  "native_runtimes": {
+    "python": {
+      "role": "implementation",
+      "root": "packages/python"
+    },
+    "typescript": {
+      "role": "implementation",
+      "root": "packages/typescript"
+    }
+  },
+  "rules": [
+    "Neither Python nor TypeScript is normative for portable semantics.",
+    "Portable semantic changes require specification and conformance evidence.",
+    "Every native runtime claiming a portable profile must pass the same conformance vectors.",
+    "External policy engines are adapters and may not weaken fail-closed Control semantics.",
+    "Unsupported or ambiguous security-critical semantics fail closed."
+  ]
+}

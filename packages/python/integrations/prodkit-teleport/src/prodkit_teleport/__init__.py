@@ -1,3 +1,6 @@
 """Teleport privileged-access evidence adapter."""
 
-__version__ = "0.8.0"
+from .evidence import TeleportEvidenceAdapter
+
+__all__ = ["TeleportEvidenceAdapter"]
+__version__ = "0.9.0"

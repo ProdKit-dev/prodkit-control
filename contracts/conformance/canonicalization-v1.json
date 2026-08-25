@@ -1,0 +1,53 @@
+{
+  "schema_name": "prodkit.control-canonicalization-conformance",
+  "schema_version": "1.0.0",
+  "profile": "prodkit-json-v1",
+  "vectors": [
+    {
+      "id": "object-order",
+      "input": {
+        "z": 1,
+        "a": "x",
+        "nested": {
+          "b": true,
+          "a": null
+        }
+      },
+      "canonical_json": "{\"a\":\"x\",\"nested\":{\"a\":null,\"b\":true},\"z\":1}",
+      "sha256": "9fccb00c883bac8ca6e5ec9268605328828c31b70aca996943e90a95dd7d260b"
+    },
+    {
+      "id": "unicode",
+      "input": {
+        "message": "Merhaba 🌍",
+        "list": [3, 2, 1]
+      },
+      "canonical_json": "{\"list\":[3,2,1],\"message\":\"Merhaba 🌍\"}",
+      "sha256": "f14a801504056b64e8ef3b4237addeb80aa34acdfef29083ceab8d09bb02949e"
+    },
+    {
+      "id": "escaped",
+      "input": {
+        "quote": "a\"b",
+        "slash": "a\\b",
+        "control": "line\nbreak"
+      },
+      "canonical_json": "{\"control\":\"line\\nbreak\",\"quote\":\"a\\\"b\",\"slash\":\"a\\\\b\"}",
+      "sha256": "b783d88c53c0d6b56d2cc1cd980c6255cfa1997126dc5769cf5c56818244cb02"
+    }
+  ],
+  "rejection_vectors": [
+    {
+      "id": "unsafe-positive-integer",
+      "input": 9007199254740992
+    },
+    {
+      "id": "unsafe-negative-integer",
+      "input": -9007199254740992
+    },
+    {
+      "id": "binary-floating-point",
+      "input": 1.5
+    }
+  ]
+}

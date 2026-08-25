@@ -1,7 +1,7 @@
 {
   "name": "@prodkit/control-next",
-  "version": "0.8.0",
-  "description": "Next.js server and route-handler integration boundary.",
+  "version": "0.9.0",
+  "description": "Next.js server client and guarded App Router route-handler integration for ProdKit Control.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",

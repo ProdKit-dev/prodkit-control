@@ -1,0 +1,164 @@
+{
+  "schema_name": "prodkit.control-policy-conformance",
+  "schema_version": "1.0.0",
+  "profiles": [
+    "prodkit-default-policy-v1",
+    "prodkit-conjunctive-policy-v1"
+  ],
+  "default_policy": [
+    {
+      "id": "read-low-allows",
+      "input": {
+        "effect_class": "read",
+        "risk_class": "low"
+      },
+      "expected": {
+        "outcome": "allow",
+        "reason_codes": ["low_risk_action_allowed"],
+        "required_approval_roles": [],
+        "constraints": {}
+      }
+    },
+    {
+      "id": "write-low-requires-approval",
+      "input": {
+        "effect_class": "write",
+        "risk_class": "low"
+      },
+      "expected": {
+        "outcome": "require_approval",
+        "reason_codes": ["side_effect_requires_exact_approval"],
+        "required_approval_roles": ["production_approver"],
+        "constraints": {}
+      }
+    },
+    {
+      "id": "read-high-requires-approval",
+      "input": {
+        "effect_class": "read",
+        "risk_class": "high"
+      },
+      "expected": {
+        "outcome": "require_approval",
+        "reason_codes": ["side_effect_requires_exact_approval"],
+        "required_approval_roles": ["production_approver"],
+        "constraints": {}
+      }
+    },
+    {
+      "id": "privileged-critical-denies",
+      "input": {
+        "effect_class": "privileged",
+        "risk_class": "critical"
+      },
+      "expected": {
+        "outcome": "deny",
+        "reason_codes": ["critical_privileged_action_denied_by_default"],
+        "required_approval_roles": [],
+        "constraints": {}
+      }
+    }
+  ],
+  "conjunctive_policy": [
+    {
+      "id": "strictest-outcome-wins",
+      "decisions": [
+        {
+          "engine": "opa",
+          "outcome": "allow",
+          "reason_codes": ["base_allowed"],
+          "required_approval_roles": [],
+          "constraints": {"region": "eu"}
+        },
+        {
+          "engine": "permit",
+          "outcome": "require_approval",
+          "reason_codes": ["human_required"],
+          "required_approval_roles": ["security", "production_approver"],
+          "constraints": {"region": "eu"}
+        }
+      ],
+      "expected": {
+        "outcome": "require_approval",
+        "reason_codes": ["opa:base_allowed", "permit:human_required"],
+        "required_approval_roles": ["production_approver", "security"],
+        "constraints": {"region": "eu"}
+      }
+    },
+    {
+      "id": "deny-dominates",
+      "decisions": [
+        {
+          "engine": "native",
+          "outcome": "allow",
+          "reason_codes": [],
+          "required_approval_roles": [],
+          "constraints": {}
+        },
+        {
+          "engine": "opa",
+          "outcome": "deny",
+          "reason_codes": ["blocked"],
+          "required_approval_roles": [],
+          "constraints": {}
+        }
+      ],
+      "expected": {
+        "outcome": "deny",
+        "reason_codes": ["opa:blocked"],
+        "required_approval_roles": [],
+        "constraints": {}
+      }
+    },
+    {
+      "id": "constraint-conflict-fails-closed",
+      "decisions": [
+        {
+          "engine": "one",
+          "outcome": "allow",
+          "reason_codes": ["ok"],
+          "required_approval_roles": ["z_role"],
+          "constraints": {"region": "eu", "ticket": true}
+        },
+        {
+          "engine": "two",
+          "outcome": "allow",
+          "reason_codes": ["also_ok"],
+          "required_approval_roles": ["a_role", "z_role"],
+          "constraints": {"region": "us", "ticket": true}
+        }
+      ],
+      "expected": {
+        "outcome": "deny",
+        "reason_codes": ["one:ok", "two:also_ok", "constraint_conflict:region"],
+        "required_approval_roles": ["a_role", "z_role"],
+        "constraints": {"region": "eu", "ticket": true}
+      }
+    },
+    {
+      "id": "empty-reasons-get-fallback",
+      "decisions": [
+        {
+          "engine": "one",
+          "outcome": "allow",
+          "reason_codes": [],
+          "required_approval_roles": [],
+          "constraints": {}
+        },
+        {
+          "engine": "two",
+          "outcome": "allow",
+          "reason_codes": [],
+          "required_approval_roles": [],
+          "constraints": {}
+        }
+      ],
+      "expected": {
+        "outcome": "allow",
+        "reason_codes": ["all_policy_engines_returned_no_reason"],
+        "required_approval_roles": [],
+        "constraints": {}
+      }
+    }
+  ]
+}

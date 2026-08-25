@@ -1,3 +1,6 @@
 """Anthropic model-provider normalization adapter."""
 
-__version__ = "0.8.0"
+from .provider import AnthropicProvider, AnthropicTransport
+
+__all__ = ["AnthropicProvider", "AnthropicTransport"]
+__version__ = "0.9.0"

@@ -2,7 +2,7 @@
 
 ProdKit Control uses a **maturity-gated roadmap**. Version numbers communicate an engineering boundary, not a marketing claim. A milestone is complete only when its documented release gates are evidenced in CI, integration tests, security tests, operational exercises, or independent review as appropriate.
 
-The long-term target is an advanced, general-purpose, provider-neutral, standalone-capable control and assurance plane with a documented enterprise production profile.
+The long-term target is an advanced, general-purpose, provider-neutral, language-neutral, standalone-capable control and assurance plane with a documented enterprise production profile.
 
 ## Versioning model
 
@@ -13,7 +13,7 @@ The pre-1.0 sequence is intentionally simple:
 - Patch versions such as `v0.1.1` are reserved for corrective releases of an already published milestone when needed; they are not roadmap milestones.
 - `v1.0.0` is reserved for the documented production assurance profile and must satisfy the full 1.0 release gate.
 
-This keeps the roadmap readable: `0.1.0` means the first capability milestone after the foundation, `0.2.0` the second, and so forth.
+This keeps the roadmap readable: each minor version names a concrete maturity boundary rather than a percentage-complete claim.
 
 ## Maturity ladder
 
@@ -27,7 +27,8 @@ flowchart LR
     T --> G[0.6.0\nGovernance + lifecycle]
     G --> DR[0.7.0\nReliability + disaster recovery]
     DR --> S[0.8.0\nSecurity + operational hardening]
-    S --> C[0.9.0\nProduction candidate]
+    S --> LC[0.9.0\nCumulative completeness + language-neutral authority]
+    LC --> C[0.10.0\nProduction candidate]
     C --> P[1.0.0\nProduction assurance profile]
 ```
 
@@ -38,6 +39,7 @@ Every milestone inherits all earlier gates. A release may contain additional wor
 A release gate should be supported by one or more of:
 
 - deterministic unit/property tests for canonical contracts and hashing;
+- language-neutral semantic specifications and shared cross-runtime conformance vectors where behavior is declared portable;
 - integration tests across real adapters and durable stores;
 - crash/restart/idempotency tests around external side effects;
 - adversarial tests for bypass, replay, race, privilege, and tenant isolation;
@@ -48,7 +50,7 @@ A release gate should be supported by one or more of:
 - documented operational procedures;
 - independent security or architecture review where required.
 
-A milestone is not complete merely because package names or adapter boundaries exist. The implementation, proof, documentation, and operational boundary must agree.
+A milestone is not complete merely because package names or adapter boundaries exist. The implementation, proof, documentation, and operational boundary must agree. A portable semantic is not complete merely because one native runtime implements it: every runtime claiming the same profile must pass the same language-neutral conformance corpus.
 
 ## v0.0.0 — Canonical foundation
 
@@ -297,7 +299,40 @@ Close known threat-model gaps for the supported production profile.
 - incident-response exercise;
 - no open critical security finding for the supported profile.
 
-## v0.9.0 — Production candidate
+## v0.9.0 — Cumulative completeness and language-neutral authority
+
+### Goal
+
+Close inherited implementation gaps before entering production-candidate freeze, ensure every declared first-party package has executable behavior appropriate to its advertised boundary, and make portable Control semantics independent of Python or TypeScript implementation authority.
+
+### Required capabilities
+
+- complete implementation audit of every first-party Python and TypeScript package declared in the workspace;
+- no supported or optional-supported first-party package that is only a docstring, version constant, re-export shell without its advertised behavior, or speculative directory;
+- production-capable implementations for all inherited v0.1 executor families in the supported profile, including database, Kubernetes, and deployment boundaries;
+- functional provider/integration adapters for every first-party package shipped in the v0.9 workspace while keeping external providers optional;
+- functional Next.js and React integration surfaces rather than version-only placeholders;
+- machine-readable package-completeness manifest covering the discovered workspace;
+- CI that fails on undeclared packages, version skew, missing implementation, or scaffold-only packages;
+- a language-neutral contract authority composed of semantic specifications, published schemas, protocol definitions, canonicalization profiles, and shared conformance vectors;
+- Python and TypeScript declared as native **implementations**, never normative portable authorities;
+- portable `prodkit-json-v1` canonicalization semantics with cross-runtime golden vectors;
+- portable built-in/default and conjunctive policy profiles with identical Python/TypeScript outcomes;
+- external policy systems retained as adapters that normalize into canonical decisions and cannot weaken fail-closed composition;
+- architecture decision and compatibility rules covering future native runtimes and schema generation.
+
+### Release gates
+
+- package-completeness discovery covers the entire first-party Python/TypeScript workspace and reports no scaffold package;
+- all first-party package/root/lock metadata is normalized to `0.9.0` before the exact release candidate is qualified;
+- Python CI passes the language-neutral authority check and shared canonicalization/policy conformance corpus;
+- TypeScript/Node CI independently passes the same shared canonicalization/policy conformance corpus;
+- a semantic change present in only one native runtime blocks release until the specification/vectors and other claiming runtimes agree;
+- existing v0.0-v0.8 tests, security gates, reconciliation gates, HA/DR exercises, and release lifecycle remain green;
+- no documentation or package metadata overstates provider, language, production, or enterprise guarantees;
+- exact-head CI, Security, CodeQL, review, trusted release proof, publication, independent release verification, and branch cleanup complete successfully.
+
+## v0.10.0 — Production candidate
 
 ### Goal
 
@@ -320,7 +355,8 @@ Freeze the supported production profile long enough to prove compatibility, oper
 - backup/restore and disaster-recovery proof;
 - multi-tenant isolation proof where that profile is supported;
 - independent architecture/security review initiated or completed;
-- no unresolved blocker against the 1.0 guarantee set.
+- no unresolved blocker against the 1.0 guarantee set;
+- all v0.9 language-neutral authority and package-completeness gates remain enforced.
 
 ## v1.0.0 — Production assurance profile
 
@@ -339,13 +375,14 @@ Provide a stable, documented, independently reviewable production assurance prof
 - disaster recovery with validated RPO/RTO procedures;
 - retention, deletion, legal hold, export, and key rotation;
 - multi-tenant isolation and authorization verification for the enterprise multi-tenant profile;
+- language-neutral portable contract authority with compatibility/conformance evidence for every supported native runtime;
 - compatibility, migration, and deprecation policy;
 - independent security review with release-blocking critical findings resolved.
 
 ### 1.0 release gate
 
-`v1.0.0` must not be declared merely because all packages exist. The release requires evidence that the **supported production profile** satisfies the documented guarantees under normal operation, failure, recovery, upgrade, and adversarial conditions.
+`v1.0.0` must not be declared merely because all packages exist. The release requires evidence that the **supported production profile** satisfies the documented guarantees under normal operation, failure, recovery, upgrade, adversarial conditions, and cross-runtime portability claims.
 
 ## Post-1.0 directions
 
-Post-1.0 work may include additional provider/executor/reconciler ecosystems, richer organization policy profiles, distributed evidence federation, higher-assurance hardware-backed identity/signing, additional compliance mappings, and deeper delivery-platform integrations. These directions must remain subordinate to the core invariants: provider neutrality, exact authorization, fail-closed control, durable evidence, independent reconciliation, and explicit claim boundaries.
+Post-1.0 work may include additional provider/executor/reconciler ecosystems, richer organization policy profiles, distributed evidence federation, higher-assurance hardware-backed identity/signing, additional compliance mappings, deeper delivery-platform integrations, and additional native runtimes. These directions must remain subordinate to the core invariants: provider neutrality, language-neutral portable authority, exact authorization, fail-closed control, durable evidence, independent reconciliation, and explicit claim boundaries.
