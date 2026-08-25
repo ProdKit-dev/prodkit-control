@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import threading
 import time
-from collections import defaultdict, deque
+from collections import deque
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -163,8 +163,7 @@ class SlidingWindowRateLimiter:
     ) -> None:
         self._policy = policy
         self._clock = clock
-        self._entries: dict[str, deque[float]] = defaultdict(deque)
-        self._last_seen: dict[str, float] = {}
+        self._entries: dict[str, deque[float]] = {}
         self._lock = threading.Lock()
 
     def check(self, key: str) -> RateLimitDecision:
@@ -174,14 +173,31 @@ class SlidingWindowRateLimiter:
         cutoff = now - self._policy.window_seconds
         capacity = self._policy.limit + self._policy.burst
         with self._lock:
+            expired_keys: list[str] = []
+            for existing_key, existing_events in self._entries.items():
+                while existing_events and existing_events[0] <= cutoff:
+                    existing_events.popleft()
+                if not existing_events:
+                    expired_keys.append(existing_key)
+            for expired_key in expired_keys:
+                del self._entries[expired_key]
+
             if key not in self._entries and len(self._entries) >= self._policy.max_keys:
-                oldest = min(self._last_seen, key=self._last_seen.__getitem__)
-                del self._entries[oldest]
-                del self._last_seen[oldest]
-            events = self._entries[key]
-            while events and events[0] <= cutoff:
-                events.popleft()
-            self._last_seen[key] = now
+                retry = min(
+                    max(
+                        1,
+                        int(
+                            events[0]
+                            + self._policy.window_seconds
+                            - now
+                            + 0.999
+                        ),
+                    )
+                    for events in self._entries.values()
+                )
+                return RateLimitDecision(False, 0, retry)
+
+            events = self._entries.setdefault(key, deque())
             if len(events) >= capacity:
                 retry = max(1, int(events[0] + self._policy.window_seconds - now + 0.999))
                 return RateLimitDecision(False, 0, retry)
