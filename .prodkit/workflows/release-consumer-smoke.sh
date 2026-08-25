@@ -65,7 +65,7 @@ from prodkit_control_fastapi import create_app
 
 app = create_app()
 schema = app.openapi()
-assert schema["info"]["title"] == "ProdKit Control API"
+assert schema["info"]["title"] == "ProdKit Control"
 assert "/healthz" in schema["paths"]
 assert "/readyz" in schema["paths"]
 assert prodkit_control_core is not None
