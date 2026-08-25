@@ -11,9 +11,7 @@ HOMEPAGE_URL = "https://github.com/ProdKit-dev/prodkit-control"
 DOCUMENTATION_URL = f"{HOMEPAGE_URL}/tree/main/docs"
 ISSUES_URL = f"{HOMEPAGE_URL}/issues"
 
-_PYTHON_FIELD_RE = re.compile(
-    r"^(?P<indent>\s*)(?P<key>readme|license-files|license)\s*=.*$"
-)
+_PYTHON_FIELD_RE = re.compile(r"^(?P<indent>\s*)(?P<key>readme|license-files|license)\s*=.*$")
 
 _TS_DESCRIPTIONS = {
     "@prodkit/control": "Language-neutral TypeScript contracts and portable semantics for ProdKit Control.",
@@ -99,7 +97,11 @@ def _normalize_typescript_project(path: Path) -> None:
     payload["engines"] = {"node": ">=22"}
     payload["publishConfig"] = {"access": "public"}
     existing_files = payload.get("files")
-    files = [item for item in existing_files if isinstance(item, str)] if isinstance(existing_files, list) else []
+    files = (
+        [item for item in existing_files if isinstance(item, str)]
+        if isinstance(existing_files, list)
+        else []
+    )
     for required in ("dist", "README.md", "LICENSE", "NOTICE"):
         if required not in files:
             files.append(required)
