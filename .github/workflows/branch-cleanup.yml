@@ -26,7 +26,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: read
-    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-branch-cleanup.yml@d117932d61e0bc45ec065dfc13728b71c6ceb9f3
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-branch-cleanup.yml@e77861d685e0aaaabd43a385c9f26297d3598792
     with:
       branches_json: ${{ inputs.branches_json }}
       expected_default_sha: ${{ inputs.expected_default_sha != '' && inputs.expected_default_sha || github.sha }}
