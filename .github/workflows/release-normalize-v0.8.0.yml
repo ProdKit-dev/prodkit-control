@@ -10,13 +10,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: normalize-v0.8.0-hosted
+  group: normalize-v0.8.0
   cancel-in-progress: false
 
 jobs:
   normalize:
     name: normalize
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     steps:
       - name: Check out exact release branch
@@ -87,7 +87,7 @@ jobs:
           PY
           uv run --python 3.13 --no-sync python scripts/export_schemas.py
           uv run --python 3.13 --no-sync python scripts/export_schemas.py --check
-          uv run --python 3.13 --no-sync pytest -q tests/test_security_hardening.py
+          uv run --python 3.13 --no-sync pytest -q --no-cov tests/test_security_hardening.py
           python3 scripts/release_check.py --version 0.8.0
           git diff --check
           git status --short
