@@ -40,6 +40,7 @@ done
 
 uv run --python "$python_version" --no-sync python scripts/inspect_release_artifacts.py \
   .artifacts/release-build --version "$version"
+bash .prodkit/workflows/release-consumer-smoke.sh .artifacts/release-build "$python_version"
 
 # uv may place build-control files (for example .gitignore) beside distributions.
 # Publish only package payloads; the central release contract rejects hidden names.
