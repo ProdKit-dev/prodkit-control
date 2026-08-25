@@ -62,16 +62,27 @@ def check() -> None:
     if "prodkit-json-v1" not in index.get("canonicalization_profiles", []):
         raise ValueError("prodkit-json-v1 must be indexed as a portable canonicalization profile")
     policy_profiles = set(index.get("policy_profiles", []))
-    if policy_profiles != {"prodkit-default-policy-v1", "prodkit-conjunctive-policy-v1"}:
+    expected_policy_profiles = {
+        "prodkit-default-policy-v1",
+        "prodkit-conjunctive-policy-v1",
+    }
+    if policy_profiles != expected_policy_profiles:
         raise ValueError("v0.9 portable policy profile set is incomplete")
 
-    _require_file("packages/python/prodkit-control-runtime/src/prodkit_control_runtime/policy_semantics.py")
+    _require_file(
+        "packages/python/prodkit-control-runtime/src/"
+        "prodkit_control_runtime/policy_semantics.py"
+    )
     _require_file("packages/typescript/control/src/portable.ts")
     _require_file("scripts/check_contract_conformance.py")
     _require_file("scripts/check_contract_conformance.mjs")
 
-    python_ci = _require_file(".prodkit/workflows/ci-python.sh").read_text(encoding="utf-8")
-    node_ci = _require_file(".prodkit/workflows/ci-node.sh").read_text(encoding="utf-8")
+    python_ci = _require_file(".prodkit/workflows/ci-python.sh").read_text(
+        encoding="utf-8"
+    )
+    node_ci = _require_file(".prodkit/workflows/ci-node.sh").read_text(
+        encoding="utf-8"
+    )
     if "check_contract_authority.py" not in python_ci:
         raise ValueError("Python CI does not enforce contract authority")
     if "check_contract_conformance.py" not in python_ci:
@@ -81,11 +92,15 @@ def check() -> None:
 
     roadmap = _require_file("ROADMAP.md").read_text(encoding="utf-8")
     if "v0.9.0 — Cumulative completeness and language-neutral authority" not in roadmap:
-        raise ValueError("v0.9 roadmap does not gate cumulative completeness and language neutrality")
+        raise ValueError(
+            "v0.9 roadmap does not gate cumulative completeness and language neutrality"
+        )
     if "v0.10.0 — Production candidate" not in roadmap:
         raise ValueError("production candidate milestone has not been moved to v0.10.0")
 
-    print("contract authority: language-neutral specifications and cross-runtime gates are enforced")
+    print(
+        "contract authority: language-neutral specifications and cross-runtime gates are enforced"
+    )
 
 
 def main() -> None:
