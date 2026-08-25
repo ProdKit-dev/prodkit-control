@@ -54,6 +54,13 @@ def test_secret_reference_guard_requires_approved_versioned_binding() -> None:
         guard.validate(reference, tenant_id="tenant-b", purpose="signing")
     with pytest.raises(PermissionError, match="audience mismatch"):
         guard.validate(reference, tenant_id="tenant-a", purpose="signing", audience="executor-b")
+    with pytest.raises(PermissionError, match="audience mismatch"):
+        guard.validate(
+            reference.model_copy(update={"audience": ()}),
+            tenant_id="tenant-a",
+            purpose="signing",
+            audience="executor-a",
+        )
 
 
 def test_secret_reference_contract_rejects_inline_material() -> None:
@@ -97,21 +104,25 @@ def test_workload_identity_rejects_replay_and_wrong_bindings() -> None:
     now = datetime.now(UTC)
     verifier = _workload_verifier()
     assertion = _workload_assertion(now)
-    verifier.verify_and_claim(assertion, now=now)
+    verifier.verify_and_claim(assertion, tenant_id="tenant-a", now=now)
 
     with pytest.raises(PermissionError, match="replay"):
-        verifier.verify_and_claim(assertion, now=now)
+        verifier.verify_and_claim(assertion, tenant_id="tenant-a", now=now)
+    with pytest.raises(PermissionError, match="tenant mismatch"):
+        _workload_verifier().verify_and_claim(assertion, tenant_id="tenant-b", now=now)
     with pytest.raises(PermissionError, match="audience mismatch"):
         _workload_verifier().verify_and_claim(
-            assertion.model_copy(update={"audience": "wrong"}), now=now
+            assertion.model_copy(update={"audience": "wrong"}), tenant_id="tenant-a", now=now
         )
     with pytest.raises(PermissionError, match="subject"):
         _workload_verifier().verify_and_claim(
-            assertion.model_copy(update={"subject": "spiffe://attacker/workload"}), now=now
+            assertion.model_copy(update={"subject": "spiffe://attacker/workload"}),
+            tenant_id="tenant-a",
+            now=now,
         )
     with pytest.raises(PermissionError, match="client"):
         _workload_verifier().verify_and_claim(
-            assertion.model_copy(update={"client_id": "unknown"}), now=now
+            assertion.model_copy(update={"client_id": "unknown"}), tenant_id="tenant-a", now=now
         )
 
 
@@ -122,7 +133,7 @@ def test_workload_replay_claim_is_atomic_under_race() -> None:
 
     def attempt() -> bool:
         try:
-            verifier.verify_and_claim(assertion, now=now)
+            verifier.verify_and_claim(assertion, tenant_id="tenant-a", now=now)
         except PermissionError:
             return False
         return True
@@ -138,7 +149,9 @@ def test_workload_identity_validity_window_fails_closed() -> None:
     assertion = _workload_assertion(now)
     with pytest.raises(PermissionError, match="validity window"):
         verifier.verify_and_claim(
-            assertion.model_copy(update={"expires_at": now - timedelta(seconds=1)}), now=now
+            assertion.model_copy(update={"expires_at": now - timedelta(seconds=1)}),
+            tenant_id="tenant-a",
+            now=now,
         )
 
 
@@ -165,15 +178,25 @@ def test_security_audit_export_redacts_credential_like_fields() -> None:
         severity=SecuritySeverity.HIGH,
         outcome=SecurityOutcome.DENIED,
         tenant_id="tenant-a",
-        attributes={"authorization": "Bearer should-not-leak", "route": "/v1/actions"},
+        attributes={
+            "authorization": "Bearer should-not-leak",
+            "api_key": "live-api-key",
+            "access-key-id": "live-access-key",
+            "route": "/v1/actions",
+        },
     )
     NDJSONSecurityAuditExporter(lines.append).export((event,))
     exported = json.loads(lines[0])
     assert exported["attributes"]["authorization"] == "[REDACTED]"
+    assert exported["attributes"]["api_key"] == "[REDACTED]"
+    assert exported["attributes"]["access-key-id"] == "[REDACTED]"
     assert exported["attributes"]["route"] == "/v1/actions"
     assert "should-not-leak" not in lines[0]
-    assert redact_security_attributes({"session_cookie": "abc"}) == {
-        "session_cookie": "[REDACTED]"
+    assert "live-api-key" not in lines[0]
+    assert "live-access-key" not in lines[0]
+    assert redact_security_attributes({"session_cookie": "abc", "apikey": "def"}) == {
+        "session_cookie": "[REDACTED]",
+        "apikey": "[REDACTED]",
     }
 
 
