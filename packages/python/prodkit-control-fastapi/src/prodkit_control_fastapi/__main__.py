@@ -23,7 +23,7 @@ def main() -> None:
     app = create_app(allow_insecure_header_auth=_env_bool("PRODKIT_ALLOW_INSECURE_HEADER_AUTH"))
     uvicorn.run(
         app,
-        host=os.getenv("PRODKIT_API_HOST", "127.0.0.0"),
+        host=os.getenv("PRODKIT_API_HOST", "127.0.0.1"),
         port=int(os.getenv("PRODKIT_API_PORT", "8000")),
         log_level=os.getenv("PRODKIT_LOG_LEVEL", "info").lower(),
     )
