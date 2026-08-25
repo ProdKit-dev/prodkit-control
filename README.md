@@ -4,7 +4,7 @@
 [![Security](https://github.com/ProdKit-dev/prodkit-control/actions/workflows/security.yml/badge.svg)](https://github.com/ProdKit-dev/prodkit-control/actions/workflows/security.yml)
 [![CodeQL](https://github.com/ProdKit-dev/prodkit-control/actions/workflows/codeql.yml/badge.svg)](https://github.com/ProdKit-dev/prodkit-control/actions/workflows/codeql.yml)
 [![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](pyproject.toml)
+[![Python](https://img.shields.io/badge/Python-3.12--3.14-blue.svg)](pyproject.toml)
 
 A provider-neutral, language-neutral **intent-to-production control and assurance plane** for software changes and AI/agent actions.
 
@@ -23,7 +23,7 @@ v0.9.1 does **not** claim the v1.0 enterprise production-assurance gate. Maturit
 
 For the Python control plane and CLI:
 
-- Python 3.12+
+- Python 3.12–3.14
 - [`uv`](https://docs.astral.sh/uv/)
 
 For TypeScript development/conformance:
