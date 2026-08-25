@@ -133,7 +133,8 @@ def main() -> int:
     group.add_argument("--version")
     group.add_argument("--tag")
     args = parser.parse_args()
-    expected = _version(args.version or args.tag) if (args.version or args.tag) else _root_project_version()
+    requested = args.version or args.tag
+    expected = _version(requested) if requested else _root_project_version()
     failures = verify(expected)
     if failures:
         print("Release contract failed:")
