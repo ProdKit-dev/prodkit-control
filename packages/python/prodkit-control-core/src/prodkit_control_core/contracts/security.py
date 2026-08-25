@@ -49,9 +49,18 @@ class SecretReference(ContractModel):
 
     @model_validator(mode="after")
     def validate_reference(self) -> SecretReference:
-        lowered = self.reference.lower()
-        forbidden = ("password=", "token=", "secret=", "private_key=", "authorization:")
-        if any(marker in lowered for marker in forbidden):
+        normalized = self.reference.lower().replace("-", "_")
+        forbidden = (
+            "password=",
+            "token=",
+            "secret=",
+            "private_key=",
+            "authorization:",
+            "api_key=",
+            "apikey=",
+            "access_key=",
+        )
+        if any(marker in normalized for marker in forbidden):
             raise ValueError("secret references must not contain inline secret material")
         if len(self.audience) != len(set(self.audience)):
             raise ValueError("secret reference audience values must be unique")
