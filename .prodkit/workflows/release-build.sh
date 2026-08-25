@@ -7,8 +7,11 @@ python_version="${PRODKIT_RELEASE_PYTHON_VERSION:-3.13}"
 pnpm_version="${PRODKIT_RELEASE_PNPM_VERSION:-10.15.0}"
 
 python3 scripts/release_check.py --version "$version"
+python3 scripts/check_contract_authority.py
 uv python install "$python_version"
 uv sync --all-packages --group dev --locked --python "$python_version"
+uv run --python "$python_version" --no-sync python scripts/check_contract_conformance.py
+uv run --python "$python_version" --no-sync python scripts/check_package_completeness.py
 command -v pnpm >/dev/null
 actual_pnpm_version="$(pnpm --version)"
 if [[ "$actual_pnpm_version" != "$pnpm_version" ]]; then
@@ -16,11 +19,12 @@ if [[ "$actual_pnpm_version" != "$pnpm_version" ]]; then
   exit 2
 fi
 pnpm install --frozen-lockfile
+pnpm build:ts
+node scripts/check_contract_conformance.mjs
 
 rm -rf .artifacts/release-build
 mkdir -p .artifacts/release-build "$output"
 uv build --all-packages --out-dir .artifacts/release-build
-pnpm build:ts
 for package_dir in packages/typescript/*; do
   test -f "$package_dir/package.json" || continue
   pnpm --dir "$package_dir" pack --pack-destination "$GITHUB_WORKSPACE/.artifacts/release-build"
