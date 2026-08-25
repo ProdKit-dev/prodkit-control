@@ -1,0 +1,169 @@
+name: v0.9.1 Review Fix
+
+on:
+  push:
+    branches:
+      - release/v0.9.1-public-readiness
+    paths:
+      - .github/workflows/v0.9.1-review-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    name: Apply v0.9.1 review corrections
+    if: github.actor != 'github-actions[bot]'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: "0.10.0"
+
+      - name: Apply review corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              if text.count(old) != 1:
+                  raise SystemExit(f"{path}: expected replacement target exactly once")
+              target.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          replace_once(
+              ".prodkit/workflows/ci-python.sh",
+              'uv run --python "$python_version" --no-sync python scripts/release_check.py\n',
+              'release_version="$(uv run --python "$python_version" --no-sync python -c \'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])\')"\n'
+              'uv run --python "$python_version" --no-sync python scripts/release_check.py --version "$release_version"\n',
+          )
+
+          replace_once(
+              "Makefile",
+              "\tuv run python scripts/release_check.py\n",
+              "\t@version=\"$$(uv run python -c 'import tomllib; print(tomllib.load(open(\"pyproject.toml\", \"rb\"))[\"project\"][\"version\"])')\"; \\\n"
+              "\t\tuv run python scripts/release_check.py --version \"$$version\"\n",
+          )
+
+          replace_once(
+              "packages/typescript/control-next/src/index.ts",
+              'export const CONTROL_NEXT_PACKAGE_VERSION = "0.9.0" as const;',
+              'export const CONTROL_NEXT_PACKAGE_VERSION = "0.9.1" as const;',
+          )
+          replace_once(
+              "packages/typescript/control-react/src/index.ts",
+              'export const CONTROL_REACT_PACKAGE_VERSION = "0.9.0" as const;',
+              'export const CONTROL_REACT_PACKAGE_VERSION = "0.9.1" as const;',
+          )
+
+          versioner = Path("scripts/set_release_version.py")
+          text = versioner.read_text(encoding="utf-8")
+          marker = 'PYTHON_VERSION_RE = re.compile(r\'^(?P<prefix>__version__\\s*=\\s*)"[^\"]+"(?P<suffix>\\s*)$\')\n'
+          addition = marker + 'TS_RUNTIME_VERSION_RE = re.compile(\n    r\'^(?P<prefix>export const [A-Z0-9_]+_PACKAGE_VERSION\\s*=\\s*)"[^\"]+"(?P<suffix>\\s+as const;\\s*)$\'\n)\n'
+          if text.count(marker) != 1:
+              raise SystemExit("set_release_version.py: Python version regex marker not found exactly once")
+          text = text.replace(marker, addition, 1)
+
+          marker = '\n\ndef set_fastapi_metadata(version: str) -> None:\n'
+          function = '''
+
+          def set_typescript_runtime_versions(version: str) -> None:
+              for path in sorted((ROOT / "packages/typescript").glob("*/src/**/*.ts")):
+                  lines = path.read_text(encoding="utf-8").splitlines()
+                  changed = False
+                  for index, line in enumerate(lines):
+                      match = TS_RUNTIME_VERSION_RE.match(line)
+                      if match is None:
+                          continue
+                      lines[index] = f'{match.group("prefix")}"{version}"{match.group("suffix")}'
+                      changed = True
+                  if changed:
+                      path.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+          '''
+          function = "\n".join(line.removeprefix("          ") for line in function.splitlines())
+          if text.count(marker) != 1:
+              raise SystemExit("set_release_version.py: FastAPI function marker not found exactly once")
+          text = text.replace(marker, function + marker, 1)
+
+          old_call = '''    for path in typescript_projects:
+              set_typescript_version(path, version)
+              set_python_runtime_versions(version)
+          '''
+          old_call = "\n".join(line.removeprefix("          ") for line in old_call.splitlines())
+          new_call = '''    for path in typescript_projects:
+              set_typescript_version(path, version)
+              set_typescript_runtime_versions(version)
+              set_python_runtime_versions(version)
+          '''
+          new_call = "\n".join(line.removeprefix("          ") for line in new_call.splitlines())
+          if text.count(old_call) != 1:
+              raise SystemExit("set_release_version.py: TypeScript version call marker not found exactly once")
+          versioner.write_text(text.replace(old_call, new_call, 1), encoding="utf-8")
+
+          checker = Path("scripts/release_check.py")
+          text = checker.read_text(encoding="utf-8")
+          marker = 'VERSION_RE = re.compile(r"^v?(\\d+\\.\\d+\\.\\d+)$")\n'
+          addition = marker + 'TS_RUNTIME_VERSION_RE = re.compile(\n    r\'export const (?P<name>[A-Z0-9_]+_PACKAGE_VERSION) = "(?P<version>\\d+\\.\\d+\\.\\d+)" as const;\'\n)\n'
+          if text.count(marker) != 1:
+              raise SystemExit("release_check.py: version regex marker not found exactly once")
+          text = text.replace(marker, addition, 1)
+
+          marker = '''    for name, (version, path) in sorted(_typescript_packages().items()):
+              if version != expected:
+                  failures.append(f"{path.relative_to(ROOT)}: {name} is {version}, expected {expected}")
+          '''
+          marker = "\n".join(line.removeprefix("          ") for line in marker.splitlines())
+          addition = marker + '''
+
+              for path in sorted((ROOT / "packages/typescript").glob("*/src/**/*.ts")):
+                  source = path.read_text(encoding="utf-8")
+                  for match in TS_RUNTIME_VERSION_RE.finditer(source):
+                      version = match.group("version")
+                      if version != expected:
+                          failures.append(
+                              f"{path.relative_to(ROOT)}: {match.group('name')} is {version}, expected {expected}"
+                          )
+          '''
+          addition = "\n".join(line.removeprefix("          ") for line in addition.splitlines())
+          if text.count(marker) != 1:
+              raise SystemExit("release_check.py: TypeScript package verification marker not found exactly once")
+          checker.write_text(text.replace(marker, addition, 1), encoding="utf-8")
+          PY
+
+          python scripts/set_release_version.py 0.9.1
+          python scripts/prepare_public_metadata.py
+          uv lock
+          python scripts/release_check.py --version 0.9.1
+          python scripts/check_package_completeness.py
+          python scripts/check_public_readiness.py
+          make release-check
+          git diff --check
+
+      - name: Commit permanent review fixes and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git diff --name-only)
+          test "${#changed[@]}" -gt 0
+          for path in "${changed[@]}"; do
+            case "$path" in
+              .prodkit/workflows/ci-python.sh|Makefile|scripts/set_release_version.py|scripts/release_check.py|packages/typescript/control-next/src/index.ts|packages/typescript/control-react/src/index.ts) ;;
+              *) echo "unexpected review-fix mutation: $path" >&2; exit 2 ;;
+            esac
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "${changed[@]}"
+          git rm -- .github/workflows/v0.9.1-review-fix.yml
+          git commit -m "fix(release): address v0.9.1 qualification review"
+          git push origin HEAD:release/v0.9.1-public-readiness
