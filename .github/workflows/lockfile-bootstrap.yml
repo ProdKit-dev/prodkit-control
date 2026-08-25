@@ -1,24 +1,25 @@
 name: Finalize v0.9 Metadata
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches:
+      - release/v0.9.0-cumulative-completeness
 
 permissions:
   contents: write
 
 concurrency:
-  group: v0.9-metadata-${{ github.event.pull_request.head.ref }}
+  group: v0.9-metadata-finalizer
   cancel-in-progress: true
 
 jobs:
   finalize:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.ref_name == 'release/v0.9.0-cumulative-completeness'
     runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: release/v0.9.0-cumulative-completeness
           fetch-depth: 0
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
         with:
@@ -117,4 +118,4 @@ v0.9.0 closes inherited first-party implementation and semantic-portability gaps
           git config user.name "prodkit-release-bot"
           git config user.email "prodkit-release-bot@users.noreply.github.com"
           git commit -m "release: finalize v0.9.0 source metadata"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          git push origin HEAD:release/v0.9.0-cumulative-completeness
