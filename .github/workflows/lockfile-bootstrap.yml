@@ -1,0 +1,37 @@
+name: Lockfile Bootstrap
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lockfile-bootstrap-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lock:
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: 0.10.0
+          enable-cache: true
+      - name: Generate lockfile
+        run: |
+          set -euo pipefail
+          uv lock
+          uv lock --check
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: generated-uv-lock-${{ github.event.pull_request.head.sha }}
+          path: uv.lock
+          if-no-files-found: error
+          retention-days: 1
