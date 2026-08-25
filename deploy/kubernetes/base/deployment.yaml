@@ -13,13 +13,16 @@ spec:
         app: prodkit-control-api
     spec:
       serviceAccountName: prodkit-control-api
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
       containers:
         - name: api
-          image: ghcr.io/prodkit-dev/prodkit-control:latest
+          image: ghcr.io/prodkit-dev/prodkit-control:0.8.0
           ports:
             - containerPort: 8000
           readinessProbe:
