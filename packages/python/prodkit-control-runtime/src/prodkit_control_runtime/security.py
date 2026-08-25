@@ -57,20 +57,26 @@ class InMemoryReplayStore:
             raise ValueError("max_entries must be positive")
         self._max_entries = max_entries
         self._claims: dict[str, datetime] = {}
+        self._expirations: list[tuple[datetime, str]] = []
         self._lock = threading.Lock()
+
+    def _evict_expired(self, *, now: datetime) -> None:
+        while self._expirations and self._expirations[0][0] <= now:
+            expires_at, key = heapq.heappop(self._expirations)
+            if self._claims.get(key) == expires_at:
+                del self._claims[key]
 
     def claim_once(self, *, key: str, expires_at: datetime, now: datetime) -> bool:
         if expires_at.tzinfo is None or now.tzinfo is None:
             raise ValueError("replay timestamps must be timezone-aware")
         with self._lock:
-            expired = [claim for claim, expiry in self._claims.items() if expiry <= now]
-            for claim in expired:
-                del self._claims[claim]
+            self._evict_expired(now=now)
             if key in self._claims:
                 return False
             if len(self._claims) >= self._max_entries:
                 raise RuntimeError("replay store capacity exhausted; fail closed")
             self._claims[key] = expires_at
+            heapq.heappush(self._expirations, (expires_at, key))
             return True
 
 
@@ -243,13 +249,12 @@ class SlidingWindowRateLimiter:
         cutoff = now - self._policy.window_seconds
         capacity = self._policy.limit + self._policy.burst
         with self._lock:
+            self._evict_expired(now=now, cutoff=cutoff)
             events = self._entries.get(key)
             if events is not None:
                 events = self._prune_bucket(key, events, cutoff)
 
             if events is None:
-                if len(self._entries) >= self._policy.max_keys:
-                    self._evict_expired(now=now, cutoff=cutoff)
                 if len(self._entries) >= self._policy.max_keys:
                     expires_at = self._next_valid_expiration()
                     retry = (
