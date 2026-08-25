@@ -1,3 +1,4 @@
+# One-shot release candidate normalizer. Removed before merge.
 name: Normalize v0.8.0 release candidate
 
 on:
