@@ -45,7 +45,9 @@ def _scan_uses(path: Path, violations: list[str], visited: set[Path]) -> None:
                 _scan_uses(dependency, violations, visited)
             continue
         if "@" not in target:
-            violations.append(f"{resolved_path.relative_to(ROOT.resolve())}: unpinned action {target}")
+            violations.append(
+                f"{resolved_path.relative_to(ROOT.resolve())}: unpinned action {target}"
+            )
             continue
         _, ref = target.rsplit("@", 1)
         if not EXACT_SHA.fullmatch(ref):
