@@ -1,0 +1,105 @@
+name: v0.9.1 Python Packaging Metadata Fix
+
+on:
+  push:
+    branches:
+      - release/v0.9.1-public-readiness
+    paths:
+      - .github/workflows/v0.9.1-python-packaging-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    name: Repair Python SPDX packaging metadata
+    if: github.actor != 'github-actions[bot]'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: "0.10.0"
+
+      - name: Repair generator and generated metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          generator = Path("scripts/prepare_public_metadata.py")
+          text = generator.read_text(encoding="utf-8")
+          old = '        "license": \'license = { text = "Apache-2.0" }\','
+          new = '        "license": \'license = "Apache-2.0"\','
+          if text.count(old) != 1:
+              raise SystemExit("prepare_public_metadata.py license template was not found exactly once")
+          generator.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          checker = Path("scripts/check_public_readiness.py")
+          text = checker.read_text(encoding="utf-8")
+          old_helper = '''def _is_apache_license(value: object) -> bool:
+              if value == "Apache-2.0":
+                  return True
+              return isinstance(value, dict) and value.get("text") == "Apache-2.0"
+          '''
+          old_helper = "\n".join(line.removeprefix("          ") for line in old_helper.splitlines())
+          new_helper = '''def _is_apache_license(value: object) -> bool:
+              return value == "Apache-2.0"
+          '''
+          new_helper = "\n".join(line.removeprefix("          ") for line in new_helper.splitlines())
+          if text.count(old_helper) != 1:
+              raise SystemExit("check_public_readiness.py Apache license helper was not found exactly once")
+          text = text.replace(old_helper, new_helper, 1)
+
+          old_root = '''    if not isinstance(project, dict) or not isinstance(project.get("version"), str):
+              raise ValueError("pyproject.toml is missing project.version")
+              return project["version"]
+          '''
+          old_root = "\n".join(line.removeprefix("          ") for line in old_root.splitlines())
+          new_root = '''    if not isinstance(project, dict) or not isinstance(project.get("version"), str):
+              raise ValueError("pyproject.toml is missing project.version")
+              if project.get("license") != "Apache-2.0":
+                  raise ValueError("pyproject.toml must declare Apache-2.0 as an SPDX expression")
+              if project.get("license-files") != ["LICENSE", "NOTICE"]:
+                  raise ValueError("pyproject.toml must ship LICENSE and NOTICE")
+              return project["version"]
+          '''
+          old_root = "\n".join(line.removeprefix("          ") for line in old_root.splitlines())
+          new_root = "\n".join(line.removeprefix("          ") for line in new_root.splitlines())
+          if text.count(old_root) != 1:
+              raise SystemExit("check_public_readiness.py root project check was not found exactly once")
+          checker.write_text(text.replace(old_root, new_root, 1), encoding="utf-8")
+          PY
+
+          python scripts/prepare_public_metadata.py
+          uv lock
+          python scripts/release_check.py --version 0.9.1
+          python scripts/check_package_completeness.py
+          python scripts/check_public_readiness.py
+          git diff --check
+
+      - name: Commit permanent correction and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git diff --name-only)
+          test "${#changed[@]}" -gt 0
+          for path in "${changed[@]}"; do
+            case "$path" in
+              pyproject.toml|uv.lock|scripts/prepare_public_metadata.py|scripts/check_public_readiness.py|packages/python/*/pyproject.toml|packages/python/*/*/pyproject.toml) ;;
+              *) echo "unexpected packaging-fix mutation: $path" >&2; exit 2 ;;
+            esac
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "${changed[@]}"
+          git rm -- .github/workflows/v0.9.1-python-packaging-fix.yml
+          git commit -m "fix(packaging): use SPDX license expressions"
+          git push origin HEAD:release/v0.9.1-public-readiness
