@@ -11,7 +11,9 @@ HOMEPAGE_URL = "https://github.com/ProdKit-dev/prodkit-control"
 DOCUMENTATION_URL = f"{HOMEPAGE_URL}/tree/main/docs"
 ISSUES_URL = f"{HOMEPAGE_URL}/issues"
 
-_PYTHON_FIELD_RE = re.compile(r"^(?P<indent>\s*)(?P<key>readme|license)\s*=.*$")
+_PYTHON_FIELD_RE = re.compile(
+    r"^(?P<indent>\s*)(?P<key>readme|license-files|license)\s*=.*$"
+)
 
 _TS_DESCRIPTIONS = {
     "@prodkit/control": "Language-neutral TypeScript contracts and portable semantics for ProdKit Control.",
@@ -43,6 +45,7 @@ def _normalize_python_project(path: Path) -> None:
     desired = {
         "readme": 'readme = "README.md"',
         "license": 'license = { text = "Apache-2.0" }',
+        "license-files": 'license-files = ["LICENSE", "NOTICE"]',
     }
     found: set[str] = set()
     for offset, line in enumerate(section, start=start + 1):
@@ -54,7 +57,7 @@ def _normalize_python_project(path: Path) -> None:
         found.add(key)
 
     insertion = end
-    for key in ("readme", "license"):
+    for key in ("readme", "license", "license-files"):
         if key not in found:
             lines.insert(insertion, desired[key])
             insertion += 1
@@ -95,6 +98,12 @@ def _normalize_typescript_project(path: Path) -> None:
     payload["bugs"] = {"url": ISSUES_URL}
     payload["engines"] = {"node": ">=22"}
     payload["publishConfig"] = {"access": "public"}
+    existing_files = payload.get("files")
+    files = [item for item in existing_files if isinstance(item, str)] if isinstance(existing_files, list) else []
+    for required in ("dist", "README.md", "LICENSE", "NOTICE"):
+        if required not in files:
+            files.append(required)
+    payload["files"] = files
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
