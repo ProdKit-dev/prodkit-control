@@ -1,4 +1,4 @@
-name: V090 Write Probe
+name: Finalize v0.9 Metadata
 
 on:
   push:
@@ -7,8 +7,37 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: v0.9-metadata-finalizer
+  cancel-in-progress: true
+
 jobs:
-  probe:
+  finalize:
     runs-on: [self-hosted, Linux, X64]
     steps:
-      - run: echo "v0.9 write probe"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: release/v0.9.0-cumulative-completeness
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: 0.10.0
+          enable-cache: true
+      - name: Generate exact v0.9 metadata
+        run: |
+          set -euo pipefail
+          python3 scripts/finalize_v090_metadata.py
+          uv lock
+          uv lock --check
+          python3 scripts/release_check.py --version 0.9.0
+          python3 scripts/check_contract_authority.py
+          python3 scripts/check_package_completeness.py
+          rm .github/workflows/lockfile-bootstrap.yml
+          rm .prodkit/v0.9-finalization-trigger
+          rm scripts/finalize_v090_metadata.py
+          git add -A
+          git diff --cached --check
+          git config user.name "prodkit-release-bot"
+          git config user.email "prodkit-release-bot@users.noreply.github.com"
+          git commit -m "release: finalize v0.9.0 source metadata"
+          git push origin HEAD:release/v0.9.0-cumulative-completeness
