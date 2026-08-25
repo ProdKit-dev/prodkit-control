@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 EXACT_SHA = re.compile(r"^[a-f0-9]{40}$")
-USES = re.compile(r"^\s*uses:\s*([^\s#]+)", re.MULTILINE)
+USES = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", re.MULTILINE)
 
 
 def check_workflow_pins() -> None:
