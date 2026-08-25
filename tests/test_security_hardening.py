@@ -30,6 +30,7 @@ from prodkit_control_runtime.security import (
     evaluate_slo,
     redact_security_attributes,
 )
+from scripts import check_security_policy
 
 
 def test_secret_reference_guard_requires_approved_versioned_binding() -> None:
@@ -167,6 +168,43 @@ def test_sliding_window_rate_limiter_caps_concurrent_burst() -> None:
 
     current[0] = 111.0
     assert limiter.check("tenant-a:principal-a").allowed is True
+
+
+def test_sliding_window_rate_limiter_fails_closed_at_key_capacity() -> None:
+    current = [100.0]
+    limiter = SlidingWindowRateLimiter(
+        RateLimitPolicy(policy_id="api", limit=3, burst=0, window_seconds=10, max_keys=1),
+        clock=lambda: current[0],
+    )
+
+    assert limiter.check("tenant-a:principal-a").allowed is True
+    denied = limiter.check("tenant-a:principal-b")
+    assert denied.allowed is False
+    assert denied.remaining == 0
+    assert denied.retry_after_seconds == 10
+    assert limiter.check("tenant-a:principal-c").allowed is False
+    assert limiter.check("tenant-a:principal-a").allowed is True
+
+    current[0] = 111.0
+    assert limiter.check("tenant-a:principal-b").allowed is True
+
+
+def test_workflow_pin_policy_scans_yaml_suffix(tmp_path, monkeypatch) -> None:
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "pinned.yml").write_text(
+        f"jobs:\n  check:\n    uses: actions/checkout@{'a' * 40}\n",
+        encoding="utf-8",
+    )
+    (workflows / "unpinned.yaml").write_text(
+        "jobs:\n  check:\n    uses: actions/checkout@v4\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(check_security_policy, "WORKFLOWS", workflows)
+    monkeypatch.setattr(check_security_policy, "ROOT", tmp_path)
+
+    with pytest.raises(SystemExit, match=r"unpinned\.yaml"):
+        check_security_policy.check_workflow_pins()
 
 
 def test_security_audit_export_redacts_credential_like_fields() -> None:
