@@ -146,9 +146,7 @@ async def test_oidc_resolver_enforces_authorized_party_binding() -> None:
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     accepted = jwt.encode(_claims(azp="trusted-client"), private_key, algorithm="RS256")
     rejected = jwt.encode(_claims(azp="other-client"), private_key, algorithm="RS256")
-    resolver = _resolver(
-        private_key.public_key(), allowed_authorized_parties=("trusted-client",)
-    )
+    resolver = _resolver(private_key.public_key(), allowed_authorized_parties=("trusted-client",))
 
     principal = await resolver(_request(accepted))
     assert principal.actor_id == "service-42"
