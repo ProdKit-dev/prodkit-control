@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import heapq
 import json
 import threading
 import time
@@ -27,6 +28,19 @@ class ReplayStore(Protocol):
     """Atomic replay-claim boundary for one-time workload assertions."""
 
     def claim_once(self, *, key: str, expires_at: datetime, now: datetime) -> bool: ...
+
+
+class WorkloadIdentityAuthenticator(Protocol):
+    """Cryptographically authenticates an opaque credential and returns trusted claims."""
+
+    def authenticate(
+        self,
+        credential: str,
+        *,
+        expected_issuer: str,
+        expected_audience: str,
+        now: datetime,
+    ) -> WorkloadIdentityAssertion: ...
 
 
 class SecurityAuditExporter(Protocol):
@@ -94,22 +108,37 @@ class SecretReferenceGuard:
 
 
 class WorkloadIdentityVerifier:
-    """Policy and replay verifier for short-lived one-time workload exchange assertions."""
+    """Authenticated policy and replay verifier for one-time workload credential exchange."""
 
-    def __init__(self, policy: WorkloadIdentityPolicy, replay_store: ReplayStore) -> None:
+    def __init__(
+        self,
+        policy: WorkloadIdentityPolicy,
+        replay_store: ReplayStore,
+        *,
+        authenticator: WorkloadIdentityAuthenticator,
+    ) -> None:
         self._policy = policy
         self._replay_store = replay_store
+        self._authenticator = authenticator
 
     def verify_and_claim(
         self,
-        assertion: WorkloadIdentityAssertion,
+        credential: str,
         *,
         tenant_id: str,
         now: datetime | None = None,
-    ) -> None:
+    ) -> WorkloadIdentityAssertion:
+        if not credential.strip():
+            raise ValueError("workload identity credential must be non-empty")
         checked_at = now or datetime.now(UTC)
         if checked_at.tzinfo is None:
             raise ValueError("verification time must be timezone-aware")
+        assertion = self._authenticator.authenticate(
+            credential,
+            expected_issuer=self._policy.issuer,
+            expected_audience=self._policy.audience,
+            now=checked_at,
+        )
         if assertion.tenant_id != tenant_id:
             raise PermissionError("workload identity tenant mismatch")
         skew = timedelta(seconds=self._policy.clock_skew_seconds)
@@ -146,6 +175,7 @@ class WorkloadIdentityVerifier:
                 now=checked_at,
             ):
                 raise PermissionError("workload identity assertion replay detected")
+        return assertion
 
 
 @dataclass(frozen=True)
@@ -164,7 +194,49 @@ class SlidingWindowRateLimiter:
         self._policy = policy
         self._clock = clock
         self._entries: dict[str, deque[float]] = {}
+        self._expirations: list[tuple[float, str, float]] = []
         self._lock = threading.Lock()
+
+    def _schedule_expiration(self, key: str, events: deque[float]) -> None:
+        if events:
+            first = events[0]
+            heapq.heappush(
+                self._expirations,
+                (first + self._policy.window_seconds, key, first),
+            )
+
+    def _prune_bucket(
+        self, key: str, events: deque[float], cutoff: float
+    ) -> deque[float] | None:
+        first = events[0] if events else None
+        while events and events[0] <= cutoff:
+            events.popleft()
+        if not events:
+            self._entries.pop(key, None)
+            return None
+        if events[0] != first:
+            self._schedule_expiration(key, events)
+        return events
+
+    def _next_valid_expiration(self) -> float | None:
+        while self._expirations:
+            expires_at, key, first = self._expirations[0]
+            events = self._entries.get(key)
+            if events and events[0] == first:
+                return expires_at
+            heapq.heappop(self._expirations)
+        return None
+
+    def _evict_expired(self, *, now: float, cutoff: float) -> None:
+        while True:
+            expires_at = self._next_valid_expiration()
+            if expires_at is None or expires_at > now:
+                return
+            _, key, first = heapq.heappop(self._expirations)
+            events = self._entries.get(key)
+            if not events or events[0] != first:
+                continue
+            self._prune_bucket(key, events, cutoff)
 
     def check(self, key: str) -> RateLimitDecision:
         if not key.strip():
@@ -173,30 +245,30 @@ class SlidingWindowRateLimiter:
         cutoff = now - self._policy.window_seconds
         capacity = self._policy.limit + self._policy.burst
         with self._lock:
-            expired_keys: list[str] = []
-            for existing_key, existing_events in self._entries.items():
-                while existing_events and existing_events[0] <= cutoff:
-                    existing_events.popleft()
-                if not existing_events:
-                    expired_keys.append(existing_key)
-            for expired_key in expired_keys:
-                del self._entries[expired_key]
+            events = self._entries.get(key)
+            if events is not None:
+                events = self._prune_bucket(key, events, cutoff)
 
-            if key not in self._entries and len(self._entries) >= self._policy.max_keys:
-                retry = min(
-                    max(
-                        1,
-                        int(events[0] + self._policy.window_seconds - now + 0.999),
+            if events is None:
+                if len(self._entries) >= self._policy.max_keys:
+                    self._evict_expired(now=now, cutoff=cutoff)
+                if len(self._entries) >= self._policy.max_keys:
+                    expires_at = self._next_valid_expiration()
+                    retry = (
+                        max(1, int(expires_at - now + 0.999))
+                        if expires_at is not None
+                        else self._policy.window_seconds
                     )
-                    for events in self._entries.values()
-                )
-                return RateLimitDecision(False, 0, retry)
+                    return RateLimitDecision(False, 0, retry)
+                events = deque()
+                self._entries[key] = events
 
-            events = self._entries.setdefault(key, deque())
             if len(events) >= capacity:
                 retry = max(1, int(events[0] + self._policy.window_seconds - now + 0.999))
                 return RateLimitDecision(False, 0, retry)
             events.append(now)
+            if len(events) == 1:
+                self._schedule_expiration(key, events)
             return RateLimitDecision(True, capacity - len(events), 0)
 
 
