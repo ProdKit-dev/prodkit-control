@@ -65,14 +65,23 @@ def test_secret_reference_guard_requires_approved_versioned_binding() -> None:
 
 
 def test_secret_reference_contract_rejects_inline_material() -> None:
-    with pytest.raises(ValueError, match="inline secret material"):
-        SecretReference(
-            provider="vault",
-            reference="password=hunter2",
-            version="1",
-            tenant_id="tenant-a",
-            purpose="database",
-        )
+    for inline_reference in (
+        "password=hunter2",
+        "api_key=live-api-key",
+        "api-key=live-api-key",
+        "apikey=live-api-key",
+        "access_key=live-access-key",
+        "access-key=live-access-key",
+        "client_secret=live-client-secret",
+    ):
+        with pytest.raises(ValueError, match="inline secret material"):
+            SecretReference(
+                provider="vault",
+                reference=inline_reference,
+                version="1",
+                tenant_id="tenant-a",
+                purpose="database",
+            )
 
 
 def _workload_assertion(now: datetime, *, nonce: str = "nonce-1") -> WorkloadIdentityAssertion:
@@ -189,7 +198,7 @@ def test_sliding_window_rate_limiter_fails_closed_at_key_capacity() -> None:
     assert limiter.check("tenant-a:principal-b").allowed is True
 
 
-def test_workflow_pin_policy_scans_yaml_suffix(tmp_path, monkeypatch) -> None:
+def test_workflow_pin_policy_scans_yaml_step_uses(tmp_path, monkeypatch) -> None:
     workflows = tmp_path / ".github" / "workflows"
     workflows.mkdir(parents=True)
     (workflows / "pinned.yml").write_text(
@@ -197,7 +206,7 @@ def test_workflow_pin_policy_scans_yaml_suffix(tmp_path, monkeypatch) -> None:
         encoding="utf-8",
     )
     (workflows / "unpinned.yaml").write_text(
-        "jobs:\n  check:\n    uses: actions/checkout@v4\n",
+        "jobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(check_security_policy, "WORKFLOWS", workflows)
