@@ -205,9 +205,7 @@ class SlidingWindowRateLimiter:
                 (first + self._policy.window_seconds, key, first),
             )
 
-    def _prune_bucket(
-        self, key: str, events: deque[float], cutoff: float
-    ) -> deque[float] | None:
+    def _prune_bucket(self, key: str, events: deque[float], cutoff: float) -> deque[float] | None:
         first = events[0] if events else None
         while events and events[0] <= cutoff:
             events.popleft()
