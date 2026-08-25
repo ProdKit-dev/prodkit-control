@@ -9,6 +9,9 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 PROJECT_VERSION_RE = re.compile(r'^(version\s*=\s*)"[^"]+"(\s*)$')
 PYTHON_VERSION_RE = re.compile(r'^(?P<prefix>__version__\s*=\s*)"[^"]+"(?P<suffix>\s*)$')
+TS_RUNTIME_VERSION_RE = re.compile(
+    r'^(?P<prefix>export const [A-Z0-9_]+_PACKAGE_VERSION\s*=\s*)"[^"]+"(?P<suffix>\s+as const;\s*)$'
+)
 
 
 def set_project_version(path: Path, version: str) -> None:
@@ -55,6 +58,20 @@ def set_python_runtime_versions(version: str) -> None:
             path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def set_typescript_runtime_versions(version: str) -> None:
+    for path in sorted((ROOT / "packages/typescript").glob("*/src/**/*.ts")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        changed = False
+        for index, line in enumerate(lines):
+            match = TS_RUNTIME_VERSION_RE.match(line)
+            if match is None:
+                continue
+            lines[index] = f'{match.group("prefix")}"{version}"{match.group("suffix")}'
+            changed = True
+        if changed:
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def set_fastapi_metadata(version: str) -> None:
     path = ROOT / "packages/python/prodkit-control-fastapi/src/prodkit_control_fastapi/app.py"
     text = path.read_text(encoding="utf-8")
@@ -86,6 +103,7 @@ def main() -> int:
         set_project_version(path, version)
     for path in typescript_projects:
         set_typescript_version(path, version)
+    set_typescript_runtime_versions(version)
     set_python_runtime_versions(version)
     set_fastapi_metadata(version)
 
