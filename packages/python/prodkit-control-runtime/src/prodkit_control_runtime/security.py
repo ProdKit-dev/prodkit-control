@@ -89,7 +89,9 @@ class SecretReferenceGuard:
             raise PermissionError("production secret references must be version-pinned")
         if reference.tenant_id != tenant_id or reference.purpose != purpose:
             raise PermissionError("secret reference binding mismatch")
-        if audience is not None and reference.audience and audience not in reference.audience:
+        if audience is not None and (
+            not reference.audience or audience not in reference.audience
+        ):
             raise PermissionError("secret reference audience mismatch")
 
 
@@ -104,11 +106,14 @@ class WorkloadIdentityVerifier:
         self,
         assertion: WorkloadIdentityAssertion,
         *,
+        tenant_id: str,
         now: datetime | None = None,
     ) -> None:
         checked_at = now or datetime.now(UTC)
         if checked_at.tzinfo is None:
             raise ValueError("verification time must be timezone-aware")
+        if assertion.tenant_id != tenant_id:
+            raise PermissionError("workload identity tenant mismatch")
         skew = timedelta(seconds=self._policy.clock_skew_seconds)
         if assertion.issuer.rstrip("/") != self._policy.issuer.rstrip("/"):
             raise PermissionError("workload identity issuer mismatch")
@@ -180,6 +185,9 @@ class SlidingWindowRateLimiter:
 
 
 _SENSITIVE_FRAGMENTS = (
+    "access_key",
+    "api_key",
+    "apikey",
     "authorization",
     "cookie",
     "credential",
