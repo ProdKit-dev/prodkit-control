@@ -17,7 +17,7 @@ The project does not require PyPI, npm, a container registry, another ProdKit pr
 
 For the Python control plane and CLI:
 
-- Python 3.12 or newer;
+- Python 3.12–3.14;
 - [`uv`](https://docs.astral.sh/uv/).
 
 For the TypeScript packages and cross-runtime development checks:
