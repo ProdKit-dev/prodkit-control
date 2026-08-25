@@ -24,6 +24,13 @@ async function checkCanonicalization() {
     const digest = createHash("sha256").update(encoded, "utf8").digest("hex");
     assert.equal(digest, vector.sha256, `canonical digest mismatch: ${vector.id}`);
   }
+  for (const vector of document.rejection_vectors ?? []) {
+    assert.throws(
+      () => canonicalPortableJson(vector.input),
+      undefined,
+      `canonical JSON unexpectedly accepted: ${vector.id}`,
+    );
+  }
 }
 
 async function checkPolicy() {

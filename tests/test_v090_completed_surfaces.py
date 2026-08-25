@@ -6,9 +6,20 @@ from uuid import uuid4
 
 import pytest
 
-from prodkit_control_core import ActionSpec, ActionTarget, EffectClass, RiskClass, sha256_hex
+from prodkit_control_core import (
+    ActionSpec,
+    ActionTarget,
+    EffectClass,
+    PolicyOutcome,
+    RiskClass,
+    sha256_hex,
+)
 from prodkit_e2b.sandbox import E2BSandboxAdapter, E2BSandboxConfig, SandboxExecution
-from prodkit_executor_database.executor import ConstrainedDatabaseExecutor, DatabaseExecutorConfig
+from prodkit_executor_database.executor import (
+    AsyncpgDatabaseConnection,
+    ConstrainedDatabaseExecutor,
+    DatabaseExecutorConfig,
+)
 from prodkit_executor_deployment.executor import (
     ConstrainedDeploymentExecutor,
     DeploymentExecutorConfig,
@@ -18,6 +29,7 @@ from prodkit_executor_kubernetes.executor import (
     ConstrainedKubernetesExecutor,
     KubernetesExecutorConfig,
 )
+from prodkit_permit.policy import PermitPolicyEngine
 from prodkit_provider_openai.provider import OpenAIProvider
 
 
@@ -44,6 +56,66 @@ class DummyE2BClient:
         )
 
 
+class DummyPermitClient:
+    async def check(self, **kwargs: Any) -> dict[str, object]:
+        del kwargs
+        return {"allowed": True, "constraints": {"regions": ["eu"]}}
+
+
+class DummyTransaction:
+    async def __aenter__(self) -> None:
+        return None
+
+    async def __aexit__(self, *args: object) -> None:
+        del args
+
+
+class DummyCursor:
+    def __init__(self, rows: list[dict[str, object]]) -> None:
+        self._rows = iter(rows)
+        self.iterated = 0
+
+    def __aiter__(self) -> DummyCursor:
+        return self
+
+    async def __anext__(self) -> dict[str, object]:
+        try:
+            row = next(self._rows)
+        except StopIteration as exc:
+            raise StopAsyncIteration from exc
+        self.iterated += 1
+        return row
+
+
+class DummyAsyncpgConnection:
+    def __init__(self, rows: list[dict[str, object]]) -> None:
+        self.cursor_instance = DummyCursor(rows)
+        self.readonly = False
+        self.prefetch: int | None = None
+
+    def transaction(self, *, readonly: bool = False) -> DummyTransaction:
+        self.readonly = readonly
+        return DummyTransaction()
+
+    def cursor(
+        self,
+        query: str,
+        *args: object,
+        prefetch: int | None = None,
+        timeout: float | None = None,
+    ) -> DummyCursor:
+        del query, args, timeout
+        self.prefetch = prefetch
+        return self.cursor_instance
+
+    async def execute(self, query: str, *args: object, timeout: float | None = None) -> str:
+        del query, args, timeout
+        return "OK"
+
+    async def close(self) -> None:
+        return None
+
+
 def action(
     *,
     executor: str,
@@ -53,6 +125,7 @@ def action(
     arguments: dict[str, object],
     effect_class: EffectClass = EffectClass.WRITE,
     environment: str = "production",
+    policy_context: dict[str, str | int | float | bool | None] | None = None,
 ) -> ActionSpec:
     return ActionSpec(
         action_id=uuid4(),
@@ -71,6 +144,7 @@ def action(
         arguments=arguments,
         idempotency_key=f"test:{uuid4()}",
         proposed_at=datetime.now(UTC),
+        policy_context=policy_context or {},
     )
 
 
@@ -99,6 +173,17 @@ async def test_database_executor_fails_closed_on_statement_and_lease() -> None:
     denied = allowed.model_copy(update={"arguments": {"statement": "SELECT * FROM secrets"}})
     with pytest.raises(PermissionError, match="statement is not allowlisted"):
         await executor.validate(denied)
+
+
+@pytest.mark.asyncio
+async def test_database_adapter_stops_after_bounded_row_count() -> None:
+    raw = DummyAsyncpgConnection([{"id": value} for value in range(20)])
+    connection = AsyncpgDatabaseConnection(raw)  # type: ignore[arg-type]
+    rows = await connection.fetch_bounded("SELECT id FROM accounts", limit=4, timeout=1.0)
+    assert len(rows) == 4
+    assert raw.cursor_instance.iterated == 4
+    assert raw.readonly is True
+    assert raw.prefetch == 4
 
 
 @pytest.mark.asyncio
@@ -190,6 +275,28 @@ async def test_e2b_adapter_emits_hash_only_output_evidence() -> None:
 
     with pytest.raises(PermissionError, match="command is not allowlisted"):
         await adapter.run(template="python", command=("sh", "-c", "id"))
+
+
+@pytest.mark.asyncio
+async def test_permit_adapter_denies_unrepresentable_constraints() -> None:
+    engine = PermitPolicyEngine(
+        client=DummyPermitClient(),
+        bundle="production",
+        revision="r1",
+    )
+    decision = await engine.evaluate(
+        action(
+            executor="deployment",
+            operation="deploy",
+            resource_type="service",
+            resource_id="api",
+            arguments={},
+            policy_context={"principal_id": "user-1"},
+        )
+    )
+    assert decision.outcome is PolicyOutcome.DENY
+    assert "permit_invalid_constraint" in decision.reason_codes
+    assert decision.constraints == {}
 
 
 def test_openai_adapter_normalizes_tool_calls_and_usage() -> None:

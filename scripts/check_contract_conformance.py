@@ -8,7 +8,7 @@ from prodkit_control_core import (
     EffectClass,
     PolicyOutcome,
     RiskClass,
-    canonical_json_bytes,
+    canonical_portable_json,
     sha256_hex,
 )
 from prodkit_control_runtime.policy_semantics import (
@@ -45,12 +45,22 @@ def check_canonicalization() -> None:
             raise ValueError("canonicalization vector must be an object")
         vector_id = str(vector.get("id"))
         value = vector.get("input")
-        encoded = canonical_json_bytes(value).decode("utf-8")
+        encoded = canonical_portable_json(value)
         if encoded != vector.get("canonical_json"):
             raise ValueError(f"canonicalization mismatch for {vector_id}: {encoded!r}")
         digest = sha256_hex(encoded)
         if digest != vector.get("sha256"):
             raise ValueError(f"canonicalization digest mismatch for {vector_id}: {digest}")
+
+    for vector in document.get("rejection_vectors", []):
+        if not isinstance(vector, dict):
+            raise ValueError("canonicalization rejection vector must be an object")
+        vector_id = str(vector.get("id"))
+        try:
+            canonical_portable_json(vector.get("input"))
+        except (TypeError, ValueError):
+            continue
+        raise ValueError(f"canonicalization unexpectedly accepted rejection vector {vector_id}")
 
 
 def check_policy() -> None:

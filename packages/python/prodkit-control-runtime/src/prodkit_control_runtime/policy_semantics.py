@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TypeAlias
 
 from prodkit_control_core import EffectClass, PolicyOutcome, RiskClass
 
-ConstraintValue: TypeAlias = str | int | float | bool | None
+type ConstraintValue = str | int | float | bool | None
 
 
 @dataclass(frozen=True)

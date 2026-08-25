@@ -74,12 +74,24 @@ class PermitPolicyEngine:
         if not isinstance(constraints_raw, Mapping):
             constraints_raw = {}
             outcome = PolicyOutcome.DENY
+            invalid_constraint = True
+        else:
+            invalid_constraint = False
+
         constraints: dict[str, str | int | float | bool | None] = {}
         for key, value in constraints_raw.items():
             if isinstance(key, str) and (
                 value is None or isinstance(value, (str, int, float, bool))
             ):
                 constraints[key] = value
+            else:
+                invalid_constraint = True
+
+        reason_codes = [str(item) for item in reason_codes_raw if str(item)]
+        if invalid_constraint:
+            outcome = PolicyOutcome.DENY
+            reason_codes.append("permit_invalid_constraint")
+
         now = datetime.now(UTC)
         return PolicyDecision(
             decision_id=uuid5(NAMESPACE_URL, f"permit:{self._revision}:{action.digest}"),
@@ -91,7 +103,7 @@ class PermitPolicyEngine:
             policy_revision=self._revision,
             evaluated_at=now,
             outcome=outcome,
-            reason_codes=tuple(str(item) for item in reason_codes_raw if str(item)),
+            reason_codes=tuple(reason_codes),
             constraints=constraints,
             required_approval_roles=tuple(str(item) for item in roles_raw if str(item)),
             expires_at=now + timedelta(seconds=self._ttl),

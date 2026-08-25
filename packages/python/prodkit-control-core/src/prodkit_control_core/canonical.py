@@ -19,6 +19,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 CANONICALIZATION_VERSION = "prodkit-json-v1"
+_MAX_PORTABLE_INTEGER = 9_007_199_254_740_991
 
 
 def _normalize(value: Any) -> Any:
@@ -47,7 +48,7 @@ def _normalize(value: Any) -> Any:
 
 
 def canonical_json_bytes(value: Any) -> bytes:
-    """Return deterministic UTF-8 JSON bytes for a supported value."""
+    """Return deterministic UTF-8 JSON bytes for a supported local value."""
 
     return json.dumps(
         _normalize(value),
@@ -56,6 +57,37 @@ def canonical_json_bytes(value: Any) -> bytes:
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
+
+
+def canonical_portable_json(value: object) -> str:
+    """Encode only values admitted by the language-neutral ``prodkit-json-v1`` profile."""
+
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    if isinstance(value, int):
+        if not -_MAX_PORTABLE_INTEGER <= value <= _MAX_PORTABLE_INTEGER:
+            raise ValueError("prodkit-json-v1 permits only JavaScript-safe integers")
+        return str(value)
+    if isinstance(value, float):
+        raise TypeError("prodkit-json-v1 does not permit binary floating-point numbers")
+    if isinstance(value, list):
+        return "[" + ",".join(canonical_portable_json(item) for item in value) + "]"
+    if isinstance(value, dict):
+        keys: list[str] = []
+        for key in value:
+            if not isinstance(key, str):
+                raise TypeError("prodkit-json-v1 object keys must be strings")
+            keys.append(key)
+        items = [
+            f"{json.dumps(key, ensure_ascii=False)}:{canonical_portable_json(value[key])}"
+            for key in sorted(keys)
+        ]
+        return "{" + ",".join(items) + "}"
+    raise TypeError(f"value of type {type(value).__name__} is outside prodkit-json-v1")
 
 
 def sha256_hex(value: bytes | str | Any) -> str:

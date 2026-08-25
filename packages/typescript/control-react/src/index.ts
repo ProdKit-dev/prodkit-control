@@ -130,6 +130,7 @@ export class ControlMutation<TInput, TOutput> {
   readonly #execute: ControlMutationExecutor<TInput, TOutput>;
   readonly #listeners = new Set<ControlResourceListener>();
   #snapshot: ControlMutationSnapshot<TOutput> = { pending: false, data: null, error: null };
+  #generation = 0;
 
   constructor(execute: ControlMutationExecutor<TInput, TOutput>) {
     this.#execute = execute;
@@ -143,19 +144,25 @@ export class ControlMutation<TInput, TOutput> {
   readonly getSnapshot = (): ControlMutationSnapshot<TOutput> => this.#snapshot;
 
   async mutate(input: TInput): Promise<TOutput> {
+    const generation = ++this.#generation;
     this.#setSnapshot({ pending: true, data: this.#snapshot.data, error: null });
     try {
       const data = await this.#execute(input);
-      this.#setSnapshot({ pending: false, data, error: null });
+      if (generation === this.#generation) {
+        this.#setSnapshot({ pending: false, data, error: null });
+      }
       return data;
     } catch (error: unknown) {
       const normalized = error instanceof Error ? error : new Error(String(error));
-      this.#setSnapshot({ pending: false, data: null, error: normalized });
+      if (generation === this.#generation) {
+        this.#setSnapshot({ pending: false, data: null, error: normalized });
+      }
       throw normalized;
     }
   }
 
   reset(): void {
+    ++this.#generation;
     this.#setSnapshot({ pending: false, data: null, error: null });
   }
 

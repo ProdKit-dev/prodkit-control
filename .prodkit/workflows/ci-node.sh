@@ -9,6 +9,7 @@ pnpm_cmd=(corepack pnpm)
 "${pnpm_cmd[@]}" typecheck:ts
 "${pnpm_cmd[@]}" build:ts
 node scripts/check_contract_conformance.mjs
+node scripts/check_control_react.mjs
 
 if [[ "$node_version" == "24" ]]; then
   rm -rf .artifacts/npm-release

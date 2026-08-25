@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, ClassVar
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from prodkit_control_core import SecurityAuditEvent, SecurityOutcome, SecuritySeverity
@@ -11,7 +11,9 @@ from prodkit_control_core import SecurityAuditEvent, SecurityOutcome, SecuritySe
 class TeleportEvidenceAdapter:
     """Normalize Teleport audit/session events into canonical security audit evidence."""
 
-    _SENSITIVE_KEYS = {"token", "password", "secret", "private_key", "authorization", "credential"}
+    _SENSITIVE_KEYS: ClassVar[frozenset[str]] = frozenset(
+        {"authorization", "credential", "password", "private_key", "secret", "token"}
+    )
 
     def normalize(
         self,

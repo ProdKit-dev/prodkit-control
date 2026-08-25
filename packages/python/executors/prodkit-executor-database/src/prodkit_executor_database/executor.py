@@ -20,13 +20,56 @@ from prodkit_control_core import (
 
 
 class DatabaseConnection(Protocol):
-    async def fetch(
-        self, query: str, *args: object, timeout: float | None = None
+    async def fetch_bounded(
+        self,
+        query: str,
+        *args: object,
+        limit: int,
+        timeout: float | None = None,
     ) -> Sequence[Mapping[str, Any]]: ...
 
     async def execute(self, query: str, *args: object, timeout: float | None = None) -> str: ...
 
     async def close(self) -> None: ...
+
+
+class AsyncpgDatabaseConnection:
+    """Bound asyncpg reads with a server cursor before rows reach executor memory."""
+
+    def __init__(self, connection: asyncpg.Connection) -> None:
+        self._connection = connection
+
+    async def fetch_bounded(
+        self,
+        query: str,
+        *args: object,
+        limit: int,
+        timeout: float | None = None,
+    ) -> Sequence[Mapping[str, Any]]:
+        rows: list[Mapping[str, Any]] = []
+        async with self._connection.transaction(readonly=True):
+            cursor = self._connection.cursor(
+                query,
+                *args,
+                prefetch=min(limit, 100),
+                timeout=timeout,
+            )
+            async for row in cursor:
+                rows.append(row)
+                if len(rows) >= limit:
+                    break
+        return rows
+
+    async def execute(self, query: str, *args: object, timeout: float | None = None) -> str:
+        return await self._connection.execute(query, *args, timeout=timeout)
+
+    async def close(self) -> None:
+        await self._connection.close()
+
+
+async def _connect_asyncpg(*, dsn: str, timeout: float) -> DatabaseConnection:
+    connection = await asyncpg.connect(dsn=dsn, timeout=timeout)
+    return AsyncpgDatabaseConnection(connection)
 
 
 ConnectFactory = Callable[..., Awaitable[DatabaseConnection]]
@@ -64,7 +107,7 @@ class ConstrainedDatabaseExecutor:
             raise ValueError("database max_rows must be positive")
         self._config = config
         self._resolver = credential_resolver
-        self._connect: ConnectFactory = connect or asyncpg.connect
+        self._connect: ConnectFactory = connect or _connect_asyncpg
         self.identity = config.executor_identity
 
     async def validate(self, action: ActionSpec) -> None:
@@ -108,9 +151,10 @@ class ConstrainedDatabaseExecutor:
             statement = self._statement(action)
             parameters = self._parameters(action)
             if action.operation == "query":
-                rows = await connection.fetch(
+                rows = await connection.fetch_bounded(
                     statement,
                     *parameters,
+                    limit=self._config.max_rows + 1,
                     timeout=self._config.timeout_seconds,
                 )
                 if len(rows) > self._config.max_rows:
