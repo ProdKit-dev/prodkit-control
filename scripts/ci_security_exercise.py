@@ -17,18 +17,26 @@ from prodkit_control_runtime import (
 )
 
 
+class _ExerciseWorkloadAuthenticator:
+    def __init__(self, assertion: WorkloadIdentityAssertion) -> None:
+        self._assertion = assertion
+
+    def authenticate(
+        self,
+        credential: str,
+        *,
+        expected_issuer: str,
+        expected_audience: str,
+        now: datetime,
+    ) -> WorkloadIdentityAssertion:
+        del expected_issuer, expected_audience, now
+        if credential != "exercise-signed-token":
+            raise PermissionError("exercise workload credential is not authenticated")
+        return self._assertion
+
+
 def exercise_identity_replay() -> None:
     now = datetime.now(UTC)
-    verifier = WorkloadIdentityVerifier(
-        WorkloadIdentityPolicy(
-            issuer="https://issuer.example",
-            audience="prodkit-control-exchange",
-            subject_prefixes=("spiffe://prodkit/executor/",),
-            max_assertion_lifetime_seconds=120,
-            clock_skew_seconds=0,
-        ),
-        InMemoryReplayStore(),
-    )
     assertion = WorkloadIdentityAssertion(
         issuer="https://issuer.example",
         subject="spiffe://prodkit/executor/exercise",
@@ -39,9 +47,28 @@ def exercise_identity_replay() -> None:
         expires_at=now + timedelta(seconds=59),
         nonce="incident-exercise-replay",
     )
-    verifier.verify_and_claim(assertion, tenant_id="exercise-tenant", now=now)
+    verifier = WorkloadIdentityVerifier(
+        WorkloadIdentityPolicy(
+            issuer="https://issuer.example",
+            audience="prodkit-control-exchange",
+            subject_prefixes=("spiffe://prodkit/executor/",),
+            max_assertion_lifetime_seconds=120,
+            clock_skew_seconds=0,
+        ),
+        InMemoryReplayStore(),
+        authenticator=_ExerciseWorkloadAuthenticator(assertion),
+    )
+    verifier.verify_and_claim(
+        "exercise-signed-token",
+        tenant_id="exercise-tenant",
+        now=now,
+    )
     try:
-        verifier.verify_and_claim(assertion, tenant_id="exercise-tenant", now=now)
+        verifier.verify_and_claim(
+            "exercise-signed-token",
+            tenant_id="exercise-tenant",
+            now=now,
+        )
     except PermissionError:
         return
     raise RuntimeError("identity replay exercise failed to detect replay")
