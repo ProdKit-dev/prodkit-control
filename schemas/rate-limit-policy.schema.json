@@ -1,0 +1,55 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "burst": {
+      "default": 0,
+      "maximum": 1000000,
+      "minimum": 0,
+      "title": "Burst",
+      "type": "integer"
+    },
+    "limit": {
+      "maximum": 1000000,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "max_keys": {
+      "default": 100000,
+      "maximum": 10000000,
+      "minimum": 1,
+      "title": "Max Keys",
+      "type": "integer"
+    },
+    "policy_id": {
+      "minLength": 1,
+      "title": "Policy Id",
+      "type": "string"
+    },
+    "schema_name": {
+      "const": "prodkit.rate-limit-policy",
+      "default": "prodkit.rate-limit-policy",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "window_seconds": {
+      "maximum": 86400,
+      "minimum": 1,
+      "title": "Window Seconds",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "policy_id",
+    "limit",
+    "window_seconds"
+  ],
+  "title": "RateLimitPolicy",
+  "type": "object"
+}

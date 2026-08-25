@@ -1,0 +1,56 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "allowed_build_types": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Allowed Build Types",
+      "type": "array"
+    },
+    "allowed_builder_ids": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Allowed Builder Ids",
+      "type": "array"
+    },
+    "policy_id": {
+      "minLength": 1,
+      "title": "Policy Id",
+      "type": "string"
+    },
+    "require_verified_signature": {
+      "default": true,
+      "title": "Require Verified Signature",
+      "type": "boolean"
+    },
+    "required_predicate_type": {
+      "default": "https://slsa.dev/provenance/v1",
+      "minLength": 1,
+      "title": "Required Predicate Type",
+      "type": "string"
+    },
+    "schema_name": {
+      "const": "prodkit.artifact-provenance-policy",
+      "default": "prodkit.artifact-provenance-policy",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "policy_id",
+    "allowed_builder_ids"
+  ],
+  "title": "ArtifactProvenancePolicy",
+  "type": "object"
+}

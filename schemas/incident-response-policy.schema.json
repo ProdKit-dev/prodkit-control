@@ -1,0 +1,89 @@
+{
+  "$defs": {
+    "IncidentClass": {
+      "enum": [
+        "credential_compromise",
+        "identity_replay",
+        "abuse_or_dos",
+        "supply_chain",
+        "data_integrity",
+        "control_plane_bypass",
+        "availability"
+      ],
+      "title": "IncidentClass",
+      "type": "string"
+    },
+    "SecuritySeverity": {
+      "enum": [
+        "info",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "title": "SecuritySeverity",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "acknowledge_within_seconds": {
+      "maximum": 86400,
+      "minimum": 60,
+      "title": "Acknowledge Within Seconds",
+      "type": "integer"
+    },
+    "contain_within_seconds": {
+      "maximum": 604800,
+      "minimum": 60,
+      "title": "Contain Within Seconds",
+      "type": "integer"
+    },
+    "incident_class": {
+      "$ref": "#/$defs/IncidentClass"
+    },
+    "owner": {
+      "minLength": 1,
+      "title": "Owner",
+      "type": "string"
+    },
+    "patch_within_seconds": {
+      "anyOf": [
+        {
+          "maximum": 2592000,
+          "minimum": 60,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Patch Within Seconds"
+    },
+    "schema_name": {
+      "const": "prodkit.incident-response-policy",
+      "default": "prodkit.incident-response-policy",
+      "title": "Schema Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "severity": {
+      "$ref": "#/$defs/SecuritySeverity"
+    }
+  },
+  "required": [
+    "incident_class",
+    "owner",
+    "severity",
+    "acknowledge_within_seconds",
+    "contain_within_seconds"
+  ],
+  "title": "IncidentResponsePolicy",
+  "type": "object"
+}
