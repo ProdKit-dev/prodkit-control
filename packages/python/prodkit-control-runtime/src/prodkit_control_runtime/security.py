@@ -186,12 +186,7 @@ class SlidingWindowRateLimiter:
                 retry = min(
                     max(
                         1,
-                        int(
-                            events[0]
-                            + self._policy.window_seconds
-                            - now
-                            + 0.999
-                        ),
+                        int(events[0] + self._policy.window_seconds - now + 0.999),
                     )
                     for events in self._entries.values()
                 )
