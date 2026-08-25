@@ -69,9 +69,7 @@ def _require_text(path: str, *, minimum_bytes: int) -> str:
 
 
 def _is_apache_license(value: object) -> bool:
-    if value == "Apache-2.0":
-        return True
-    return isinstance(value, dict) and value.get("text") == "Apache-2.0"
+    return value == "Apache-2.0"
 
 
 def _check_package_public_files(package_dir: Path, *, status: str) -> None:

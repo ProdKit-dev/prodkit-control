@@ -3,7 +3,7 @@ name = "prodkit-executor-http"
 version = "0.9.1"
 description = "Controlled HTTP executor boundary."
 requires-python = ">=3.12,<3.15"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 dependencies = [
   "httpx>=0.28,<1",
   "prodkit-control-core",

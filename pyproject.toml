@@ -3,7 +3,7 @@ name = "prodkit-control-workspace"
 version = "0.9.1"
 description = "Provider-neutral intent-to-production control, lineage, assurance, and reconciliation plane."
 requires-python = ">=3.12,<3.15"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 readme = "README.md"
 dependencies = [
   "prodkit-control-core",

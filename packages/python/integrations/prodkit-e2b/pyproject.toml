@@ -3,7 +3,7 @@ name = "prodkit-e2b"
 version = "0.9.1"
 description = "Constrained E2B sandbox execution adapter with command allowlisting and content-addressed evidence."
 requires-python = ">=3.12,<3.15"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 dependencies = [
   "prodkit-control-core",
 ]

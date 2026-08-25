@@ -3,7 +3,7 @@ name = "prodkit-control-runtime"
 version = "0.9.1"
 description = "Provider-neutral coordinator, action broker, projectors, and evidence bundles."
 requires-python = ">=3.12,<3.15"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 dependencies = [
   "cryptography>=45,<47",
   "httpx>=0.28,<1",

@@ -3,7 +3,7 @@ name = "prodkit-provider-google"
 version = "0.9.1"
 description = "Google Gemini generateContent normalization adapter for canonical model requests and responses."
 requires-python = ">=3.12,<3.15"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 dependencies = [
   "prodkit-control-core",
 ]

@@ -3,7 +3,7 @@ name = "prodkit-executor-deployment"
 version = "0.9.1"
 description = "Provider-neutral controlled deployment executor with leased credentials and artifact-digest binding."
 requires-python = ">=3.12,<3.15"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 dependencies = [
   "prodkit-control-core",
 ]

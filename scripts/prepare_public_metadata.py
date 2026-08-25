@@ -44,7 +44,7 @@ def _normalize_python_project(path: Path) -> None:
 
     desired = {
         "readme": 'readme = "README.md"',
-        "license": 'license = { text = "Apache-2.0" }',
+        "license": 'license = "Apache-2.0"',
         "license-files": 'license-files = ["LICENSE", "NOTICE"]',
     }
     found: set[str] = set()
