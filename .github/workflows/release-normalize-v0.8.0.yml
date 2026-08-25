@@ -44,6 +44,7 @@ jobs:
             packages/python/prodkit-control-core/src/prodkit_control_core/contracts/security.py \
             packages/python/prodkit-control-runtime/src/prodkit_control_runtime/security.py \
             packages/python/prodkit-control-fastapi/src/prodkit_control_fastapi/security.py \
+            scripts/export_schemas.py \
             tests/test_security_hardening.py
           cat > /tmp/prodkit-v080-changelog <<'EOF'
           ## [0.8.0] - 2026-08-25
@@ -84,6 +85,9 @@ jobs:
               text = text.replace(marker, marker + "\n" + section, 1)
               path.write_text(text, encoding="utf-8")
           PY
+          uv run --python 3.13 --no-sync python scripts/export_schemas.py
+          uv run --python 3.13 --no-sync python scripts/export_schemas.py --check
+          uv run --python 3.13 --no-sync pytest -q tests/test_security_hardening.py
           python3 scripts/release_check.py --version 0.8.0
           git diff --check
           git status --short
@@ -100,5 +104,5 @@ jobs:
           fi
           git config user.name "prodkit-release-bot"
           git config user.email "release-bot@prodkit.dev"
-          git commit -m "chore(release): normalize v0.8.0 metadata"
+          git commit -m "chore(release): normalize v0.8.0 metadata and schemas"
           git push origin "HEAD:release/v0.8.0-security-operational-hardening"
