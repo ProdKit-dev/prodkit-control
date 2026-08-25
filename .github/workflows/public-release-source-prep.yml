@@ -11,7 +11,7 @@ permissions:
 jobs:
   prepare:
     name: Normalize v0.9.1 source metadata
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
     steps:
       - name: Check out exact branch head
