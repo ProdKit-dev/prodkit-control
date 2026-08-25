@@ -8,7 +8,7 @@ ProdKit Control is a security-sensitive control-plane project. Contributions are
 
 Requirements:
 
-- Python 3.12 or newer;
+- Python 3.12–3.14;
 - `uv`;
 - Node.js 22 or newer and Corepack/pnpm 10 for TypeScript work;
 - Docker only when running PostgreSQL/container integration paths.
