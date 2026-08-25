@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from pathlib import Path
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 EXACT_SHA = re.compile(r"^[a-f0-9]{40}$")
-USES = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", re.MULTILINE)
 
 
 def _local_dependency_paths(target: str, violations: list[str]) -> tuple[Path, ...]:
@@ -31,29 +33,43 @@ def _local_dependency_paths(target: str, violations: list[str]) -> tuple[Path, .
     return ()
 
 
+def _iter_uses(node: object) -> Iterator[str]:
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "uses" and isinstance(value, str):
+                yield value
+            yield from _iter_uses(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _iter_uses(item)
+
+
 def _scan_uses(path: Path, violations: list[str], visited: set[Path]) -> None:
     resolved_path = path.resolve()
     if resolved_path in visited:
         return
     visited.add(resolved_path)
 
-    text = resolved_path.read_text(encoding="utf-8")
-    for match in USES.finditer(text):
-        target = match.group(1).strip("\"'")
+    relative_path = resolved_path.relative_to(ROOT.resolve())
+    try:
+        document = yaml.safe_load(resolved_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        violations.append(f"{relative_path}: invalid YAML: {exc}")
+        return
+
+    for target in _iter_uses(document):
+        target = target.strip()
         if target.startswith("./"):
             for dependency in _local_dependency_paths(target, violations):
                 _scan_uses(dependency, violations, visited)
             continue
         if "@" not in target:
-            violations.append(
-                f"{resolved_path.relative_to(ROOT.resolve())}: unpinned action {target}"
-            )
+            violations.append(f"{relative_path}: unpinned action {target}")
             continue
         _, ref = target.rsplit("@", 1)
         if not EXACT_SHA.fullmatch(ref):
             violations.append(
-                f"{resolved_path.relative_to(ROOT.resolve())}: "
-                f"action/reusable workflow ref is not an exact SHA: {target}"
+                f"{relative_path}: action/reusable workflow ref is not an exact SHA: {target}"
             )
 
 
