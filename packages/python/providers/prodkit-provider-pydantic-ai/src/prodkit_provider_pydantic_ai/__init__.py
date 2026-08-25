@@ -1,3 +1,6 @@
 """Pydantic AI model-provider normalization adapter."""
 
-__version__ = "0.8.0"
+from .provider import PydanticAIProvider, PydanticAIRunner, PydanticAIResult
+
+__all__ = ["PydanticAIProvider", "PydanticAIRunner", "PydanticAIResult"]
+__version__ = "0.9.0"
