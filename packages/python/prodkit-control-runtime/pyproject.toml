@@ -1,6 +1,6 @@
 [project]
 name = "prodkit-control-runtime"
-version = "0.9.0"
+version = "0.9.1"
 description = "Provider-neutral coordinator, action broker, projectors, and evidence bundles."
 requires-python = ">=3.12,<3.15"
 license = { text = "Apache-2.0" }
@@ -10,6 +10,8 @@ dependencies = [
   "prodkit-control-core",
 ]
 
+readme = "README.md"
+license-files = ["LICENSE", "NOTICE"]
 [build-system]
 requires = ["uv_build>=0.10,<0.12"]
 build-backend = "uv_build"
@@ -19,3 +21,9 @@ module-name = "prodkit_control_runtime"
 
 [tool.uv.sources]
 prodkit-control-core = { workspace = true }
+
+[project.urls]
+Homepage = "https://github.com/ProdKit-dev/prodkit-control"
+Repository = "https://github.com/ProdKit-dev/prodkit-control.git"
+Documentation = "https://github.com/ProdKit-dev/prodkit-control/tree/main/docs"
+Issues = "https://github.com/ProdKit-dev/prodkit-control/issues"

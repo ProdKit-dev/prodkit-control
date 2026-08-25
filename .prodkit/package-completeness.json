@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "release": "0.9.0",
+  "release": "0.9.1",
   "packages": {
     "packages/python/prodkit-control-core": "supported",
     "packages/python/prodkit-control-runtime": "supported",

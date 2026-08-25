@@ -662,7 +662,7 @@ wheels = [
 
 [[package]]
 name = "prodkit-agentgateway"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/integrations/prodkit-agentgateway" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -673,7 +673,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-control-cli"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/prodkit-control-cli" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -690,7 +690,7 @@ requires-dist = [
 
 [[package]]
 name = "prodkit-control-core"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/prodkit-control-core" }
 dependencies = [
     { name = "pydantic" },
@@ -701,7 +701,7 @@ requires-dist = [{ name = "pydantic", specifier = ">=2.12,<3" }]
 
 [[package]]
 name = "prodkit-control-fastapi"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/prodkit-control-fastapi" }
 dependencies = [
     { name = "fastapi" },
@@ -722,7 +722,7 @@ requires-dist = [
 
 [[package]]
 name = "prodkit-control-postgres"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/prodkit-control-postgres" }
 dependencies = [
     { name = "asyncpg" },
@@ -739,7 +739,7 @@ requires-dist = [
 
 [[package]]
 name = "prodkit-control-runtime"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/prodkit-control-runtime" }
 dependencies = [
     { name = "cryptography" },
@@ -756,7 +756,7 @@ requires-dist = [
 
 [[package]]
 name = "prodkit-control-workspace"
-version = "0.9.0"
+version = "0.9.1"
 source = { virtual = "." }
 dependencies = [
     { name = "prodkit-control-cli" },
@@ -795,7 +795,7 @@ dev = [
 
 [[package]]
 name = "prodkit-e2b"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/integrations/prodkit-e2b" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -806,7 +806,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-executor-database"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/executors/prodkit-executor-database" }
 dependencies = [
     { name = "asyncpg" },
@@ -821,7 +821,7 @@ requires-dist = [
 
 [[package]]
 name = "prodkit-executor-deployment"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/executors/prodkit-executor-deployment" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -832,7 +832,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-executor-filesystem"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/executors/prodkit-executor-filesystem" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -843,7 +843,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-executor-git"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/executors/prodkit-executor-git" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -854,7 +854,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-executor-github"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/executors/prodkit-executor-github" }
 dependencies = [
     { name = "httpx" },
@@ -869,7 +869,7 @@ requires-dist = [
 
 [[package]]
 name = "prodkit-executor-http"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/executors/prodkit-executor-http" }
 dependencies = [
     { name = "httpx" },
@@ -884,7 +884,7 @@ requires-dist = [
 
 [[package]]
 name = "prodkit-executor-kubernetes"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/executors/prodkit-executor-kubernetes" }
 dependencies = [
     { name = "httpx" },
@@ -899,7 +899,7 @@ requires-dist = [
 
 [[package]]
 name = "prodkit-executor-shell"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/executors/prodkit-executor-shell" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -910,7 +910,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-opa"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/integrations/prodkit-opa" }
 dependencies = [
     { name = "httpx" },
@@ -925,7 +925,7 @@ requires-dist = [
 
 [[package]]
 name = "prodkit-otel"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/integrations/prodkit-otel" }
 dependencies = [
     { name = "opentelemetry-api" },
@@ -940,7 +940,7 @@ requires-dist = [
 
 [[package]]
 name = "prodkit-permit"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/integrations/prodkit-permit" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -951,7 +951,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-provider-anthropic"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/providers/prodkit-provider-anthropic" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -962,7 +962,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-provider-generic"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/providers/prodkit-provider-generic" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -973,7 +973,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-provider-google"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/providers/prodkit-provider-google" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -984,7 +984,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-provider-openai"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/providers/prodkit-provider-openai" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -995,7 +995,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-provider-pydantic-ai"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/providers/prodkit-provider-pydantic-ai" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -1006,7 +1006,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-reconcile-ci"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/reconcilers/prodkit-reconcile-ci" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -1017,7 +1017,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-reconcile-database"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/reconcilers/prodkit-reconcile-database" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -1028,7 +1028,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-reconcile-deployment"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/reconcilers/prodkit-reconcile-deployment" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -1039,7 +1039,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-reconcile-git"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/reconcilers/prodkit-reconcile-git" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -1050,7 +1050,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-reconcile-github"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/reconcilers/prodkit-reconcile-github" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -1061,7 +1061,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-reconcile-kubernetes"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/reconcilers/prodkit-reconcile-kubernetes" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -1072,7 +1072,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-reconcile-registry"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/reconcilers/prodkit-reconcile-registry" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -1083,7 +1083,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-sigstore"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/integrations/prodkit-sigstore" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -1094,7 +1094,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-teleport"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/integrations/prodkit-teleport" }
 dependencies = [
     { name = "prodkit-control-core" },
@@ -1105,7 +1105,7 @@ requires-dist = [{ name = "prodkit-control-core", editable = "packages/python/pr
 
 [[package]]
 name = "prodkit-temporal"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/python/integrations/prodkit-temporal" }
 dependencies = [
     { name = "prodkit-control-core" },

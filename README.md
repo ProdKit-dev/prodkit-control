@@ -31,7 +31,7 @@ For TypeScript development/conformance:
 - Node.js 22+
 - Corepack / pnpm 10
 
-Docker is optional for the PostgreSQL development stack and container builds.
+Docker is optional for the containerized development/reference profile and container builds.
 
 ### Run the verified local demo
 
