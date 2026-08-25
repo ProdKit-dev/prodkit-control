@@ -85,7 +85,9 @@ def _check_package_public_files(package_dir: Path, *, status: str) -> None:
         raise ValueError(f"{(package_dir / 'NOTICE').relative_to(ROOT)} drifted from root NOTICE")
     readme = (package_dir / "README.md").read_text(encoding="utf-8")
     if len(readme.encode("utf-8")) < 120:
-        raise ValueError(f"{(package_dir / 'README.md').relative_to(ROOT)} is too thin for end users")
+        raise ValueError(
+            f"{(package_dir / 'README.md').relative_to(ROOT)} is too thin for end users"
+        )
     if status == "supported":
         stale = [marker for marker in _FORBIDDEN_SUPPORTED_DOC_MARKERS if marker in readme]
         if stale:
@@ -144,11 +146,17 @@ def _check_typescript_package_metadata(package_status: dict[str, str]) -> None:
         if not isinstance(publish_config, dict) or publish_config.get("access") != "public":
             raise ValueError(f"{path.relative_to(ROOT)} must be public-publication capable")
         files = payload.get("files")
-        if not isinstance(files, list) or not {"dist", "README.md", "LICENSE", "NOTICE"}.issubset(files):
-            raise ValueError(f"{path.relative_to(ROOT)} must publish dist, README, LICENSE, and NOTICE")
+        if not isinstance(files, list) or not {"dist", "README.md", "LICENSE", "NOTICE"}.issubset(
+            files
+        ):
+            raise ValueError(
+                f"{path.relative_to(ROOT)} must publish dist, README, LICENSE, and NOTICE"
+            )
         _check_package_public_files(package_dir, status=status)
         if len((package_dir / "README.md").read_bytes()) < 500:
-            raise ValueError(f"{(package_dir / 'README.md').relative_to(ROOT)} needs a usable package guide")
+            raise ValueError(
+                f"{(package_dir / 'README.md').relative_to(ROOT)} needs a usable package guide"
+            )
 
 
 def main() -> int:
