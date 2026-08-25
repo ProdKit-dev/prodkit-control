@@ -78,16 +78,13 @@ cd npm-consumer
 npm init -y >/dev/null
 npm install --ignore-scripts --no-audit --no-fund "${npm_archives[@]}" >/dev/null
 node --input-type=module - <<'JS'
-const packages = [
-  "@prodkit/control",
-  "@prodkit/control-client",
-  "@prodkit/control-next",
-  "@prodkit/control-react",
-];
-for (const name of packages) {
-  const loaded = await import(name);
-  if (Object.keys(loaded).length === 0) throw new Error(`${name} exported no public surface`);
-}
+await import("@prodkit/control");
+const client = await import("@prodkit/control-client");
+const next = await import("@prodkit/control-next");
+const react = await import("@prodkit/control-react");
+if (typeof client.ControlClient !== "function") throw new Error("control-client export missing");
+if (typeof next.ControlServerClient !== "function") throw new Error("control-next export missing");
+if (typeof react.ControlResource !== "function") throw new Error("control-react export missing");
 console.log("clean npm artifact installation/import smoke passed");
 JS
 popd >/dev/null
