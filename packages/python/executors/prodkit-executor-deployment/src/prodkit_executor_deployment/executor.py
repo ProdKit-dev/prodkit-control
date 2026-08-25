@@ -153,7 +153,9 @@ class ConstrainedDeploymentExecutor:
     def _artifact_digest(action: ActionSpec) -> str:
         digest = action.arguments.get("artifact_digest")
         if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
-            raise ValueError("deployment requires sha256:<64 lowercase hex> arguments.artifact_digest")
+            raise ValueError(
+                "deployment requires sha256:<64 lowercase hex> arguments.artifact_digest"
+            )
         return digest
 
     def _validate_lease(self, action: ActionSpec, lease: CredentialLease) -> None:

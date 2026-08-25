@@ -164,13 +164,13 @@ class ConstrainedKubernetesExecutor:
         if action.operation == "set_image":
             container = self._required_name(action, "container")
             image = action.arguments.get("image")
-            if not isinstance(image, str) or not re.fullmatch(r"[^\s@]+@sha256:[0-9a-f]{64}", image):
+            if not isinstance(image, str) or not re.fullmatch(
+                r"[^\s@]+@sha256:[0-9a-f]{64}", image
+            ):
                 raise ValueError("set_image requires an immutable image@sha256:<digest>")
             payload = {
                 "spec": {
-                    "template": {
-                        "spec": {"containers": [{"name": container, "image": image}]}
-                    }
+                    "template": {"spec": {"containers": [{"name": container, "image": image}]}}
                 }
             }
             return "PATCH", base, "application/strategic-merge-patch+json", payload

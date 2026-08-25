@@ -45,7 +45,11 @@ class GoogleProvider:
         path = f"/v1beta/models/{quote(request.model_name, safe='')}:generateContent"
         raw = await self._transport(path, payload)
         candidates = raw.get("candidates")
-        if not isinstance(candidates, list) or not candidates or not isinstance(candidates[0], Mapping):
+        if (
+            not isinstance(candidates, list)
+            or not candidates
+            or not isinstance(candidates[0], Mapping)
+        ):
             raise ValueError("Google response is missing candidates[0]")
         candidate = candidates[0]
         content = candidate.get("content")

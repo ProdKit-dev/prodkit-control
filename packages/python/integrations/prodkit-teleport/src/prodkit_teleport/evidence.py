@@ -25,7 +25,11 @@ class TeleportEvidenceAdapter:
         event_type = self._required_str(raw, "event")
         occurred_at = self._timestamp(raw.get("time") or raw.get("timestamp"))
         external_id = raw.get("uid") or raw.get("id") or raw.get("event_id")
-        stable_id = str(external_id) if external_id is not None else f"{event_type}:{occurred_at.isoformat()}:{raw.get('user', '')}"
+        stable_id = (
+            str(external_id)
+            if external_id is not None
+            else f"{event_type}:{occurred_at.isoformat()}:{raw.get('user', '')}"
+        )
         try:
             event_id = UUID(stable_id)
         except ValueError:
@@ -53,7 +57,9 @@ class TeleportEvidenceAdapter:
                 attributes[key] = str(value)
         for key, value in raw.items():
             normalized = str(key).lower().replace("-", "_")
-            if normalized in self._SENSITIVE_KEYS or any(marker in normalized for marker in self._SENSITIVE_KEYS):
+            if normalized in self._SENSITIVE_KEYS or any(
+                marker in normalized for marker in self._SENSITIVE_KEYS
+            ):
                 continue
             if key.startswith("prodkit_") and isinstance(value, (str, int, float, bool)):
                 attributes[str(key)] = str(value)

@@ -53,7 +53,9 @@ class OpenAIProvider:
             returned_model_name=returned_model if isinstance(returned_model, str) else None,
             provider_run_id=provider_run_id if isinstance(provider_run_id, str) else None,
             completed_at=datetime.now(UTC),
-            stop_reason=str(choice["finish_reason"]) if choice.get("finish_reason") is not None else None,
+            stop_reason=str(choice["finish_reason"])
+            if choice.get("finish_reason") is not None
+            else None,
             output_text=output_text,
             tool_proposals=tool_proposals,
             usage=usage,
@@ -88,7 +90,12 @@ class OpenAIProvider:
             tool_call_id = item.get("id")
             name = function.get("name")
             raw_arguments = function.get("arguments", "{}")
-            if not isinstance(tool_call_id, str) or not tool_call_id or not isinstance(name, str) or not name:
+            if (
+                not isinstance(tool_call_id, str)
+                or not tool_call_id
+                or not isinstance(name, str)
+                or not name
+            ):
                 raise ValueError("OpenAI tool call is missing id or function name")
             if isinstance(raw_arguments, str):
                 parsed = json.loads(raw_arguments or "{}")

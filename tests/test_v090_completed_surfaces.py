@@ -125,9 +125,7 @@ async def test_deployment_executor_requires_immutable_artifact_and_allowlisted_t
         await executor.validate(mutable)
 
     foreign = immutable.model_copy(
-        update={
-            "target": immutable.target.model_copy(update={"resource_id": "unapproved-service"})
-        }
+        update={"target": immutable.target.model_copy(update={"resource_id": "unapproved-service"})}
     )
     with pytest.raises(PermissionError, match="resource is not allowlisted"):
         await executor.validate(foreign)

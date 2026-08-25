@@ -82,7 +82,10 @@ class E2BSandboxAdapter:
         )
         if not execution.sandbox_id:
             raise ValueError("E2B execution did not return a sandbox id")
-        if len(execution.stdout) > self._config.max_output_bytes or len(execution.stderr) > self._config.max_output_bytes:
+        if (
+            len(execution.stdout) > self._config.max_output_bytes
+            or len(execution.stderr) > self._config.max_output_bytes
+        ):
             raise ValueError("E2B output exceeds configured evidence bound")
         return SandboxEvidence(
             sandbox_id=execution.sandbox_id,

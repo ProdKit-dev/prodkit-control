@@ -70,19 +70,14 @@ def check() -> None:
         raise ValueError("v0.9 portable policy profile set is incomplete")
 
     _require_file(
-        "packages/python/prodkit-control-runtime/src/"
-        "prodkit_control_runtime/policy_semantics.py"
+        "packages/python/prodkit-control-runtime/src/prodkit_control_runtime/policy_semantics.py"
     )
     _require_file("packages/typescript/control/src/portable.ts")
     _require_file("scripts/check_contract_conformance.py")
     _require_file("scripts/check_contract_conformance.mjs")
 
-    python_ci = _require_file(".prodkit/workflows/ci-python.sh").read_text(
-        encoding="utf-8"
-    )
-    node_ci = _require_file(".prodkit/workflows/ci-node.sh").read_text(
-        encoding="utf-8"
-    )
+    python_ci = _require_file(".prodkit/workflows/ci-python.sh").read_text(encoding="utf-8")
+    node_ci = _require_file(".prodkit/workflows/ci-node.sh").read_text(encoding="utf-8")
     if "check_contract_authority.py" not in python_ci:
         raise ValueError("Python CI does not enforce contract authority")
     if "check_contract_conformance.py" not in python_ci:

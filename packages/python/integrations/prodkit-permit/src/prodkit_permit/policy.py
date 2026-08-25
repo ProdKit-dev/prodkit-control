@@ -76,7 +76,9 @@ class PermitPolicyEngine:
             outcome = PolicyOutcome.DENY
         constraints: dict[str, str | int | float | bool | None] = {}
         for key, value in constraints_raw.items():
-            if isinstance(key, str) and (value is None or isinstance(value, (str, int, float, bool))):
+            if isinstance(key, str) and (
+                value is None or isinstance(value, (str, int, float, bool))
+            ):
                 constraints[key] = value
         now = datetime.now(UTC)
         return PolicyDecision(

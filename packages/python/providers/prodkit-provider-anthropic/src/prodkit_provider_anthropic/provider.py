@@ -60,7 +60,12 @@ class AnthropicProvider:
                 call_id = item.get("id")
                 name = item.get("name")
                 arguments = item.get("input", {})
-                if not isinstance(call_id, str) or not call_id or not isinstance(name, str) or not name:
+                if (
+                    not isinstance(call_id, str)
+                    or not call_id
+                    or not isinstance(name, str)
+                    or not name
+                ):
                     raise ValueError("Anthropic tool_use block is missing id or name")
                 if not isinstance(arguments, dict):
                     raise ValueError("Anthropic tool_use input must be an object")

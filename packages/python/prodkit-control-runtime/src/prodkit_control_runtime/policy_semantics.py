@@ -71,9 +71,7 @@ def combine_policy_semantics(
     }
     outcome = max((decision.outcome for decision in decisions), key=rank.__getitem__)
     reasons = tuple(
-        f"{decision.engine}:{reason}"
-        for decision in decisions
-        for reason in decision.reason_codes
+        f"{decision.engine}:{reason}" for decision in decisions for reason in decision.reason_codes
     )
     roles = tuple(
         sorted({role for decision in decisions for role in decision.required_approval_roles})
