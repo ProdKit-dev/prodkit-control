@@ -6,6 +6,30 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-25
+
+### Added
+
+- Production implementations for the database, Kubernetes, and deployment executor families that remained scaffolded in earlier milestones.
+- Provider adapters for OpenAI, Anthropic, Google, and Pydantic AI; substantive E2B, Permit, Teleport, and Temporal integrations; and functional Next.js and React TypeScript surfaces.
+- A language-neutral contract authority with normative specifications, canonicalization/policy profiles, shared conformance vectors, and independent Python/TypeScript implementations.
+- Machine-discovered first-party package completeness plus direct v0.9 qualification tests for newly completed execution, sandbox, and provider boundaries.
+
+### Changed
+
+- All current first-party Python and TypeScript package manifests are version-aligned at 0.9.0 and frozen dependency metadata is regenerated from that exact workspace.
+- Default and conjunctive policy semantics are defined by portable profiles rather than by Python or TypeScript implementation code; external policy engines remain optional adapters.
+- The former Production Candidate milestone moves to v0.10.0; v0.9.0 is the cumulative-completeness and language-neutral-authority milestone.
+
+### Assurance
+
+- CI and release builds fail if package declarations drift from the discovered workspace, a package is scaffold-only, portable authority files disappear, cross-runtime conformance diverges, or frozen dependency state is stale.
+- Release publication retains the inherited exact-source CI, Security, CodeQL, trusted release proof, immutable publication, and independent verification lifecycle.
+
+### Release scope
+
+v0.9.0 closes inherited first-party implementation and semantic-portability gaps. Optional integrations remain non-required runtime dependencies. This release does not claim the v0.10.0 Production Candidate or v1.0.0 Production Assurance profile.
+
 ## [0.8.0] - 2026-08-25
 
 ### Added
