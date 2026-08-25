@@ -77,7 +77,9 @@ def main() -> None:
     )
     release_intent = "startsWith(github.event.workflow_run.head_commit.message, 'release: v')"
     if dispatch.count(release_intent) != 2:
-        raise SystemExit("release-proof-dispatch.yml: both automatic jobs must require release intent")
+        raise SystemExit(
+            "release-proof-dispatch.yml: both automatic jobs must require release intent"
+        )
     require(dispatch, "actions: write", workflow="release-proof-dispatch.yml")
     reject(dispatch, "contents: write", workflow="release-proof-dispatch.yml")
 
