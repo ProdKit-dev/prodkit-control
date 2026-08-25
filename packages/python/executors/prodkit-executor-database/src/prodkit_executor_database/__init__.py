@@ -1,3 +1,6 @@
-"""Controlled database executor boundary."""
+"""Controlled PostgreSQL executor for allowlisted, parameterized operations."""
 
-__version__ = "0.8.0"
+from .executor import ConstrainedDatabaseExecutor, DatabaseExecutorConfig
+
+__all__ = ["ConstrainedDatabaseExecutor", "DatabaseExecutorConfig"]
+__version__ = "0.9.0"
