@@ -9,7 +9,7 @@ This guide covers the supported first-run experience for the v0.9.x line. It int
 The v0.9.1 public release supports two reproducible ways to evaluate and run the project:
 
 1. **Exact source release / source checkout** — recommended for evaluation, development, and building a deployment. The root lockfiles reproduce the tested Python and TypeScript workspace.
-2. **GitHub Release artifacts** — every first-party Python distribution and TypeScript package is built, inspected, checksummed, and published with the exact source archive and SPDX SBOM.
+2. **GitHub Release artifacts** — every first-party Python distribution and TypeScript package is built, inspected, clean-installed, smoke-tested, checksummed, and published with the exact source archive and SPDX SBOM.
 
 The project does not require PyPI, npm, a container registry, another ProdKit product, or a model vendor as a semantic dependency. Public package-registry publication is not claimed by v0.9.1; do not assume an identically named third-party registry package is an official ProdKit artifact.
 
@@ -25,7 +25,7 @@ For the TypeScript packages and cross-runtime development checks:
 - Node.js 22 or newer;
 - Corepack / pnpm 10.
 
-Docker is optional and is only required for the PostgreSQL development stack and container builds.
+Docker is optional and is only required for the containerized reference profile and container builds.
 
 ## Run the verified local demo
 
@@ -72,18 +72,26 @@ The FastAPI surface fails closed unless a principal resolver is configured. For 
 PRODKIT_ALLOW_INSECURE_HEADER_AUTH=true uv run prodkit-control-api
 ```
 
-Then open `http://127.0.0.1:8000/docs`.
+The local CLI binds to `127.0.0.1` by default. Then use:
+
+- `http://127.0.0.1:8000/docs` for Swagger UI;
+- `http://127.0.0.1:8000/redoc` for ReDoc;
+- `http://127.0.0.1:8000/openapi.json` for the machine-readable OpenAPI document.
 
 Development requests to protected routes must provide the documented ProdKit tenant/actor headers. **Never enable `PRODKIT_ALLOW_INSECURE_HEADER_AUTH` in a production deployment.** Production must inject authenticated identity from the surrounding platform and use least-privilege execution credentials.
 
-## Start the PostgreSQL development stack
+## Start the containerized reference profile
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-The Compose stack is a development/reference environment. It is not, by itself, the enterprise assurance deployment profile. Read [`docs/architecture/deployment.md`](architecture/deployment.md), [`docs/security/secure-deployment.md`](security/secure-deployment.md), and [`docs/operations/runbook.md`](operations/runbook.md) before connecting ProdKit Control to production systems.
+The Compose profile intentionally runs the same in-memory development/reference API as the local bootstrap. It does **not** silently wire PostgreSQL, durable artifacts, production authentication, or an enterprise execution plane. This is deliberate: a public quickstart must not imply durability that is not actually active.
+
+The image explicitly binds the API to `0.0.0.0` inside the container while Compose exposes it only on host loopback (`127.0.0.1:8000`). Without an authenticated principal resolver the default image remains healthy but not ready, failing `/readyz` closed with HTTP 503.
+
+For durable and production deployment, read [`docs/architecture/deployment.md`](architecture/deployment.md), [`docs/security/secure-deployment.md`](security/secure-deployment.md), and [`docs/operations/runbook.md`](operations/runbook.md) before connecting ProdKit Control to production systems. The PostgreSQL package provides durable storage primitives; selecting and wiring a durable service graph is an explicit deployment responsibility rather than an implicit side effect of `docker compose up`.
 
 ## Run the full developer verification
 
@@ -96,7 +104,9 @@ make check
 
 `make check` verifies release/version consistency, package completeness, language-neutral contract authority, cross-runtime conformance, public-readiness documentation/metadata, Python lint/types/tests/schema drift, TypeScript types/build/conformance, and the local first-run smoke path.
 
-The canonical CI additionally runs the supported Python and Node matrices, PostgreSQL integration checks, Security, and CodeQL. Pull requests from public forks use GitHub-hosted runners; same-repository release qualification may use the configured trusted runner.
+The canonical CI additionally runs the supported Python and Node matrices, PostgreSQL integration checks, container build/startup checks, Security, and CodeQL. Pull requests from public forks use GitHub-hosted runners; same-repository release qualification may use the configured trusted runner.
+
+The release build adds a separate consumer gate: it installs the exact built wheels into a clean virtual environment, runs the installed CLI and API import path outside the monorepo, installs the exact npm tarballs into a clean project, imports all public TypeScript packages, and verifies required public legal/documentation files are actually present in the distributions.
 
 ## What is language-neutral
 
