@@ -1,3 +1,6 @@
-"""Controlled Kubernetes executor boundary."""
+"""Constrained Kubernetes Deployment executor."""
 
-__version__ = "0.8.0"
+from .executor import ConstrainedKubernetesExecutor, KubernetesExecutorConfig
+
+__all__ = ["ConstrainedKubernetesExecutor", "KubernetesExecutorConfig"]
+__version__ = "0.9.0"
