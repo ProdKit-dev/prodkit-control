@@ -39,9 +39,9 @@ def exercise_identity_replay() -> None:
         expires_at=now + timedelta(seconds=59),
         nonce="incident-exercise-replay",
     )
-    verifier.verify_and_claim(assertion, now=now)
+    verifier.verify_and_claim(assertion, tenant_id="exercise-tenant", now=now)
     try:
-        verifier.verify_and_claim(assertion, now=now)
+        verifier.verify_and_claim(assertion, tenant_id="exercise-tenant", now=now)
     except PermissionError:
         return
     raise RuntimeError("identity replay exercise failed to detect replay")
