@@ -1,121 +1,14 @@
-name: Finalize v0.9 Metadata
+name: V090 Write Probe
 
 on:
   push:
-    branches:
-      - release/v0.9.0-cumulative-completeness
+    branches: [release/v0.9.0-cumulative-completeness]
 
 permissions:
   contents: write
 
-concurrency:
-  group: v0.9-metadata-finalizer
-  cancel-in-progress: true
-
 jobs:
-  finalize:
-    if: github.ref_name == 'release/v0.9.0-cumulative-completeness'
+  probe:
     runs-on: [self-hosted, Linux, X64]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: release/v0.9.0-cumulative-completeness
-          fetch-depth: 0
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
-        with:
-          version: 0.10.0
-          enable-cache: true
-      - name: Finalize v0.9 release metadata
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import re
-          from pathlib import Path
-
-          release = "0.9.0"
-          pyprojects = [Path("pyproject.toml"), *sorted(Path("packages/python").glob("**/pyproject.toml"))]
-          for path in pyprojects:
-              text = path.read_text(encoding="utf-8")
-              updated, count = re.subn(
-                  r'(?m)^version = "[^"]+"$',
-                  f'version = "{release}"',
-                  text,
-                  count=1,
-              )
-              if count != 1:
-                  raise SystemExit(f"could not normalize project version in {path}")
-              path.write_text(updated, encoding="utf-8")
-
-          for path in sorted(Path("packages/typescript").glob("*/package.json")):
-              payload = json.loads(path.read_text(encoding="utf-8"))
-              payload["version"] = release
-              path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-
-          for path in sorted(Path("packages/python").glob("**/*.py")):
-              text = path.read_text(encoding="utf-8")
-              updated = re.sub(
-                  r'(?m)^__version__ = "[^"]+"$',
-                  f'__version__ = "{release}"',
-                  text,
-              )
-              if updated != text:
-                  path.write_text(updated, encoding="utf-8")
-
-          app = Path("packages/python/prodkit-control-fastapi/src/prodkit_control_fastapi/app.py")
-          app_text = app.read_text(encoding="utf-8")
-          app_text, count = re.subn(
-              r'(?m)^        version="[^"]+",$',
-              f'        version="{release}",',
-              app_text,
-              count=1,
-          )
-          if count != 1:
-              raise SystemExit("could not normalize FastAPI version")
-          app.write_text(app_text, encoding="utf-8")
-
-          changelog = Path("CHANGELOG.md")
-          text = changelog.read_text(encoding="utf-8")
-          marker = "## [Unreleased]\n"
-          heading = "## [0.9.0] - 2026-08-25"
-          if heading not in text:
-              section = '''
-
-## [0.9.0] - 2026-08-25
-
-### Added
-
-- Production implementations for the database, Kubernetes, and deployment executor families that remained scaffolded in earlier milestones.
-- Provider adapters for OpenAI, Anthropic, Google, and Pydantic AI; substantive E2B, Permit, Teleport, and Temporal integrations; and functional Next.js and React TypeScript surfaces.
-- A language-neutral contract authority with normative specifications, canonicalization/policy profiles, shared conformance vectors, and independent Python/TypeScript implementations.
-- Machine-discovered first-party package completeness plus direct v0.9 qualification tests for newly completed execution, sandbox, and provider boundaries.
-
-### Changed
-
-- All current first-party Python and TypeScript package manifests are version-aligned at 0.9.0 and frozen dependency metadata is regenerated from that exact workspace.
-- Default and conjunctive policy semantics are defined by portable profiles rather than by Python or TypeScript implementation code; external policy engines remain optional adapters.
-- The former Production Candidate milestone moves to v0.10.0; v0.9.0 is the cumulative-completeness and language-neutral-authority milestone.
-
-### Assurance
-
-- CI and release builds fail if package declarations drift from the discovered workspace, a package is scaffold-only, portable authority files disappear, cross-runtime conformance diverges, or frozen dependency state is stale.
-- Release publication retains the inherited exact-source CI, Security, CodeQL, trusted release proof, immutable publication, and independent verification lifecycle.
-
-### Release scope
-
-v0.9.0 closes inherited first-party implementation and semantic-portability gaps. Optional integrations remain non-required runtime dependencies. This release does not claim the v0.10.0 Production Candidate or v1.0.0 Production Assurance profile.
-'''
-              if marker not in text:
-                  raise SystemExit("CHANGELOG.md missing Unreleased marker")
-              text = text.replace(marker, marker + section, 1)
-              changelog.write_text(text, encoding="utf-8")
-          PY
-          uv lock
-          uv lock --check
-          rm .github/workflows/lockfile-bootstrap.yml .prodkit/v0.9-finalization-trigger
-          git add -A
-          git diff --cached --check
-          git config user.name "prodkit-release-bot"
-          git config user.email "prodkit-release-bot@users.noreply.github.com"
-          git commit -m "release: finalize v0.9.0 source metadata"
-          git push origin HEAD:release/v0.9.0-cumulative-completeness
+      - run: echo "v0.9 write probe"
