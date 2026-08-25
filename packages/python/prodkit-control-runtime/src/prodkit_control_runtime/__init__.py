@@ -60,6 +60,7 @@ from .security import SecretReferenceGuard as SecretReferenceGuard
 from .security import SecurityAuditExporter as SecurityAuditExporter
 from .security import SlidingWindowRateLimiter as SlidingWindowRateLimiter
 from .security import SLOEvaluation as SLOEvaluation
+from .security import WorkloadIdentityAuthenticator as WorkloadIdentityAuthenticator
 from .security import WorkloadIdentityVerifier as WorkloadIdentityVerifier
 from .security import evaluate_slo as evaluate_slo
 from .security import redact_security_attributes as redact_security_attributes
