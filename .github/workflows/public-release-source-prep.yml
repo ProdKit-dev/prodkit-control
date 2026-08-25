@@ -1,0 +1,181 @@
+name: Public Release Source Prep
+
+on:
+  push:
+    branches:
+      - release/v0.9.1-public-readiness
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    name: Normalize v0.9.1 source metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: "0.10.0"
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24"
+
+      - name: Normalize source metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/set_release_version.py 0.9.1
+          python scripts/prepare_public_metadata.py
+
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          from pathlib import Path
+
+          root = Path.cwd()
+
+          completeness_path = root / ".prodkit/package-completeness.json"
+          completeness = json.loads(completeness_path.read_text(encoding="utf-8"))
+          completeness["release"] = "0.9.1"
+          completeness_path.write_text(
+              json.dumps(completeness, indent=2, ensure_ascii=False) + "\n",
+              encoding="utf-8",
+          )
+
+          changelog_path = root / "CHANGELOG.md"
+          changelog = changelog_path.read_text(encoding="utf-8")
+          if "## [0.9.1]" not in changelog:
+              marker = "## [Unreleased]\n"
+              if marker not in changelog:
+                  raise SystemExit("CHANGELOG.md is missing [Unreleased] marker")
+              entry = """
+
+          ## [0.9.1] - 2026-08-25
+
+          ### Added
+
+          - Public getting-started, support, contributor, distribution, and executable-example surfaces for first-time users.
+          - A machine-checked public-readiness contract covering current documentation, package publication metadata, lifecycle workflows, examples, and exact release identity.
+          - Real CLI and programmatic first-run smoke execution in CI and the release build.
+
+          ### Changed
+
+          - Current-facing README/security/release/versioning documentation now reflects the v0.9.x implementation boundary and v0.10.0 Production Candidate target instead of stale v0.7/v0.8 status text.
+          - First-party Python and TypeScript distributions carry public README/license/repository metadata while preserving language-neutral semantic authority and optional-provider boundaries.
+          - Local `make install` / `make check` now reproduce the locked public contributor and release-consumer path.
+
+          ### Assurance
+
+          - Public readiness, package metadata, the executable demo/example, package completeness, neutral contract conformance, CI, Security, CodeQL, trusted release proof, sealed publication, independent release verification, and cleanup are release gates for the exact v0.9.1 candidate.
+
+          ### Release scope
+
+          v0.9.1 is a compatible public-readiness patch on v0.9.0. It does not move the immutable v0.9.0 tag, does not claim public PyPI/npm/container-registry publication, and does not claim the v0.10.0 Production Candidate or v1.0.0 Production Assurance profile.
+          """
+              entry = "\n".join(line.removeprefix("          ") for line in entry.splitlines())
+              changelog = changelog.replace(marker, marker + entry + "\n", 1)
+              changelog_path.write_text(changelog, encoding="utf-8")
+
+          roadmap_path = root / "ROADMAP.md"
+          roadmap = roadmap_path.read_text(encoding="utf-8")
+          patch_line = (
+              "- Patch versions such as `v0.1.1` are reserved for corrective releases of an "
+              "already published milestone when needed; they are not roadmap milestones."
+          )
+          public_line = (
+              "- `v0.9.1` is the public-readiness patch on the v0.9 cumulative-completeness "
+              "milestone; `v0.10.0` remains the next maturity milestone and Production Candidate."
+          )
+          if public_line not in roadmap:
+              if patch_line not in roadmap:
+                  raise SystemExit("ROADMAP.md patch-version marker was not found")
+              roadmap = roadmap.replace(patch_line, patch_line + "\n" + public_line, 1)
+              roadmap_path.write_text(roadmap, encoding="utf-8")
+
+          lineage_path = root / "docs/architecture/lineage.md"
+          lineage = lineage_path.read_text(encoding="utf-8")
+          old_boundary = (
+              "`v0.0.0` contains the typed graph, endpoint-constrained relations, deterministic "
+              "identities, production-lineage policy, evidence-bundle representation, and reference "
+              "validation. Durable enterprise lineage persistence, full external reconciler coverage, "
+              "organization-specific assurance profiles, and signed interoperability gates remain "
+              "roadmap work."
+          )
+          new_boundary = (
+              "`v0.9.1` inherits the typed graph, endpoint-constrained relations, deterministic "
+              "identities, durable lineage/event persistence, production-lineage policy, portable "
+              "evidence bundles, signed/interoperable evidence foundations, and first-party delivery-"
+              "chain reconciler surfaces completed through the v0.9 milestone. Environment-specific "
+              "evidence quality, organization-specific assurance profiles, Production Candidate soak/"
+              "upgrade/rollback/isolation exercises, and independent enterprise assurance remain "
+              "deployment-specific or v0.10.0/v1.0.0 gates rather than implied guarantees."
+          )
+          if old_boundary in lineage:
+              lineage = lineage.replace(old_boundary, new_boundary, 1)
+              lineage_path.write_text(lineage, encoding="utf-8")
+          elif new_boundary not in lineage:
+              raise SystemExit("lineage current implementation boundary was not recognized")
+          PY
+
+          uv lock
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+          pnpm install --lockfile-only
+
+          python scripts/release_check.py --version 0.9.1
+          python scripts/check_package_completeness.py
+          python scripts/check_public_readiness.py
+          git diff --check
+
+      - name: Refuse unexpected source mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          unexpected="$({ git diff --name-only; } | python -c '
+          import re, sys
+          allowed = [
+              re.compile(r"^pyproject[.]toml$"),
+              re.compile(r"^uv[.]lock$"),
+              re.compile(r"^pnpm-lock[.]yaml$"),
+              re.compile(r"^[.]prodkit/package-completeness[.]json$"),
+              re.compile(r"^CHANGELOG[.]md$"),
+              re.compile(r"^ROADMAP[.]md$"),
+              re.compile(r"^docs/architecture/lineage[.]md$"),
+              re.compile(r"^packages/python/.+/pyproject[.]toml$"),
+              re.compile(r"^packages/python/.+/__init__[.]py$"),
+              re.compile(r"^packages/python/prodkit-control-fastapi/src/prodkit_control_fastapi/app[.]py$"),
+              re.compile(r"^packages/typescript/[^/]+/package[.]json$"),
+          ]
+          for raw in sys.stdin:
+              path = raw.strip()
+              if path and not any(pattern.fullmatch(path) for pattern in allowed):
+                  print(path)
+          ')"
+          if [[ -n "$unexpected" ]]; then
+            printf 'unexpected source-prep mutations:\n%s\n' "$unexpected" >&2
+            exit 2
+          fi
+
+      - name: Commit normalized source if needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "v0.9.1 source metadata is already normalized"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: normalize v0.9.1 public release source"
+          git push origin HEAD:release/v0.9.1-public-readiness
