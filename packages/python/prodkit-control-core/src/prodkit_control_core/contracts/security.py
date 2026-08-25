@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 from enum import StrEnum
 from typing import Literal
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from pydantic import AwareDatetime, Field, model_validator
@@ -60,7 +61,10 @@ class SecretReference(ContractModel):
             "apikey=",
             "access_key=",
         )
-        if any(marker in normalized for marker in forbidden):
+        parsed = urlsplit(self.reference)
+        if any(marker in normalized for marker in forbidden) or (
+            parsed.username is not None or parsed.password is not None
+        ):
             raise ValueError("secret references must not contain inline secret material")
         if len(self.audience) != len(set(self.audience)):
             raise ValueError("secret reference audience values must be unique")
