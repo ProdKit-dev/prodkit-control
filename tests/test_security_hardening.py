@@ -33,6 +33,48 @@ from prodkit_control_runtime.security import (
 from scripts import check_security_policy
 
 
+class _StaticWorkloadAuthenticator:
+    def __init__(self, assertion: WorkloadIdentityAssertion) -> None:
+        self._assertion = assertion
+
+    def authenticate(
+        self,
+        credential: str,
+        *,
+        expected_issuer: str,
+        expected_audience: str,
+        now: datetime,
+    ) -> WorkloadIdentityAssertion:
+        del expected_issuer, expected_audience, now
+        if credential != "signed-workload-token":
+            raise PermissionError("workload identity credential is not authenticated")
+        return self._assertion
+
+
+class _RejectingWorkloadAuthenticator:
+    def authenticate(
+        self,
+        credential: str,
+        *,
+        expected_issuer: str,
+        expected_audience: str,
+        now: datetime,
+    ) -> WorkloadIdentityAssertion:
+        del credential, expected_issuer, expected_audience, now
+        raise PermissionError("workload identity credential is not authenticated")
+
+
+class _NeverClaimReplayStore:
+    def claim_once(self, *, key: str, expires_at: datetime, now: datetime) -> bool:
+        del key, expires_at, now
+        raise AssertionError("replay state must not be touched before authentication")
+
+
+class _NoItemsDict(dict[str, object]):
+    def items(self):  # type: ignore[override]
+        raise AssertionError("rate-limit checks must not scan every bucket")
+
+
 def test_secret_reference_guard_requires_approved_versioned_binding() -> None:
     guard = SecretReferenceGuard(allowed_providers=("vault", "aws-secrets-manager"))
     reference = SecretReference(
@@ -73,6 +115,7 @@ def test_secret_reference_contract_rejects_inline_material() -> None:
         "access_key=live-access-key",
         "access-key=live-access-key",
         "client_secret=live-client-secret",
+        "postgresql://user:hunter2@host/db",
     ):
         with pytest.raises(ValueError, match="inline secret material"):
             SecretReference(
@@ -98,8 +141,8 @@ def _workload_assertion(now: datetime, *, nonce: str = "nonce-1") -> WorkloadIde
     )
 
 
-def _workload_verifier() -> WorkloadIdentityVerifier:
-    policy = WorkloadIdentityPolicy(
+def _workload_policy() -> WorkloadIdentityPolicy:
+    return WorkloadIdentityPolicy(
         issuer="https://issuer.example",
         audience="prodkit-control-exchange",
         subject_prefixes=("spiffe://prodkit/executor/",),
@@ -107,43 +150,64 @@ def _workload_verifier() -> WorkloadIdentityVerifier:
         max_assertion_lifetime_seconds=120,
         clock_skew_seconds=0,
     )
-    return WorkloadIdentityVerifier(policy, InMemoryReplayStore(max_entries=100))
+
+
+def _workload_verifier(assertion: WorkloadIdentityAssertion) -> WorkloadIdentityVerifier:
+    return WorkloadIdentityVerifier(
+        _workload_policy(),
+        InMemoryReplayStore(max_entries=100),
+        authenticator=_StaticWorkloadAuthenticator(assertion),
+    )
+
+
+def test_workload_identity_authenticates_before_replay_claim() -> None:
+    verifier = WorkloadIdentityVerifier(
+        _workload_policy(),
+        _NeverClaimReplayStore(),
+        authenticator=_RejectingWorkloadAuthenticator(),
+    )
+    with pytest.raises(PermissionError, match="not authenticated"):
+        verifier.verify_and_claim(
+            "forged-credential",
+            tenant_id="tenant-a",
+            now=datetime.now(UTC),
+        )
 
 
 def test_workload_identity_rejects_replay_and_wrong_bindings() -> None:
     now = datetime.now(UTC)
-    verifier = _workload_verifier()
     assertion = _workload_assertion(now)
-    verifier.verify_and_claim(assertion, tenant_id="tenant-a", now=now)
+    verifier = _workload_verifier(assertion)
+    verifier.verify_and_claim("signed-workload-token", tenant_id="tenant-a", now=now)
 
     with pytest.raises(PermissionError, match="replay"):
-        verifier.verify_and_claim(assertion, tenant_id="tenant-a", now=now)
+        verifier.verify_and_claim("signed-workload-token", tenant_id="tenant-a", now=now)
     with pytest.raises(PermissionError, match="tenant mismatch"):
-        _workload_verifier().verify_and_claim(assertion, tenant_id="tenant-b", now=now)
+        _workload_verifier(assertion).verify_and_claim(
+            "signed-workload-token", tenant_id="tenant-b", now=now
+        )
     with pytest.raises(PermissionError, match="audience mismatch"):
-        _workload_verifier().verify_and_claim(
-            assertion.model_copy(update={"audience": "wrong"}), tenant_id="tenant-a", now=now
+        _workload_verifier(assertion.model_copy(update={"audience": "wrong"})).verify_and_claim(
+            "signed-workload-token", tenant_id="tenant-a", now=now
         )
     with pytest.raises(PermissionError, match="subject"):
-        _workload_verifier().verify_and_claim(
-            assertion.model_copy(update={"subject": "spiffe://attacker/workload"}),
-            tenant_id="tenant-a",
-            now=now,
-        )
+        _workload_verifier(
+            assertion.model_copy(update={"subject": "spiffe://attacker/workload"})
+        ).verify_and_claim("signed-workload-token", tenant_id="tenant-a", now=now)
     with pytest.raises(PermissionError, match="client"):
-        _workload_verifier().verify_and_claim(
-            assertion.model_copy(update={"client_id": "unknown"}), tenant_id="tenant-a", now=now
+        _workload_verifier(assertion.model_copy(update={"client_id": "unknown"})).verify_and_claim(
+            "signed-workload-token", tenant_id="tenant-a", now=now
         )
 
 
 def test_workload_replay_claim_is_atomic_under_race() -> None:
     now = datetime.now(UTC)
-    verifier = _workload_verifier()
     assertion = _workload_assertion(now, nonce="same-nonce")
+    verifier = _workload_verifier(assertion)
 
     def attempt() -> bool:
         try:
-            verifier.verify_and_claim(assertion, tenant_id="tenant-a", now=now)
+            verifier.verify_and_claim("signed-workload-token", tenant_id="tenant-a", now=now)
         except PermissionError:
             return False
         return True
@@ -155,14 +219,12 @@ def test_workload_replay_claim_is_atomic_under_race() -> None:
 
 def test_workload_identity_validity_window_fails_closed() -> None:
     now = datetime.now(UTC)
-    verifier = _workload_verifier()
-    assertion = _workload_assertion(now)
+    assertion = _workload_assertion(now).model_copy(
+        update={"expires_at": now - timedelta(seconds=1)}
+    )
+    verifier = _workload_verifier(assertion)
     with pytest.raises(PermissionError, match="validity window"):
-        verifier.verify_and_claim(
-            assertion.model_copy(update={"expires_at": now - timedelta(seconds=1)}),
-            tenant_id="tenant-a",
-            now=now,
-        )
+        verifier.verify_and_claim("signed-workload-token", tenant_id="tenant-a", now=now)
 
 
 def test_sliding_window_rate_limiter_caps_concurrent_burst() -> None:
@@ -198,6 +260,18 @@ def test_sliding_window_rate_limiter_fails_closed_at_key_capacity() -> None:
     assert limiter.check("tenant-a:principal-b").allowed is True
 
 
+def test_sliding_window_rate_limiter_does_not_scan_all_buckets() -> None:
+    current = [100.0]
+    limiter = SlidingWindowRateLimiter(
+        RateLimitPolicy(policy_id="api", limit=3, window_seconds=10, max_keys=10),
+        clock=lambda: current[0],
+    )
+    assert limiter.check("tenant-a:principal-a").allowed is True
+    assert limiter.check("tenant-b:principal-b").allowed is True
+    limiter._entries = _NoItemsDict(limiter._entries)  # type: ignore[assignment]
+    assert limiter.check("tenant-a:principal-a").allowed is True
+
+
 def test_workflow_pin_policy_scans_yaml_step_uses(tmp_path, monkeypatch) -> None:
     workflows = tmp_path / ".github" / "workflows"
     workflows.mkdir(parents=True)
@@ -213,6 +287,26 @@ def test_workflow_pin_policy_scans_yaml_step_uses(tmp_path, monkeypatch) -> None
     monkeypatch.setattr(check_security_policy, "ROOT", tmp_path)
 
     with pytest.raises(SystemExit, match=r"unpinned\.yaml"):
+        check_security_policy.check_workflow_pins()
+
+
+def test_workflow_pin_policy_scans_nested_composite_actions(tmp_path, monkeypatch) -> None:
+    workflows = tmp_path / ".github" / "workflows"
+    local_action = tmp_path / ".github" / "actions" / "local"
+    workflows.mkdir(parents=True)
+    local_action.mkdir(parents=True)
+    (workflows / "ci.yml").write_text(
+        "jobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ./.github/actions/local\n",
+        encoding="utf-8",
+    )
+    (local_action / "action.yml").write_text(
+        "name: local\nruns:\n  using: composite\n  steps:\n    - uses: actions/checkout@v4\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(check_security_policy, "WORKFLOWS", workflows)
+    monkeypatch.setattr(check_security_policy, "ROOT", tmp_path)
+
+    with pytest.raises(SystemExit, match=r"action\.yml"):
         check_security_policy.check_workflow_pins()
 
 
