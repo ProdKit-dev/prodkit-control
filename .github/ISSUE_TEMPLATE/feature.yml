@@ -1,21 +1,76 @@
-name: Feature proposal
-description: Propose a capability or integration
+name: Feature / architecture proposal
+description: Propose a capability, integration, contract, or public-surface change
 title: "[proposal]: "
 labels: [proposal]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Significant changes to canonical semantics, authorization, evidence, tenancy, compatibility, or deployment profiles may require an ADR. Provider-specific behavior should stay behind explicit adapters and portable semantics must remain language-neutral.
+
   - type: textarea
     id: problem
     attributes:
-      label: Problem
+      label: Problem / user need
+      description: What concrete limitation or user problem should be solved?
     validations:
       required: true
+
   - type: textarea
     id: proposal
     attributes:
       label: Proposed contract or behavior
+      description: Describe the desired externally observable behavior and public API/contract impact.
     validations:
       required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Primary scope
+      options:
+        - Canonical contracts / language-neutral semantics
+        - Runtime / action broker
+        - Executor
+        - Provider / integration adapter
+        - Reconciliation / evidence
+        - Storage / migration
+        - API / CLI / TypeScript surface
+        - Security / tenancy / credentials
+        - Operations / deployment
+        - Documentation / public distribution
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: trust
+    attributes:
+      label: Security / trust-boundary impact
+      description: Explain any effect on authority, credentials, external effects, tenant isolation, evidence, or fail-closed behavior. Write “none” when genuinely none.
+    validations:
+      required: true
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility / migration impact
+      description: Note schema/API/version changes, migration needs, or why the proposal is compatible.
+    validations:
+      required: true
+
   - type: textarea
     id: alternatives
     attributes:
       label: Alternatives considered
+      description: What simpler approach or existing adapter/provider path was considered?
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Architecture checks
+      options:
+        - label: The proposal does not make one model/provider/policy engine/runtime the hidden semantic source of truth.
+          required: true
+        - label: I considered whether this change requires an ADR under CONTRIBUTING.md.
+          required: true
