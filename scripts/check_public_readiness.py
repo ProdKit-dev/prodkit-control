@@ -19,6 +19,7 @@ _REQUIRED_PUBLIC_FILES: dict[str, int] = {
     "CODE_OF_CONDUCT.md": 1_000,
     "GOVERNANCE.md": 1_000,
     "VERIFICATION.md": 500,
+    "docs/README.md": 2_000,
     "docs/getting-started.md": 2_000,
     "docs/releases/README.md": 1_000,
     "examples/README.md": 500,
@@ -33,6 +34,13 @@ _REQUIRED_WORKFLOWS = {
     ".github/workflows/release-verification.yml",
     ".github/workflows/branch-cleanup.yml",
 }
+
+_REQUIRED_PACKAGE_FILES = ("README.md", "LICENSE", "NOTICE")
+_FORBIDDEN_SUPPORTED_DOC_MARKERS = (
+    "This package is an optional adapter.",
+    "Optional adapter boundary for external truth ingestion.",
+    "Optional executor adapter package",
+)
 
 
 def _load_json(path: Path) -> dict[str, object]:
@@ -66,8 +74,35 @@ def _is_apache_license(value: object) -> bool:
     return isinstance(value, dict) and value.get("text") == "Apache-2.0"
 
 
-def _check_python_package_metadata() -> None:
+def _check_package_public_files(package_dir: Path, *, status: str) -> None:
+    root_license = (ROOT / "LICENSE").read_bytes()
+    root_notice = (ROOT / "NOTICE").read_bytes()
+    for name in _REQUIRED_PACKAGE_FILES:
+        path = package_dir / name
+        if not path.is_file():
+            raise ValueError(f"{path.relative_to(ROOT)} is required for public distribution")
+    if (package_dir / "LICENSE").read_bytes() != root_license:
+        raise ValueError(f"{(package_dir / 'LICENSE').relative_to(ROOT)} drifted from root LICENSE")
+    if (package_dir / "NOTICE").read_bytes() != root_notice:
+        raise ValueError(f"{(package_dir / 'NOTICE').relative_to(ROOT)} drifted from root NOTICE")
+    readme = (package_dir / "README.md").read_text(encoding="utf-8")
+    if len(readme.encode("utf-8")) < 120:
+        raise ValueError(f"{(package_dir / 'README.md').relative_to(ROOT)} is too thin for end users")
+    if status == "supported":
+        stale = [marker for marker in _FORBIDDEN_SUPPORTED_DOC_MARKERS if marker in readme]
+        if stale:
+            raise ValueError(
+                f"{(package_dir / 'README.md').relative_to(ROOT)} contradicts supported maturity: {stale}"
+            )
+
+
+def _check_python_package_metadata(package_status: dict[str, str]) -> None:
     for path in sorted((ROOT / "packages/python").glob("**/pyproject.toml")):
+        package_dir = path.parent
+        package_key = str(package_dir.relative_to(ROOT)).replace("\\", "/")
+        status = package_status.get(package_key)
+        if status not in {"supported", "optional_supported"}:
+            raise ValueError(f"{package_key} is missing from package-completeness authority")
         payload = tomllib.loads(path.read_text(encoding="utf-8"))
         project = payload.get("project")
         if not isinstance(project, dict):
@@ -76,18 +111,23 @@ def _check_python_package_metadata() -> None:
             raise ValueError(f"{path.relative_to(ROOT)} must publish README.md metadata")
         if not _is_apache_license(project.get("license")):
             raise ValueError(f"{path.relative_to(ROOT)} must declare Apache-2.0")
+        if project.get("license-files") != ["LICENSE", "NOTICE"]:
+            raise ValueError(f"{path.relative_to(ROOT)} must ship LICENSE and NOTICE")
         urls = project.get("urls")
         if not isinstance(urls, dict):
             raise ValueError(f"{path.relative_to(ROOT)} must declare [project.urls]")
         if urls.get("Homepage") != HOMEPAGE_URL or urls.get("Repository") != REPOSITORY_URL:
             raise ValueError(f"{path.relative_to(ROOT)} has incorrect public project URLs")
-        readme = path.parent / "README.md"
-        if not readme.is_file() or not readme.read_text(encoding="utf-8").strip():
-            raise ValueError(f"{readme.relative_to(ROOT)} must exist and be non-empty")
+        _check_package_public_files(package_dir, status=status)
 
 
-def _check_typescript_package_metadata() -> None:
+def _check_typescript_package_metadata(package_status: dict[str, str]) -> None:
     for path in sorted((ROOT / "packages/typescript").glob("*/package.json")):
+        package_dir = path.parent
+        package_key = str(package_dir.relative_to(ROOT)).replace("\\", "/")
+        status = package_status.get(package_key)
+        if status not in {"supported", "optional_supported"}:
+            raise ValueError(f"{package_key} is missing from package-completeness authority")
         payload = _load_json(path)
         if payload.get("license") != "Apache-2.0":
             raise ValueError(f"{path.relative_to(ROOT)} must declare Apache-2.0")
@@ -105,6 +145,12 @@ def _check_typescript_package_metadata() -> None:
         publish_config = payload.get("publishConfig")
         if not isinstance(publish_config, dict) or publish_config.get("access") != "public":
             raise ValueError(f"{path.relative_to(ROOT)} must be public-publication capable")
+        files = payload.get("files")
+        if not isinstance(files, list) or not {"dist", "README.md", "LICENSE", "NOTICE"}.issubset(files):
+            raise ValueError(f"{path.relative_to(ROOT)} must publish dist, README, LICENSE, and NOTICE")
+        _check_package_public_files(package_dir, status=status)
+        if len((package_dir / "README.md").read_bytes()) < 500:
+            raise ValueError(f"{(package_dir / 'README.md').relative_to(ROOT)} needs a usable package guide")
 
 
 def main() -> int:
@@ -125,6 +171,16 @@ def main() -> int:
     completeness = _load_json(ROOT / ".prodkit/package-completeness.json")
     if completeness.get("release") != current_release:
         raise ValueError("package-completeness release does not match public-readiness release")
+    packages = completeness.get("packages")
+    if not isinstance(packages, dict) or not packages:
+        raise ValueError("package-completeness authority has no packages")
+    package_status = {
+        key: value
+        for key, value in packages.items()
+        if isinstance(key, str) and isinstance(value, str)
+    }
+    if len(package_status) != len(packages):
+        raise ValueError("package-completeness package entries must be string:string")
 
     for path, minimum_bytes in _REQUIRED_PUBLIC_FILES.items():
         _require_text(path, minimum_bytes=minimum_bytes)
@@ -160,12 +216,12 @@ def main() -> int:
     if not release_note.is_file():
         raise ValueError(f"missing release note: {release_note.relative_to(ROOT)}")
 
-    _check_python_package_metadata()
-    _check_typescript_package_metadata()
+    _check_python_package_metadata(package_status)
+    _check_typescript_package_metadata(package_status)
 
     print(
         f"Public readiness contract valid for v{current_release}; "
-        f"next milestone v{next_milestone}"
+        f"next milestone v{next_milestone}; {len(package_status)} packages checked"
     )
     return 0
 
