@@ -10,23 +10,57 @@ EXACT_SHA = re.compile(r"^[a-f0-9]{40}$")
 USES = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", re.MULTILINE)
 
 
+def _local_dependency_paths(target: str, violations: list[str]) -> tuple[Path, ...]:
+    root = ROOT.resolve()
+    resolved = (root / target[2:]).resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError:
+        violations.append(f"local action path escapes repository: {target}")
+        return ()
+
+    if resolved.is_file():
+        return (resolved,)
+    if resolved.is_dir():
+        metadata = tuple(
+            path for path in (resolved / "action.yml", resolved / "action.yaml") if path.is_file()
+        )
+        if metadata:
+            return metadata
+    violations.append(f"local action metadata is missing: {target}")
+    return ()
+
+
+def _scan_uses(path: Path, violations: list[str], visited: set[Path]) -> None:
+    resolved_path = path.resolve()
+    if resolved_path in visited:
+        return
+    visited.add(resolved_path)
+
+    text = resolved_path.read_text(encoding="utf-8")
+    for match in USES.finditer(text):
+        target = match.group(1).strip("\"'")
+        if target.startswith("./"):
+            for dependency in _local_dependency_paths(target, violations):
+                _scan_uses(dependency, violations, visited)
+            continue
+        if "@" not in target:
+            violations.append(f"{resolved_path.relative_to(ROOT.resolve())}: unpinned action {target}")
+            continue
+        _, ref = target.rsplit("@", 1)
+        if not EXACT_SHA.fullmatch(ref):
+            violations.append(
+                f"{resolved_path.relative_to(ROOT.resolve())}: "
+                f"action/reusable workflow ref is not an exact SHA: {target}"
+            )
+
+
 def check_workflow_pins() -> None:
     violations: list[str] = []
+    visited: set[Path] = set()
     workflow_paths = sorted((*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")))
     for path in workflow_paths:
-        text = path.read_text(encoding="utf-8")
-        for match in USES.finditer(text):
-            target = match.group(1).strip("\"'")
-            if target.startswith("./"):
-                continue
-            if "@" not in target:
-                violations.append(f"{path.relative_to(ROOT)}: unpinned action {target}")
-                continue
-            _, ref = target.rsplit("@", 1)
-            if not EXACT_SHA.fullmatch(ref):
-                violations.append(
-                    f"{path.relative_to(ROOT)}: action/reusable workflow ref is not an exact SHA: {target}"
-                )
+        _scan_uses(path, violations, visited)
     if violations:
         raise SystemExit("\n".join(violations))
 
