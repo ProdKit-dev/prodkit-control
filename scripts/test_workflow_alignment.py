@@ -161,7 +161,7 @@ def main() -> None:
     post_gate = texts["post-gate-branch-cleanup.yml"]
     require(
         post_gate,
-        f"required_gates_json: ${{{{ vars.PRODKIT_GATED_CLEANUP_GATES_JSON != ''",
+        "required_gates_json: ${{ vars.PRODKIT_GATED_CLEANUP_GATES_JSON != ''",
         workflow="post-gate-branch-cleanup.yml",
     )
     require(post_gate, TRUSTED_RUNNER, workflow="post-gate-branch-cleanup.yml")
