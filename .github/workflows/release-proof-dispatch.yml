@@ -1,0 +1,42 @@
+name: Release Proof Dispatch
+
+on:
+  workflow_run:
+    workflows: ["CI", "Security", "CodeQL"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    name: dispatch proof
+    if: "${{ github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_commit.message, 'release: v') }}"
+    permissions:
+      actions: write
+      contents: read
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-proof-dispatch.yml@d117932d61e0bc45ec065dfc13728b71c6ceb9f3
+    with:
+      source_sha: ${{ github.event.workflow_run.head_sha }}
+      runner_json: '"ubuntu-latest"'
+      manifest_path: .prodkit/release.json
+      required_workflows_json: '["CI","Security","CodeQL"]'
+      proof_workflow_file: trusted-release-proof.yml
+
+  promote:
+    name: bridge proof to promotion
+    needs: dispatch
+    if: "${{ github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_commit.message, 'release: v') }}"
+    permissions:
+      actions: write
+      contents: read
+    uses: ProdKit-dev/prodkit-workflows/.github/workflows/reusable-release-proof-promotion-dispatch.yml@d117932d61e0bc45ec065dfc13728b71c6ceb9f3
+    with:
+      source_sha: ${{ github.event.workflow_run.head_sha }}
+      runner_json: '"ubuntu-latest"'
+      manifest_path: .prodkit/release.json
+      required_workflows_json: '["CI","Security","CodeQL"]'
+      proof_workflow_file: trusted-release-proof.yml
+      promotion_workflow_file: release-promotion.yml
