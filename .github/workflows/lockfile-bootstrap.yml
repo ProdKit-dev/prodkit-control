@@ -23,15 +23,55 @@ jobs:
         with:
           version: 0.10.0
           enable-cache: true
-      - name: Generate lockfile
+      - name: Normalize v0.9 metadata and generate lockfile
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          release = "0.9.0"
+          pyprojects = [Path("pyproject.toml"), *sorted(Path("packages/python").glob("**/pyproject.toml"))]
+          for path in pyprojects:
+              text = path.read_text(encoding="utf-8")
+              updated, count = re.subn(
+                  r'(?m)^version = "[^"]+"$',
+                  f'version = "{release}"',
+                  text,
+                  count=1,
+              )
+              if count != 1:
+                  raise SystemExit(f"could not normalize project version in {path}")
+              path.write_text(updated, encoding="utf-8")
+
+          for path in sorted(Path("packages/typescript").glob("*/package.json")):
+              payload = json.loads(path.read_text(encoding="utf-8"))
+              payload["version"] = release
+              path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+          for path in sorted(Path("packages/python").glob("**/*.py")):
+              text = path.read_text(encoding="utf-8")
+              updated = re.sub(
+                  r'(?m)^__version__ = "[^"]+"$',
+                  f'__version__ = "{release}"',
+                  text,
+              )
+              if updated != text:
+                  path.write_text(updated, encoding="utf-8")
+          PY
           uv lock
           uv lock --check
-      - name: Upload generated lockfile
+          git diff --check
+          git diff --name-only > /tmp/v0.9-metadata-files.txt
+          test -s /tmp/v0.9-metadata-files.txt
+          tar -czf /tmp/v0.9-metadata.tar.gz -T /tmp/v0.9-metadata-files.txt
+      - name: Upload generated workspace metadata
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: generated-uv-lock-${{ github.event.pull_request.head.sha }}
-          path: uv.lock
+          name: generated-v0.9-metadata-${{ github.event.pull_request.head.sha }}
+          path: |
+            /tmp/v0.9-metadata.tar.gz
+            /tmp/v0.9-metadata-files.txt
           if-no-files-found: error
           retention-days: 1
