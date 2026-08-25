@@ -11,7 +11,7 @@ CENTRAL_SHA = "e77861d685e0aaaabd43a385c9f26297d3598792"
 REQUIRED_GATES = '["CI","Security","CodeQL"]'
 TRUSTED_RUNNER = (
     "runner_json: ${{ vars.PRODKIT_RUNNER_JSON != '' && vars.PRODKIT_RUNNER_JSON || "
-    "'[\"self-hosted\",\"Linux\",\"X64\"]' }}"
+    '\'["self-hosted","Linux","X64"]\' }}'
 )
 HOSTED_CONTROL = "vars.PRODKIT_GITHUB_HOSTED_CONTROL_PLANE == 'true'"
 
@@ -29,9 +29,7 @@ EXPECTED = {
     "release-metadata.yml": "reusable-release-metadata-current.yml",
 }
 
-CENTRAL_REF = re.compile(
-    rf"{re.escape(CENTRAL_REPOSITORY)}/\.github/workflows/([^@\s]+)@([^\s]+)"
-)
+CENTRAL_REF = re.compile(rf"{re.escape(CENTRAL_REPOSITORY)}/\.github/workflows/([^@\s]+)@([^\s]+)")
 
 
 def require(text: str, fragment: str, *, workflow: str) -> None:
@@ -69,8 +67,8 @@ def main() -> None:
         reject(text, "@v0.", workflow=filename)
 
     ci = texts["ci.yml"]
-    require(ci, "python_versions_json: '[\"3.12\",\"3.13\",\"3.14\"]'", workflow="ci.yml")
-    require(ci, "node_versions_json: '[\"22\",\"24\"]'", workflow="ci.yml")
+    require(ci, 'python_versions_json: \'["3.12","3.13","3.14"]\'', workflow="ci.yml")
+    require(ci, 'node_versions_json: \'["22","24"]\'', workflow="ci.yml")
     require(ci, "postgres_enabled: true", workflow="ci.yml")
 
     security = texts["security.yml"]
@@ -81,17 +79,29 @@ def main() -> None:
     codeql = texts["codeql.yml"]
     require(
         codeql,
-        "languages_json: '[\"python\",\"javascript-typescript\",\"actions\"]'",
+        'languages_json: \'["python","javascript-typescript","actions"]\'',
         workflow="codeql.yml",
     )
 
     dispatch = texts["release-proof-dispatch.yml"]
-    require(dispatch, 'workflows: ["CI", "Security", "CodeQL"]', workflow="release-proof-dispatch.yml")
-    require(dispatch, f"required_workflows_json: '{REQUIRED_GATES}'", workflow="release-proof-dispatch.yml")
-    require(dispatch, "reusable-release-proof-promotion-dispatch.yml@", workflow="release-proof-dispatch.yml")
+    require(
+        dispatch, 'workflows: ["CI", "Security", "CodeQL"]', workflow="release-proof-dispatch.yml"
+    )
+    require(
+        dispatch,
+        f"required_workflows_json: '{REQUIRED_GATES}'",
+        workflow="release-proof-dispatch.yml",
+    )
+    require(
+        dispatch,
+        "reusable-release-proof-promotion-dispatch.yml@",
+        workflow="release-proof-dispatch.yml",
+    )
     release_intent = "startsWith(github.event.workflow_run.head_commit.message, 'release: v')"
     if dispatch.count(release_intent) != 2:
-        raise SystemExit("release-proof-dispatch.yml: both automatic jobs must require release intent")
+        raise SystemExit(
+            "release-proof-dispatch.yml: both automatic jobs must require release intent"
+        )
     require(dispatch, TRUSTED_RUNNER, workflow="release-proof-dispatch.yml")
     require(dispatch, HOSTED_CONTROL, workflow="release-proof-dispatch.yml")
     require(dispatch, "runner_json: '\"ubuntu-latest\"'", workflow="release-proof-dispatch.yml")
@@ -99,12 +109,16 @@ def main() -> None:
     reject(dispatch, "contents: write", workflow="release-proof-dispatch.yml")
 
     proof = texts["trusted-release-proof.yml"]
-    require(proof, f"required_workflows_json: '{REQUIRED_GATES}'", workflow="trusted-release-proof.yml")
+    require(
+        proof, f"required_workflows_json: '{REQUIRED_GATES}'", workflow="trusted-release-proof.yml"
+    )
     require(proof, "source_sha: ${{ github.sha }}", workflow="trusted-release-proof.yml")
     require(proof, "prepare_release_payload: true", workflow="trusted-release-proof.yml")
     require(proof, "promote proven release", workflow="trusted-release-proof.yml")
     require(proof, "needs: proof", workflow="trusted-release-proof.yml")
-    require(proof, "PRODKIT_GITHUB_HOSTED_CONTROL_PLANE != 'true'", workflow="trusted-release-proof.yml")
+    require(
+        proof, "PRODKIT_GITHUB_HOSTED_CONTROL_PLANE != 'true'", workflow="trusted-release-proof.yml"
+    )
     require(proof, "reusable-release-promote.yml@", workflow="trusted-release-proof.yml")
     require(proof, TRUSTED_RUNNER, workflow="trusted-release-proof.yml")
 
@@ -131,7 +145,7 @@ def main() -> None:
         "automatic_cleanup: true",
         "cleanup_workflow_file: branch-cleanup.yml",
         "main_branch: main",
-        "cleanup_branch_prefixes_json: '[\"release/\",\"hotfix/\"]'",
+        'cleanup_branch_prefixes_json: \'["release/","hotfix/"]\'',
     ):
         require(verification, fragment, workflow="release-verification.yml")
     reject(verification, "contents: write", workflow="release-verification.yml")
@@ -145,7 +159,11 @@ def main() -> None:
     require(cleanup, TRUSTED_RUNNER, workflow="branch-cleanup.yml")
 
     post_gate = texts["post-gate-branch-cleanup.yml"]
-    require(post_gate, f"required_gates_json: ${{{{ vars.PRODKIT_GATED_CLEANUP_GATES_JSON != ''", workflow="post-gate-branch-cleanup.yml")
+    require(
+        post_gate,
+        f"required_gates_json: ${{{{ vars.PRODKIT_GATED_CLEANUP_GATES_JSON != ''",
+        workflow="post-gate-branch-cleanup.yml",
+    )
     require(post_gate, TRUSTED_RUNNER, workflow="post-gate-branch-cleanup.yml")
     reject(post_gate, "contents: write", workflow="post-gate-branch-cleanup.yml")
 
