@@ -4,7 +4,13 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
-from prodkit_control_core import EffectClass, PolicyOutcome, RiskClass, canonical_json_bytes, sha256_hex
+from prodkit_control_core import (
+    EffectClass,
+    PolicyOutcome,
+    RiskClass,
+    canonical_json_bytes,
+    sha256_hex,
+)
 from prodkit_control_runtime.policy_semantics import (
     ConstraintValue,
     PolicySemanticDecision,
@@ -59,7 +65,9 @@ def check_policy() -> None:
             risk_class=RiskClass(str(input_value.get("risk_class"))),
         )
         if _result_payload(result) != vector.get("expected"):
-            raise ValueError(f"default policy mismatch for {vector_id}: {_result_payload(result)!r}")
+            raise ValueError(
+                f"default policy mismatch for {vector_id}: {_result_payload(result)!r}"
+            )
 
     for vector in document.get("conjunctive_policy", []):
         if not isinstance(vector, dict):
@@ -75,7 +83,8 @@ def check_policy() -> None:
                     cast(list[str], decision.get("required_approval_roles", []))
                 ),
                 constraints=cast(
-                    dict[str, ConstraintValue], dict(cast(dict[str, object], decision.get("constraints", {})))
+                    dict[str, ConstraintValue],
+                    dict(cast(dict[str, object], decision.get("constraints", {}))),
                 ),
             )
             for decision in raw_decisions
