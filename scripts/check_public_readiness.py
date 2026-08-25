@@ -6,6 +6,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / ".prodkit/public-readiness.json"
+REPOSITORY_URL = "https://github.com/ProdKit-dev/prodkit-control.git"
+HOMEPAGE_URL = "https://github.com/ProdKit-dev/prodkit-control"
 
 _REQUIRED_PUBLIC_FILES: dict[str, int] = {
     "README.md": 2_000,
@@ -58,6 +60,12 @@ def _require_text(path: str, *, minimum_bytes: int) -> str:
     return text
 
 
+def _is_apache_license(value: object) -> bool:
+    if value == "Apache-2.0":
+        return True
+    return isinstance(value, dict) and value.get("text") == "Apache-2.0"
+
+
 def _check_python_package_metadata() -> None:
     for path in sorted((ROOT / "packages/python").glob("**/pyproject.toml")):
         payload = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -66,8 +74,13 @@ def _check_python_package_metadata() -> None:
             raise ValueError(f"{path.relative_to(ROOT)} is missing [project]")
         if project.get("readme") != "README.md":
             raise ValueError(f"{path.relative_to(ROOT)} must publish README.md metadata")
-        if project.get("license") != "Apache-2.0":
+        if not _is_apache_license(project.get("license")):
             raise ValueError(f"{path.relative_to(ROOT)} must declare Apache-2.0")
+        urls = project.get("urls")
+        if not isinstance(urls, dict):
+            raise ValueError(f"{path.relative_to(ROOT)} must declare [project.urls]")
+        if urls.get("Homepage") != HOMEPAGE_URL or urls.get("Repository") != REPOSITORY_URL:
+            raise ValueError(f"{path.relative_to(ROOT)} has incorrect public project URLs")
         readme = path.parent / "README.md"
         if not readme.is_file() or not readme.read_text(encoding="utf-8").strip():
             raise ValueError(f"{readme.relative_to(ROOT)} must exist and be non-empty")
@@ -82,12 +95,16 @@ def _check_typescript_package_metadata() -> None:
         if not isinstance(description, str) or not description.strip():
             raise ValueError(f"{path.relative_to(ROOT)} must declare a package description")
         repository = payload.get("repository")
-        if not isinstance(repository, dict) or repository.get("url") != (
-            "https://github.com/ProdKit-dev/prodkit-control.git"
-        ):
+        if not isinstance(repository, dict) or repository.get("url") != REPOSITORY_URL:
             raise ValueError(f"{path.relative_to(ROOT)} must declare the canonical repository")
-        if payload.get("homepage") != "https://github.com/ProdKit-dev/prodkit-control":
+        if payload.get("homepage") != HOMEPAGE_URL:
             raise ValueError(f"{path.relative_to(ROOT)} must declare the canonical homepage")
+        engines = payload.get("engines")
+        if not isinstance(engines, dict) or engines.get("node") != ">=22":
+            raise ValueError(f"{path.relative_to(ROOT)} must declare the supported Node floor")
+        publish_config = payload.get("publishConfig")
+        if not isinstance(publish_config, dict) or publish_config.get("access") != "public":
+            raise ValueError(f"{path.relative_to(ROOT)} must be public-publication capable")
 
 
 def main() -> int:
