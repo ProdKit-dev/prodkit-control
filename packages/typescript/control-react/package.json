@@ -1,7 +1,7 @@
 {
   "name": "@prodkit/control-react",
-  "version": "0.8.0",
-  "description": "React query and lifecycle integration boundary.",
+  "version": "0.9.0",
+  "description": "React useSyncExternalStore-compatible data and mutation lifecycle primitives for ProdKit Control.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
