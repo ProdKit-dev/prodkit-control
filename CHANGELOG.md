@@ -6,6 +6,33 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-25
+
+### Added
+
+- Immutable tenant-, purpose-, audience-, provider-, and version-bound secret references for privileged executor credential resolution.
+- One-time workload identity assertion verification with atomic replay protection, bounded assertion lifetime, and optional authorized-party binding.
+- Provider-neutral bounded abuse controls, sanitized security-audit export, SLSA provenance policy evaluation, and operational SLO burn-rate evaluation.
+- Adversarial replay/race qualification, deterministic incident exercises, production security policy checks, and Kubernetes availability/disruption hardening.
+
+### Changed
+
+- FastAPI production identity and abuse boundaries fail closed with bounded token lifetime, direct-peer rate-limit identity, and explicit deployment assumptions for distributed enforcement.
+- Security, incident-response, SLO/alerting, deployment, and threat-model documentation now define the supported v0.8 production-hardening profile and its operator responsibilities.
+- Release qualification permanently checks the v0.8 supply-chain/deployment policy and incident exercise alongside the existing exact-source CI, Security, and CodeQL lifecycle.
+
+### Security / operations
+
+- Secret material remains outside canonical action/evidence payloads; only immutable references cross control-plane boundaries.
+- Workload identity replay is rejected atomically and cannot be made reusable by concurrent verification attempts.
+- Provenance policy rejects untrusted builders/materials and SLO evaluation exposes fast/slow burn conditions without claiming a universal deployment SLA.
+- The reference Kubernetes profile adds explicit workload identity, least-privilege/runtime hardening, network isolation, and disruption-budget requirements.
+
+### Release scope
+
+v0.8.0 is the security and operational-hardening milestone. It strengthens the supported production profile without weakening the existing trusted release lifecycle or claiming independent external certification. Enterprise-wide distributed abuse enforcement, provider-specific secret backends, and independent security review remain deployment/integration or later-assurance concerns.
+
+
 ## [0.7.0] - 2026-08-24
 
 ### Added

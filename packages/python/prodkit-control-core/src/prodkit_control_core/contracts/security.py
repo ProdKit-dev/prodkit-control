@@ -176,9 +176,7 @@ class OperationalSLO(ContractModel):
 
 
 class IncidentResponsePolicy(ContractModel):
-    schema_name: Literal["prodkit.incident-response-policy"] = (
-        "prodkit.incident-response-policy"
-    )
+    schema_name: Literal["prodkit.incident-response-policy"] = "prodkit.incident-response-policy"
     schema_version: Literal["1.0.0"] = "1.0.0"
     incident_class: IncidentClass
     owner: NonBlankStr
@@ -189,9 +187,7 @@ class IncidentResponsePolicy(ContractModel):
 
 
 class SecurityControlEvidence(ContractModel):
-    schema_name: Literal["prodkit.security-control-evidence"] = (
-        "prodkit.security-control-evidence"
-    )
+    schema_name: Literal["prodkit.security-control-evidence"] = "prodkit.security-control-evidence"
     schema_version: Literal["1.0.0"] = "1.0.0"
     control_id: NonBlankStr
     evidence_sha256: Sha256

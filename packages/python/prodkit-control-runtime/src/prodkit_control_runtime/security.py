@@ -89,9 +89,7 @@ class SecretReferenceGuard:
             raise PermissionError("production secret references must be version-pinned")
         if reference.tenant_id != tenant_id or reference.purpose != purpose:
             raise PermissionError("secret reference binding mismatch")
-        if audience is not None and (
-            not reference.audience or audience not in reference.audience
-        ):
+        if audience is not None and (not reference.audience or audience not in reference.audience):
             raise PermissionError("secret reference audience mismatch")
 
 
@@ -119,9 +117,14 @@ class WorkloadIdentityVerifier:
             raise PermissionError("workload identity issuer mismatch")
         if assertion.audience != self._policy.audience:
             raise PermissionError("workload identity audience mismatch")
-        if not any(assertion.subject.startswith(prefix) for prefix in self._policy.subject_prefixes):
+        if not any(
+            assertion.subject.startswith(prefix) for prefix in self._policy.subject_prefixes
+        ):
             raise PermissionError("workload identity subject is not allowed")
-        if self._policy.allowed_client_ids and assertion.client_id not in self._policy.allowed_client_ids:
+        if (
+            self._policy.allowed_client_ids
+            and assertion.client_id not in self._policy.allowed_client_ids
+        ):
             raise PermissionError("workload identity client is not allowed")
         if assertion.lifetime > timedelta(seconds=self._policy.max_assertion_lifetime_seconds):
             raise PermissionError("workload identity assertion lifetime is too long")
@@ -155,7 +158,9 @@ class RateLimitDecision:
 class SlidingWindowRateLimiter:
     """Bounded thread-safe local limiter; distributed deployments should inject gateway/shared limits."""
 
-    def __init__(self, policy: RateLimitPolicy, *, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self, policy: RateLimitPolicy, *, clock: Callable[[], float] = time.monotonic
+    ) -> None:
         self._policy = policy
         self._clock = clock
         self._entries: dict[str, deque[float]] = defaultdict(deque)
@@ -245,7 +250,9 @@ class ArtifactProvenanceVerifier:
             raise PermissionError("artifact provenance signature is not verified")
         if statement.predicate_type != self._policy.required_predicate_type:
             raise PermissionError("artifact provenance predicate type is not allowed")
-        if not any(subject.digest.get("sha256") == artifact_sha256 for subject in statement.subject):
+        if not any(
+            subject.digest.get("sha256") == artifact_sha256 for subject in statement.subject
+        ):
             raise PermissionError("artifact digest is not covered by provenance")
         predicate = SlsaProvenancePredicateV1.model_validate(statement.predicate)
         builder_id = predicate.run_details.builder.id

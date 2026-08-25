@@ -4,4 +4,4 @@ from .cosign import CosignClient as CosignClient
 from .cosign import CosignCommandResult as CosignCommandResult
 from .cosign import SigstoreIntegrationError as SigstoreIntegrationError
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
