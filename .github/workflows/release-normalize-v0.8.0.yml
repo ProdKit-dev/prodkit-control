@@ -1,0 +1,64 @@
+name: Normalize v0.8.0 release candidate
+
+on:
+  push:
+    branches: [release/v0.8.0-security-operational-hardening]
+    paths: [.github/workflows/release-normalize-v0.8.0.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: normalize-v0.8.0
+  cancel-in-progress: false
+
+jobs:
+  normalize:
+    name: normalize
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact release branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: release/v0.8.0-security-operational-hardening
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.10.0"
+          enable-cache: true
+
+      - name: Normalize and verify release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.13
+          python3 scripts/set_release_version.py 0.8.0
+          uv lock --python 3.13
+          uv sync --all-packages --group dev --locked --python 3.13
+          uv run --python 3.13 --no-sync ruff format \
+            packages/python/prodkit-control-core/src/prodkit_control_core/contracts/security.py \
+            packages/python/prodkit-control-runtime/src/prodkit_control_runtime/security.py \
+            packages/python/prodkit-control-fastapi/src/prodkit_control_fastapi/security.py \
+            tests/test_security_hardening.py
+          python3 scripts/release_check.py --version 0.8.0
+          git diff --check
+          git status --short
+
+      - name: Commit normalized candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "release/v0.8.0-security-operational-hardening"
+          git add --all
+          if git diff --cached --quiet; then
+            echo "release candidate already normalized"
+            exit 0
+          fi
+          git config user.name "prodkit-release-bot"
+          git config user.email "release-bot@prodkit.dev"
+          git commit -m "chore(release): normalize v0.8.0 metadata"
+          git push origin "HEAD:release/v0.8.0-security-operational-hardening"
