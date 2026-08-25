@@ -1,29 +1,30 @@
-name: Lockfile Bootstrap
+name: Finalize v0.9 Metadata
 
 on:
   pull_request:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: lockfile-bootstrap-${{ github.ref }}
+  group: v0.9-metadata-${{ github.event.pull_request.head.ref }}
   cancel-in-progress: true
 
 jobs:
-  lock:
+  finalize:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
         with:
           version: 0.10.0
           enable-cache: true
-      - name: Normalize v0.9 metadata and generate lockfile
+      - name: Finalize v0.9 release metadata
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -59,19 +60,65 @@ jobs:
               )
               if updated != text:
                   path.write_text(updated, encoding="utf-8")
+
+          app = Path("packages/python/prodkit-control-fastapi/src/prodkit_control_fastapi/app.py")
+          app_text = app.read_text(encoding="utf-8")
+          app_text, count = re.subn(
+              r'(?m)^        version="[^"]+",$',
+              f'        version="{release}",',
+              app_text,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("could not normalize FastAPI version")
+          app.write_text(app_text, encoding="utf-8")
+
+          changelog = Path("CHANGELOG.md")
+          text = changelog.read_text(encoding="utf-8")
+          marker = "## [Unreleased]\n"
+          heading = "## [0.9.0] - 2026-08-25"
+          if heading not in text:
+              section = '''
+
+## [0.9.0] - 2026-08-25
+
+### Added
+
+- Production implementations for the database, Kubernetes, and deployment executor families that remained scaffolded in earlier milestones.
+- Provider adapters for OpenAI, Anthropic, Google, and Pydantic AI; substantive E2B, Permit, Teleport, and Temporal integrations; and functional Next.js and React TypeScript surfaces.
+- A language-neutral contract authority with normative specifications, canonicalization/policy profiles, shared conformance vectors, and independent Python/TypeScript implementations.
+- Machine-discovered first-party package completeness plus direct v0.9 qualification tests for newly completed execution, sandbox, and provider boundaries.
+
+### Changed
+
+- All current first-party Python and TypeScript package manifests are version-aligned at 0.9.0 and frozen dependency metadata is regenerated from that exact workspace.
+- Default and conjunctive policy semantics are defined by portable profiles rather than by Python or TypeScript implementation code; external policy engines remain optional adapters.
+- The former Production Candidate milestone moves to v0.10.0; v0.9.0 is the cumulative-completeness and language-neutral-authority milestone.
+
+### Assurance
+
+- CI and release builds fail if package declarations drift from the discovered workspace, a package is scaffold-only, portable authority files disappear, cross-runtime conformance diverges, or frozen dependency state is stale.
+- Release publication retains the inherited exact-source CI, Security, CodeQL, trusted release proof, immutable publication, and independent verification lifecycle.
+
+### Release scope
+
+v0.9.0 closes inherited first-party implementation and semantic-portability gaps. Optional integrations remain non-required runtime dependencies. This release does not claim the v0.10.0 Production Candidate or v1.0.0 Production Assurance profile.
+'''
+              if marker not in text:
+                  raise SystemExit("CHANGELOG.md missing Unreleased marker")
+              text = text.replace(marker, marker + section, 1)
+              changelog.write_text(text, encoding="utf-8")
           PY
           uv lock
           uv lock --check
-          git diff --check
-          git diff --name-only > /tmp/v0.9-metadata-files.txt
-          test -s /tmp/v0.9-metadata-files.txt
-          tar -czf /tmp/v0.9-metadata.tar.gz -T /tmp/v0.9-metadata-files.txt
-      - name: Upload generated workspace metadata
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: generated-v0.9-metadata-${{ github.event.pull_request.head.sha }}
-          path: |
-            /tmp/v0.9-metadata.tar.gz
-            /tmp/v0.9-metadata-files.txt
-          if-no-files-found: error
-          retention-days: 1
+          rm .github/workflows/lockfile-bootstrap.yml
+          git add -A
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "no v0.9 metadata changes to commit"
+            exit 0
+          fi
+          git config user.name "prodkit-release-bot"
+          git config user.email "prodkit-release-bot@users.noreply.github.com"
+          git commit -m "release: finalize v0.9.0 source metadata"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
