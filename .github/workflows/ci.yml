@@ -31,5 +31,6 @@ jobs:
       postgres_enabled: true
       postgres_image: postgres:18-alpine
       postgres_script: .prodkit/workflows/ci-postgres.sh
-      container_enabled: false
+      container_enabled: true
+      container_script: .prodkit/workflows/ci-container.sh
       custom_enabled: false

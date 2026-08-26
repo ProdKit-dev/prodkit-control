@@ -1,5 +1,5 @@
 /** Next.js server and route-handler helpers. Never expose server credentials to browser bundles. */
-export const CONTROL_NEXT_PACKAGE_VERSION = "0.9.0" as const;
+export const CONTROL_NEXT_PACKAGE_VERSION = "0.9.1" as const;
 
 export type ControlAccessTokenProvider = () => Promise<string | null>;
 

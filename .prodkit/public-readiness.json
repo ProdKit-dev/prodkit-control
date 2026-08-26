@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "current_release": "0.9.1",
+  "next_milestone": "0.10.0",
+  "distribution": {
+    "source_checkout": "supported",
+    "github_release_assets": "supported",
+    "pypi": "not_claimed",
+    "npm_registry": "not_claimed",
+    "container_registry": "not_claimed"
+  },
+  "required_entrypoints": [
+    "prodkit-control demo",
+    "prodkit-control verify-bundle",
+    "prodkit-control-api"
+  ]
+}

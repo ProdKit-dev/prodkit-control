@@ -3,7 +3,8 @@ FROM python:3.13-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy
+    UV_LINK_MODE=copy \
+    PRODKIT_API_HOST=0.0.0.0
 
 RUN pip install --no-cache-dir uv==0.11.21
 WORKDIR /app

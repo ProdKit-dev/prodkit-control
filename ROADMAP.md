@@ -11,6 +11,7 @@ The pre-1.0 sequence is intentionally simple:
 - `v0.0.0` is the canonical foundation snapshot: architecture, contracts, reference runtime, package boundaries, release machinery, and the first complete documentation baseline.
 - Major pre-1.0 capability milestones advance the **minor** version: `v0.1.0`, `v0.2.0`, `v0.3.0`, and so on.
 - Patch versions such as `v0.1.1` are reserved for corrective releases of an already published milestone when needed; they are not roadmap milestones.
+- `v0.9.1` is the public-readiness patch on the v0.9 cumulative-completeness milestone; `v0.10.0` remains the next maturity milestone and Production Candidate.
 - `v1.0.0` is reserved for the documented production assurance profile and must satisfy the full 1.0 release gate.
 
 This keeps the roadmap readable: each minor version names a concrete maturity boundary rather than a percentage-complete claim.

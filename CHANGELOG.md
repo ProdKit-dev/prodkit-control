@@ -6,6 +6,31 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+
+## [0.9.1] - 2026-08-26
+
+### Added
+
+- Public getting-started, documentation-index, support, issue-routing, contributor, and executable-example surfaces for first-time users.
+- A machine-checked public-readiness contract covering current documentation, package maturity, package publication metadata, package-local legal notices, lifecycle workflows, examples, and exact release identity.
+- Clean external-consumer release qualification that installs the exact built Python wheels and npm tarballs outside the monorepo and exercises the installed CLI/API/import surfaces.
+- Public package guides for the TypeScript surfaces and corrected maturity/security guidance for legacy supported executor and reconciler packages.
+
+### Changed
+
+- Current-facing README/security/release/versioning documentation reflects the v0.9.x implementation boundary and v0.10.0 Production Candidate target instead of stale earlier-milestone status text.
+- First-party Python and TypeScript distributions ship README/license/repository metadata plus package-local Apache-2.0 `LICENSE` and `NOTICE` files.
+- The containerized quickstart is explicitly the in-memory development/reference profile; unused PostgreSQL/environment settings were removed rather than implying durability that is not wired by the default API bootstrap.
+- Local API execution defaults to loopback while the container image explicitly opts into its internal all-interface bind.
+
+### Assurance
+
+- Public readiness, package metadata/maturity, executable demo/example, clean artifact consumption, container startup/fail-closed readiness, package completeness, neutral contract conformance, CI, Security, CodeQL, trusted release proof, sealed publication, independent release verification, and cleanup are release gates for the exact v0.9.1 candidate.
+
+### Release scope
+
+v0.9.1 is a compatible public-readiness patch on v0.9.0. It does not move the immutable v0.9.0 tag, does not claim public PyPI/npm/container-registry publication, and does not claim the v0.10.0 Production Candidate or v1.0.0 Production Assurance profile.
+
 ## [0.9.0] - 2026-08-25
 
 ### Added

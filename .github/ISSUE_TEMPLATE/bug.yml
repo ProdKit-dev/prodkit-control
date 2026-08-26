@@ -1,21 +1,76 @@
 name: Bug report
-description: Report reproducible incorrect behavior
+description: Report reproducible incorrect behavior (not security vulnerabilities)
 title: "[bug]: "
 labels: [bug]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a defect. **Do not disclose suspected vulnerabilities, credentials, private keys, access tokens, customer data, or cross-tenant details here.** Security-sensitive reports must follow `SECURITY.md`.
+
+  - type: input
+    id: version
+    attributes:
+      label: ProdKit Control version / commit
+      description: Use an exact release such as v0.9.1 or a 40-character commit SHA.
+      placeholder: v0.9.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: profile
+    attributes:
+      label: Deployment profile
+      options:
+        - Development / reference
+        - Standalone durable
+        - Production control
+        - Enterprise assurance target
+        - Library / SDK only
+        - Other / unknown
+    validations:
+      required: true
+
   - type: textarea
     id: description
     attributes:
       label: What happened?
+      description: Describe observed and expected behavior.
     validations:
       required: true
+
   - type: textarea
     id: reproduction
     attributes:
-      label: Reproduction
+      label: Minimal reproduction
+      description: Include the smallest safe sequence that reproduces the issue. Sanitize secrets and customer data.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
     validations:
       required: true
+
   - type: textarea
     id: environment
     attributes:
       label: Environment
+      description: OS, Python/Node versions, database/provider versions, container/runtime, and relevant adapter/executor.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized logs / evidence identifiers
+      description: Include only information safe for a public issue. Do not paste credentials or private evidence payloads.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues for the same problem.
+          required: true
+        - label: This report does not contain a suspected vulnerability or sensitive secret/customer data.
+          required: true

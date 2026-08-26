@@ -1,40 +1,77 @@
 # ProdKit Control
 
-[![CI](https://github.com/prodkit-dev/prodkit-control/actions/workflows/ci.yml/badge.svg)](https://github.com/prodkit-dev/prodkit-control/actions/workflows/ci.yml)
+[![CI](https://github.com/ProdKit-dev/prodkit-control/actions/workflows/ci.yml/badge.svg)](https://github.com/ProdKit-dev/prodkit-control/actions/workflows/ci.yml)
+[![Security](https://github.com/ProdKit-dev/prodkit-control/actions/workflows/security.yml/badge.svg)](https://github.com/ProdKit-dev/prodkit-control/actions/workflows/security.yml)
+[![CodeQL](https://github.com/ProdKit-dev/prodkit-control/actions/workflows/codeql.yml/badge.svg)](https://github.com/ProdKit-dev/prodkit-control/actions/workflows/codeql.yml)
 [![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](pyproject.toml)
-[![OpenTelemetry](https://img.shields.io/badge/observability-OpenTelemetry-purple.svg)](docs/architecture/observability.md)
+[![Python](https://img.shields.io/badge/Python-3.12--3.14-blue.svg)](pyproject.toml)
 
-A provider-neutral **intent-to-production control and assurance plane** for software changes.
+A provider-neutral, language-neutral **intent-to-production control and assurance plane** for software changes and AI/agent actions.
 
-> **ProdKit connects approved intent to verified production state through a continuous, independently verifiable lineage—without requiring ProdKit to own specification authoring, generation, CI, deployment, or observability.**
+> **ProdKit Control connects approved intent to verified production state through a typed, content-addressed, independently reconcilable lineage—without requiring ProdKit to own specification authoring, generation, Git, CI, deployment, databases, observability, or a model provider.**
 
-ProdKit Control is designed to be advanced, general-purpose, provider-neutral, and standalone-capable. Its enterprise production profile is deliberately gated: the repository does not treat architectural intent, extension stubs, or a green test suite as proof that every production control is already implemented.
+Models and agents are treated as **untrusted proposers**. A tool call is not authority. Production effects must pass authenticated identity, policy/approval, exact-action binding, constrained execution, durable evidence, and independent observation appropriate to the selected deployment profile.
 
-## Project status and maturity
+Current release: **v0.9.1** — public-readiness patch for cumulative completeness and language-neutral authority.  
+Next milestone: **v0.10.0** — Production Candidate.
 
-`v0.7.0` is the **reliability and disaster-recovery milestone**. The repository includes the canonical foundation, hardened execution, delivery-chain reconciliation, portable assurance, HA/scale, multi-tenant isolation engineering controls, governance/lifecycle, and a qualified provider-neutral recovery control plane. The supported enterprise assurance claim remains maturity-gated; v0.8-v1.0 cover further security/operational hardening, production-candidate proof, and independent assurance.
+v0.9.1 does **not** claim the v1.0 enterprise production-assurance gate. Maturity claims remain tied to documented evidence, not package count or a green build alone.
 
-| Capability | v0.7.0 status | Next target |
-| --- | --- | --- |
-| Canonical contracts, typed lineage, hash-chained evidence | Implemented | Compatibility hardening |
-| Durable action execution and uncertainty handling | Implemented | Broader executor qualification |
-| Delivery-chain reconciliation | Implemented | Additional provider coverage |
-| Portable attestations and offline verification | Implemented | Higher-assurance trust profiles |
-| HA fencing, durable bounded work, backpressure, graceful drain | Implemented and qualified | Operational hardening |
-| Multi-tenant isolation engineering profile | Implemented; independent-review claim still gated | Independent review |
-| Governance, retention, legal hold, key/trust-root lifecycle | Implemented | Compliance/hardening expansion |
-| Reliability, backup/restore, uncertain-effect recovery, DR game day | Implemented and qualified reference profile | Production deployment exercises |
-| Python/TypeScript canonical surfaces | Implemented | Compatibility policy expansion |
-| Security/operational hardening and independent assurance | Roadmap | v0.8-v1.0 |
+## Start here
 
-Before enabling production actions, read [Guarantees and non-guarantees](docs/architecture/guarantees.md), [Reliability and disaster recovery](docs/architecture/reliability-disaster-recovery.md), [the DR runbook](docs/operations/disaster-recovery.md), [Secure deployment](docs/security/secure-deployment.md), and [the roadmap](ROADMAP.md).
+### Requirements
 
-## Why this repository exists
+For the Python control plane and CLI:
+
+- Python 3.12–3.14
+- [`uv`](https://docs.astral.sh/uv/)
+
+For TypeScript development/conformance:
+
+- Node.js 22+
+- Corepack / pnpm 10
+
+Docker is optional for the containerized development/reference profile and container builds.
+
+### Run the verified local demo
+
+```bash
+uv sync --all-packages --group dev --locked
+uv run prodkit-control demo --output .artifacts/demo
+```
+
+The demo creates a tenant-scoped run, routes an exact action through policy and the broker, executes it through the dry-run executor, constructs a complete lineage, exports an evidence bundle, and verifies that bundle before returning success.
+
+Run the programmatic Python example:
+
+```bash
+uv run python examples/basic_dry_run.py
+```
+
+Run the local API with the **development-only** header resolver:
+
+```bash
+PRODKIT_ALLOW_INSECURE_HEADER_AUTH=true uv run prodkit-control-api
+```
+
+Then open `http://127.0.0.1:8000/docs`. Never enable insecure header authentication in production.
+
+See **[Getting started](docs/getting-started.md)** for distribution choices, the exact first-run path, API guidance, deployment profiles, and release verification.
+
+## What problem it solves
 
 An agent trace is not an audit trail, a source repository is not the complete product definition, and a tool-call log is not proof that the intended production change occurred. Code may be disposable as an implementation, but it cannot be anonymous as evidence.
 
-ProdKit Control preserves a typed, content-addressed chain across the systems that participate in delivery:
+ProdKit Control answers:
+
+- What was intended?
+- What exact source/artifact was produced?
+- What verified it?
+- What policy and approval authorized the effect?
+- What exact executor acted with which bounded capability?
+- What changed externally?
+- What state was independently observed afterward?
+- Does production agree with the claimed delivery history?
 
 ```mermaid
 flowchart LR
@@ -58,7 +95,46 @@ flowchart LR
     R -. evidence .-> L
 ```
 
-Models are treated as **untrusted proposers**. A model does not gain authority merely because it emitted a tool call. Every production effect must be attributable to authenticated identity, exact approved inputs, policy, executor identity, observed state, and independent evidence appropriate to the deployment profile.
+## v0.9.1 capability boundary
+
+v0.9.1 inherits the v0.9.0 cumulative-completeness milestone and makes the repository/distribution usable as a public project. All first-party package surfaces are machine-discovered and must contain substantive implementation; optional integrations are optional dependencies, not empty placeholders.
+
+| Capability | v0.9.1 status | Later assurance gate |
+| --- | --- | --- |
+| Canonical contracts, typed lineage, hash-chained evidence | Implemented | Compatibility/assurance hardening |
+| Durable action execution and uncertainty handling | Implemented | Production-candidate exercises |
+| Git/GitHub/CI/registry/deployment/Kubernetes/database reconciliation | Implemented first-party surfaces | Environment-specific qualification |
+| Filesystem, Git, GitHub, HTTP, shell, database, Kubernetes, deployment executors | Implemented first-party surfaces | Production-candidate isolation/soak proof |
+| OpenAI, Anthropic, Google, generic, Pydantic AI provider adapters | Implemented optional adapters | Provider-specific compatibility evolution |
+| Agent Gateway, E2B, OPA, OpenTelemetry, Permit, Sigstore, Teleport, Temporal integrations | Implemented optional adapters | Deployment-specific qualification |
+| Python and TypeScript native surfaces | Implemented | Compatibility policy evolution |
+| Language-neutral authority and cross-runtime conformance | Implemented and CI-gated | Additional portable profiles |
+| HA/scale, tenant-isolation engineering, governance/lifecycle, DR controls | Implemented milestone foundations | Production Candidate + independent assurance |
+| Public install/use/docs/support/security surface | v0.9.1 release gate | Ongoing maintenance |
+| Production Candidate | Not claimed | v0.10.0 |
+| Enterprise production assurance | Not claimed | v1.0.0 |
+
+Before enabling production actions, read [Guarantees and non-guarantees](docs/architecture/guarantees.md), [Secure deployment](docs/security/secure-deployment.md), [Threat model](docs/security/threat-model.md), [Operations runbook](docs/operations/runbook.md), and the [Roadmap](ROADMAP.md).
+
+## Language-neutral authority
+
+ProdKit Control is not “Python software with TypeScript bindings” or “TypeScript software with Python bindings.” Portable semantics are defined under [`contracts/`](contracts/) as versioned specifications, canonicalization/policy profiles, and shared conformance vectors.
+
+```text
+contracts/ specifications + vectors
+               |
+        +------+------+
+        |             |
+     Python       TypeScript
+     runtime       runtime
+        |             |
+        +--- same ----+
+            semantics
+```
+
+Python and TypeScript are independent native implementations. CI fails when either runtime diverges from the language-neutral profiles.
+
+External policy engines such as OPA or Permit, model providers, workflow engines, observability backends, sandbox providers, signing systems, and privileged-access platforms are adapters. They do not become ProdKit Control's semantic source of truth.
 
 ## System architecture
 
@@ -78,12 +154,11 @@ flowchart TB
         Ledger[(Append-only event ledger)]
         Lineage[(Typed lineage graph)]
         Artifacts[(Content-addressed artifacts)]
-        Projectors[Projectors / exports]
         Reconcilers[Reconcilers]
     end
 
-    subgraph Execution[Execution plane]
-        Workers[Isolated executor workers]
+    subgraph Execution[Privileged execution plane]
+        Workers[Constrained executor workers]
         Credentials[Short-lived workload identity]
     end
 
@@ -118,34 +193,31 @@ flowchart TB
     Audit --> Reconcilers
     Reconcilers --> Ledger
     Reconcilers --> Lineage
-    Ledger --> Projectors
-    Lineage --> Projectors
 ```
 
-The diagram is the provider-neutral control-plane foundation. Through `v0.7.0`, durable execution, reconciliation, portable assurance, HA scheduling, tenant-isolation engineering controls, governance/lifecycle, and reliability/disaster-recovery controls are implemented behind explicit contracts and adapters. Later roadmap gates focus on security/operational hardening and independent production assurance.
+The control plane can observe and link systems it does not own. Provider-specific behavior stays behind explicit ports/adapters; privileged executors remain separate from model/agent code.
 
-See the [architecture overview](docs/architecture/overview.md) for the canonical layer model, trust boundaries, data ownership, invariants, and end-to-end flows.
+See the [Architecture overview](docs/architecture/overview.md).
 
 ## Core invariants
 
-ProdKit Control is designed around these invariants:
-
-- **No implicit model authority.** Models propose; policy, authenticated identity, and approvals authorize.
-- **Exact binding.** Approval is bound to action, target, tenant, environment, policy revision, and expiry.
-- **Fail closed.** Missing policy, invalid approval, integrity failure, unknown executor, tenant mismatch, or incomplete production lineage must not silently become success.
-- **Append, do not rewrite.** Corrections are new events; historical evidence is preserved.
-- **Content-address important identities.** Source trees, artifacts, actions, observations, and evidence are fingerprinted deterministically.
-- **Uncertain is not failed.** Ambiguous external side effects require reconciliation before retry.
-- **Independent evidence matters.** Provider traces and internal telemetry are witnesses, not the sole source of truth.
-- **Bypass is an assurance failure.** A production action outside the controlled path must be detectable and investigated.
-- **Tenant boundaries are authoritative.** Tenant identity comes from authenticated context, never from untrusted client fields alone.
-- **Telemetry is not the ledger.** OpenTelemetry can be sampled; the authoritative evidence path cannot depend on sampled telemetry.
+- **No implicit model authority.** Models/agents propose; authenticated identity, policy, approvals, and capability limits authorize.
+- **Exact binding.** Authorization binds action, target, tenant, environment, policy revision, relevant evidence, and expiry.
+- **Fail closed.** Missing policy/evidence, invalid approval, tenant mismatch, integrity failure, malformed adapter output, or unknown capability cannot silently become success.
+- **Append, do not rewrite.** Corrections are new evidence/events; historical facts are retained.
+- **Content-address important identities.** Source, artifacts, actions, observations, and evidence use deterministic identities.
+- **Uncertain is not failed.** An ambiguous external side effect is reconciled before any retry that could duplicate it.
+- **Independent evidence matters.** Model/provider traces and internal telemetry are witnesses, not sole truth.
+- **Bypass is an assurance failure.** Production activity outside the controlled path must be detectable through external reconciliation.
+- **Tenant identity is authoritative.** Production tenant/actor identity comes from authenticated context, not untrusted request fields.
+- **Telemetry is not the ledger.** Sampled observability cannot replace unsampled canonical evidence.
+- **Language implementations are not semantic authority.** Portable behavior is governed by versioned neutral contracts/conformance vectors.
 
 ## Canonical product lineage
 
 ```mermaid
 flowchart LR
-    Spec[Specification revision] -->|authorizes intent| Gen[Generator configuration]
+    Spec[Specification revision] -->|generated from| Gen[Generator configuration]
     Decision[Decision set] --> Gen
     Gen -->|produced| Source[Source tree]
     Source -->|verified by| Verification[Verification]
@@ -157,59 +229,28 @@ flowchart LR
     Observation -->|compared by| Reconciliation[Reconciliation]
 ```
 
-`LineageGraph` is the semantic product lineage. The append-only `ControlEvent` ledger records how assertions and actions entered the system, including actor, causality, evidence, and integrity chaining. Content-addressed artifacts preserve exact inputs and outputs. Evidence bundles carry portable verification material. Query tables, Git history, traces, dashboards, and provider logs remain projections or witnesses—not the canonical explanation of the system.
+`LineageGraph` is the typed semantic product lineage. `ControlEvent` is the append-only event history recording how assertions/actions entered the system. Content-addressed artifacts preserve exact retained material. External systems remain witnesses and effect owners rather than silently replacing the canonical control record.
 
-## Action lifecycle
-
-Every externally visible action follows a fail-closed lifecycle. An executor exception after execution begins is **uncertain**, because an external effect may already have occurred.
-
-```mermaid
-stateDiagram-v2
-    [*] --> Proposed
-    Proposed --> PolicyDenied
-    Proposed --> ApprovalRequired
-    Proposed --> Authorized
-    ApprovalRequired --> ApprovalDenied
-    ApprovalRequired --> Authorized
-    Authorized --> ExecutionStarted
-    ExecutionStarted --> ExecutionUncertain
-    ExecutionStarted --> ExecutionFailed
-    ExecutionStarted --> ExecutionSucceeded
-    ExecutionSucceeded --> StateObserved
-    StateObserved --> EffectVerified
-    StateObserved --> EffectMismatched
-    EffectVerified --> Reconciled
-    EffectMismatched --> Reconciled
-```
-
-The broker persists the proposal before execution. Approval is digest-bound. Idempotency claims are retained after uncertain outcomes so a blind retry cannot duplicate a possibly completed external effect.
+See [Product lineage](docs/architecture/lineage.md).
 
 ## Deployment profiles
 
-ProdKit Control intentionally separates **standalone capability** from **production hardening**.
+ProdKit Control deliberately separates standalone capability from assurance level.
 
 | Profile | Purpose | Typical characteristics |
 | --- | --- | --- |
-| Development / reference | Local evaluation and contract testing | In-memory components, explicit insecure development auth, local executors |
-| Standalone durable | Single-organization controlled deployment | PostgreSQL, artifact storage, authenticated principals, durable broker/ledger |
-| Production control | Production actions | Isolated executors, short-lived credentials, policy/approval service, external reconciliation, signed checkpoints |
-| Enterprise assurance | Regulated/high-assurance operation | HA, DR, tenant isolation verification, retention/legal hold, key rotation, SLOs, audit integrations, independent security review |
+| Development / reference | Local evaluation and contract testing | In-memory/reference components, explicit insecure development auth, dry-run/local executors |
+| Standalone durable | Durable control deployment without another ProdKit product | PostgreSQL/artifact storage, authenticated principals, durable broker/ledger |
+| Production control | Controlled production effects | Isolated executors, short-lived credentials, policy/approval integration, external reconciliation |
+| Enterprise assurance | High-assurance target | HA/DR, isolation verification, retention/legal hold, SLOs, audit integrations, independent review |
 
-A system remains “standalone” when its core control semantics and evidence model do not require another ProdKit product. PostgreSQL, object storage, identity providers, policy engines, or orchestrators are infrastructure/adapters behind replaceable ports, not hidden ownership dependencies.
-
-See [Deployment architecture](docs/architecture/deployment.md).
-
-## Provider neutrality and extension model
-
-Provider adapters normalize model interactions into canonical records; they do **not** execute tools. OpenAI, Anthropic, Google, local models, agent frameworks, MCP clients, and future providers can integrate without changing the control semantics.
-
-The same principle applies to policy engines, workflow engines, executors, artifact stores, identity providers, telemetry backends, and reconcilers. The core depends on capability contracts; adapters depend on external vendors.
-
-See [Extension architecture](docs/architecture/extensions.md).
+The v0.9.1 release makes these surfaces public and reproducibly testable; it does not collapse the v0.10/v1.0 assurance gates.
 
 ## Repository layout
 
 ```text
+contracts/                  language-neutral specifications + conformance
+schemas/                    generated/public schemas
 packages/
   python/
     prodkit-control-core/
@@ -226,71 +267,52 @@ packages/
     control-client/
     control-react/
     control-next/
-
-schemas/
-docs/
-examples/
-deploy/
+docs/                       architecture, security, operations, releases
+deploy/                     deployment examples/configuration
+examples/                   executable public API examples
+scripts/                    verification and maintenance tools
 ```
 
-Some adapter packages begin as explicit extension points. A package boundary indicates a supported architectural seam, **not automatically a production-complete implementation**.
+Package completeness is a machine-checked release contract. A first-party package may be optional at runtime, but it may not be declared supported while remaining an empty shell.
 
-## Quick start
+## Distribution and verification
 
-### Requirements
+v0.9.1 supports exact source checkout/source archives and verified GitHub Release assets. The release lifecycle builds every first-party Python wheel+sdist and every TypeScript package archive, checks package identity/version/content, adds an exact source archive and SPDX SBOM, seals checksums, publishes against the exact source SHA, and then runs independent release verification before branch cleanup.
 
-- Python 3.12 or newer
-- `uv`
-- Docker, only for the PostgreSQL example
+Public PyPI/npm/container-registry publication is **not claimed** by v0.9.1. This avoids creating hidden runtime or provenance dependencies on a registry channel that the release process has not independently qualified.
 
-### Install and verify
+See [Getting started](docs/getting-started.md), [Release/versioning contract](docs/releases/README.md), and [Verification](VERIFICATION.md).
+
+## Development
+
+Install the locked Python and TypeScript workspaces:
 
 ```bash
-uv sync --all-packages --group dev --locked
-uv run pytest
-uv run ruff check .
-uv run mypy
+make install
 ```
 
-### Run the local API
-
-Protected routes fail closed unless authentication is configured. For local development only, explicitly enable the insecure header resolver:
+Run the local public/release contract plus lint, typing, tests, schema checks, cross-runtime conformance, and first-run smoke checks:
 
 ```bash
-PRODKIT_ALLOW_INSECURE_HEADER_AUTH=true uv run prodkit-control-api
+make check
 ```
 
-Open `http://127.0.0.1:8000/docs`. Development requests to protected routes must provide `X-ProdKit-Tenant-Id`, `X-ProdKit-Actor-Id`, and `X-ProdKit-Actor-Kind`; production deployments must inject an authenticated `PrincipalResolver` instead of enabling header authentication.
+Pull requests from forks use GitHub-hosted runners. Same-repository qualification can use the configured trusted runner. Reusable workflow governance is pinned to immutable commits in the public [`ProdKit-dev/prodkit-workflows`](https://github.com/ProdKit-dev/prodkit-workflows) repository.
 
-### Run the deterministic demo
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-```bash
-uv run prodkit-control demo
-```
+## Security and support
 
-The demo creates a run, proposes a low-risk dry-run action, evaluates policy, executes through a controlled executor, verifies the result, exports an evidence bundle, and verifies its hash chain.
+Do not report suspected vulnerabilities in public issues. Follow [SECURITY.md](SECURITY.md). For usage/support boundaries, see [SUPPORT.md](SUPPORT.md).
 
-### PostgreSQL development stack
-
-```bash
-cp .env.example .env
-docker compose up --build
-```
-
-## Security and data handling
-
-The trust model assumes agents/models are untrusted proposers, secrets are referenced rather than embedded in events, authoritative evidence is unsampled and append-only, production executors use least-privilege short-lived identity, and external state is reconciled after execution.
-
-The core supports content retention modes `none`, `hash_only`, `redacted`, and `full`. `hash_only` proves integrity of known content but cannot reconstruct discarded content. Production profiles normally require encrypted artifact storage, field-level redaction, retention rules, and explicit legal-hold behavior.
-
-Read the [threat model](docs/security/threat-model.md) and [secure deployment guide](docs/security/secure-deployment.md).
+The security model assumes agents/models are untrusted proposers, production credentials are not ambient model inputs, privileged executors are independently constrained, authoritative evidence is unsampled, and production state is reconciled after effects. Sandbox escape prevention additionally depends on the OS/container/microVM/runtime isolation used to host untrusted code; ProdKit Control does not claim a software-only guarantee that arbitrary hostile code can never escape a compromised execution substrate.
 
 ## Standards and interoperability
 
-The architecture is designed around:
+The architecture is designed to interoperate with:
 
 - W3C Trace Context identifiers;
-- OpenTelemetry-compatible correlation;
+- OpenTelemetry correlation;
 - JSON Schema contracts;
 - SHA-256 content addressing and event chaining;
 - in-toto Statement-compatible evidence;
@@ -298,40 +320,30 @@ The architecture is designed around:
 - policy-engine-neutral decisions;
 - SPIFFE-compatible workload identity references.
 
-Compatibility with a standard means the data model and adapter boundary are designed to interoperate with it; stronger conformance claims require the corresponding roadmap implementation and verification gate.
+Compatibility language is bounded by implemented adapters and release gates; it is not a blanket certification claim.
 
 ## Documentation map
 
+- [Getting started](docs/getting-started.md)
 - [Architecture index](docs/architecture/README.md)
 - [Architecture overview](docs/architecture/overview.md)
-- [Runtime and action flow](docs/architecture/runtime.md)
+- [Product lineage](docs/architecture/lineage.md)
+- [Runtime/action flow](docs/architecture/runtime.md)
 - [Deployment architecture](docs/architecture/deployment.md)
 - [Extension architecture](docs/architecture/extensions.md)
-- [Failure and recovery](docs/architecture/failure-recovery.md)
-- [Multi-tenancy and isolation](docs/architecture/multi-tenancy.md)
-- [Event model](docs/architecture/event-model.md)
-- [Product lineage model](docs/architecture/lineage.md)
-- [Action and approval model](docs/architecture/action-approval.md)
 - [Guarantees and non-guarantees](docs/architecture/guarantees.md)
-- [Observability](docs/architecture/observability.md)
 - [High availability and scale](docs/architecture/high-availability.md)
+- [Reliability and disaster recovery](docs/architecture/reliability-disaster-recovery.md)
 - [Threat model](docs/security/threat-model.md)
 - [Secure deployment](docs/security/secure-deployment.md)
 - [Operations runbook](docs/operations/runbook.md)
-- [Capacity and overload envelope](docs/operations/capacity.md)
-- [Releases and versioning](docs/releases/README.md)
+- [Security incident response](docs/operations/security-incident-response.md)
+- [Release/versioning contract](docs/releases/README.md)
+- [v0.9.1 release boundary](docs/releases/v0.9.1.md)
 - [Roadmap](ROADMAP.md)
 
-## Roadmap philosophy
+## Governance and license
 
-The roadmap is **maturity-gated, not calendar-promised**. A version is eligible only when its release gates are evidenced. Production and enterprise terminology is tied to documented capabilities rather than package count or version number.
-
-See [ROADMAP.md](ROADMAP.md) for the complete path from canonical foundation through hardened execution, reconciliation, attestations, enterprise hardening, release candidate, and the 1.0 production assurance profile.
-
-## Contributing
-
-Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), follow the [Code of Conduct](CODE_OF_CONDUCT.md), and review [GOVERNANCE.md](GOVERNANCE.md).
-
-## License
+Contributions are welcome under [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Project decision and maintainer rules are in [GOVERNANCE.md](GOVERNANCE.md).
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

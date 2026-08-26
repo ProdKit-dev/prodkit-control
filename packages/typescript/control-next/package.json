@@ -1,13 +1,16 @@
 {
   "name": "@prodkit/control-next",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Next.js server client and guarded App Router route-handler integration for ProdKit Control.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -15,5 +18,20 @@
   },
   "devDependencies": {
     "typescript": "^5.8.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ProdKit-dev/prodkit-control.git",
+    "directory": "packages/typescript/control-next"
+  },
+  "homepage": "https://github.com/ProdKit-dev/prodkit-control",
+  "bugs": {
+    "url": "https://github.com/ProdKit-dev/prodkit-control/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

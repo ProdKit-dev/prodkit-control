@@ -8,7 +8,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_RE = re.compile(r"^v?(\d+\.\d+\.\d+)$")
-TEMPORARY_RELEASE_PATHS = (ROOT / ".github/workflows/v0.0.0-normalize.yml",)
+TS_RUNTIME_VERSION_RE = re.compile(
+    r'export const (?P<name>[A-Z0-9_]+_PACKAGE_VERSION) = "(?P<version>\d+\.\d+\.\d+)" as const;'
+)
+TEMPORARY_RELEASE_PATHS = (
+    ROOT / ".github/workflows/v0.0.0-normalize.yml",
+    ROOT / ".github/workflows/public-release-source-prep.yml",
+    ROOT / ".github/workflows/v0.9.1-python-packaging-fix.yml",
+    ROOT / ".github/workflows/v0.9.1-review-fix.yml",
+)
 
 
 def _version(value: str) -> str:
@@ -20,6 +28,13 @@ def _version(value: str) -> str:
 
 def _toml(path: Path) -> dict[str, object]:
     return tomllib.loads(path.read_text(encoding="utf-8"))
+
+
+def _root_project_version() -> str:
+    project = _toml(ROOT / "pyproject.toml").get("project")
+    if not isinstance(project, dict) or not isinstance(project.get("version"), str):
+        raise ValueError("pyproject.toml is missing project.version")
+    return _version(project["version"])
 
 
 def _python_packages() -> dict[str, tuple[str, Path]]:
@@ -76,6 +91,15 @@ def verify(expected: str) -> list[str]:
         if version != expected:
             failures.append(f"{path.relative_to(ROOT)}: {name} is {version}, expected {expected}")
 
+    for path in sorted((ROOT / "packages/typescript").glob("*/src/**/*.ts")):
+        source = path.read_text(encoding="utf-8")
+        for match in TS_RUNTIME_VERSION_RE.finditer(source):
+            version = match.group("version")
+            if version != expected:
+                failures.append(
+                    f"{path.relative_to(ROOT)}: {match.group('name')} is {version}, expected {expected}"
+                )
+
     locked = _locked_versions()
     for name in sorted(python_packages):
         versions = locked.get(name, set())
@@ -105,11 +129,12 @@ def verify(expected: str) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify a ProdKit Control release source tree")
-    group = parser.add_mutually_exclusive_group(required=True)
+    group = parser.add_mutually_exclusive_group()
     group.add_argument("--version")
     group.add_argument("--tag")
     args = parser.parse_args()
-    expected = _version(args.version or args.tag)
+    requested = args.version or args.tag
+    expected = _version(requested) if requested else _root_project_version()
     failures = verify(expected)
     if failures:
         print("Release contract failed:")
