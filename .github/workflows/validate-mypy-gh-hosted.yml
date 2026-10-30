@@ -1,0 +1,32 @@
+name: Temporary mypy v2 compatibility validation
+on:
+  push:
+    branches:
+      - validation/mypy-v2-py312-314
+permissions:
+  contents: read
+jobs:
+  mypy:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.12', '3.13', '3.14']
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: 0.11.21
+          enable-cache: true
+      - name: Install exact locked workspace
+        run: uv sync --all-packages --group dev --locked --python ${{ matrix.python-version }}
+      - name: Validate mypy, Ruff and lock compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv lock --check
+          uv run --python ${{ matrix.python-version }} --no-sync mypy
+          uv run --python ${{ matrix.python-version }} --no-sync ruff check .
