@@ -2,7 +2,14 @@
 set -euo pipefail
 
 node_version="${PRODKIT_NODE_VERSION:?PRODKIT_NODE_VERSION is required}"
-pnpm_cmd=(corepack pnpm)
+# Expose a writable Corepack-managed pnpm shim to child processes such as Turborepo.
+# `corepack pnpm` works as a parent command but leaves `pnpm` undiscoverable on
+# clean GitHub-hosted runners, causing Turborepo package-manager detection to fail.
+pnpm_shims="$(mktemp -d "${RUNNER_TEMP:-/tmp}/prodkit-pnpm.XXXXXX")"
+trap 'rm -rf "$pnpm_shims"' EXIT
+corepack enable --install-directory "$pnpm_shims" pnpm
+export PATH="$pnpm_shims:$PATH"
+pnpm_cmd=(pnpm)
 
 "${pnpm_cmd[@]}" --version
 "${pnpm_cmd[@]}" install --frozen-lockfile
