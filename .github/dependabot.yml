@@ -9,6 +9,6 @@ updates:
     schedule:
       interval: weekly
   - package-ecosystem: npm
-    directory: /packages/typescript/execution
+    directory: /
     schedule:
       interval: weekly
